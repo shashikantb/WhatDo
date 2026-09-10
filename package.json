@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "prisma generate",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -12,9 +13,15 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
+    "db:push:direct": "prisma db push --url \"$DIRECT_DATABASE_URL\"",
     "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:migrate:resolve": "prisma migrate resolve",
     "db:studio": "prisma studio",
     "db:seed": "prisma db seed",
+    "vercel:pull": "vercel pull",
+    "vercel:link": "vercel link",
+    "vercel:dev": "vercel dev",
     "sentry:sourcemaps": "sentry-cli sourcemaps inject --org example-org --project example-project ./.next && sentry-cli sourcemaps upload --org example-org --project example-project ./.next"
   },
   "prisma": {

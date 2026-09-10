@@ -1,0 +1,2837 @@
+# BUILD THIS COMPLETE PRODUCT: "WHATDO"
+
+## 1. PRODUCT VISION
+
+Build a production-ready web application called **WHATDO**.
+
+Tagline:
+
+> **See it. Vote it. Know what people think.**
+
+WHATDO is a fast, addictive, mobile-first social opinion platform where users can:
+
+1. Scroll through content.
+2. Give an opinion with one tap.
+3. Immediately see how other people voted.
+4. Continue scrolling.
+5. Create their own posts and ask the public for opinions.
+
+The core interaction must be:
+
+**SEE → VOTE → REVEAL → SCROLL → REPEAT**
+
+The platform should feel extremely simple and fast.
+
+Do NOT build this like a traditional forum, Reddit clone, or long-form social network.
+
+The primary experience is a **vertical infinite opinion feed**.
+
+Users should be able to participate without writing anything.
+
+---
+
+# 2. CORE USER EXPERIENCE
+
+When a user opens WHATDO:
+
+They immediately see an opinion card.
+
+Example:
+
+---
+
+WHATDO
+
+What do YOU think?
+
+[IMAGE / VIDEO]
+
+"Would you buy this?"
+
+```
+  YES       NO
+
+ 67%       33%
+```
+
+1,284 people voted
+
+## [ Swipe / Scroll ↓ ]
+
+After the user votes:
+
+* Animate the selected option.
+* Show the result percentage.
+* Show total votes.
+* Optionally show a small explanation/comment section.
+* Immediately allow the user to continue to the next card.
+
+The interaction should take approximately 1–3 seconds.
+
+The user should NEVER have to navigate through multiple pages just to vote.
+
+---
+
+# 3. CONTENT TYPES
+
+The platform must support multiple post types.
+
+## A. YES / NO
+
+Example:
+
+"Would you buy this?"
+
+YES / NO
+
+## B. MULTIPLE CHOICE
+
+Example:
+
+"Which logo is better?"
+
+A / B / C
+
+## C. A vs B
+
+Example:
+
+"Which design is better?"
+
+[Image A]
+
+VS
+
+[Image B]
+
+## D. RATING
+
+Example:
+
+"Rate this room design."
+
+1–10
+
+## E. EMOJI REACTION
+
+Example:
+
+"What's your reaction?"
+
+❤️ 😂 😐 😡
+
+## F. POLL
+
+Example:
+
+"Which phone would you choose?"
+
+iPhone
+Samsung
+Google Pixel
+Other
+
+## G. PRICE OPINION
+
+Example:
+
+"How much would you pay for this?"
+
+₹499
+₹999
+₹1,999
+₹2,999+
+
+## H. DECISION
+
+Example:
+
+"Should I launch this business?"
+
+DO IT
+DON'T DO IT
+NOT SURE
+
+## I. PREDICTION
+
+Example:
+
+"Will this movie cross ₹100 crore?"
+
+YES
+NO
+
+The system should later be able to determine whether the prediction was correct.
+
+---
+
+# 4. SUPPORTED MEDIA
+
+Users should be able to create posts containing:
+
+* Text
+* Images
+* Multiple images
+* Short videos
+* GIFs
+* Links
+
+For MVP, prioritize:
+
+1. Image
+2. Video
+3. Text
+
+Images and videos should be optimized/compressed before delivery.
+
+Use lazy loading.
+
+Use responsive media sizing.
+
+Videos should:
+
+* autoplay muted when appropriate
+* pause when out of viewport
+* have controls
+* respect mobile bandwidth
+* support poster images
+
+---
+
+# 5. USER ROLES
+
+Implement:
+
+## Guest
+
+Can:
+
+* Browse public feed
+* View posts
+* See results
+
+Cannot:
+
+* Vote
+* Comment
+* Create posts
+* Follow users
+
+Prompt guest users to sign in when they attempt interaction.
+
+## Registered User
+
+Can:
+
+* Vote
+* Create posts
+* Comment
+* Like comments
+* Follow users
+* Save posts
+* Report content
+* Block users
+* View profile
+* View voting history
+* View statistics
+
+## Moderator
+
+Can:
+
+* Review reports
+* Hide content
+* Remove content
+* Suspend users
+* Review moderation queue
+
+## Admin
+
+Full access:
+
+* users
+* posts
+* reports
+* moderation
+* analytics
+* advertisements
+* categories
+* settings
+* featured content
+* system configuration
+
+---
+
+# 6. AUTHENTICATION
+
+Support:
+
+* Email/password
+* Google login
+* Apple login if infrastructure supports it
+
+Users should have:
+
+* username
+* display name
+* avatar
+* bio
+* account creation date
+* opinion score
+* prediction accuracy
+* posts count
+* votes count
+* followers
+* following
+
+Allow username changes with reasonable restrictions.
+
+Prevent username impersonation.
+
+---
+
+# 7. USER PROFILE
+
+Profile should contain:
+
+Avatar
+
+@username
+
+Display name
+
+Bio
+
+Opinion Score
+
+Votes Given
+
+Posts Created
+
+Followers
+
+Following
+
+Prediction Accuracy
+
+Tabs:
+
+* Posts
+* Opinions
+* Saved
+* Predictions
+
+Example:
+
+---
+
+@alex
+
+Opinion Score
+842
+
+Votes: 4,281
+Posts: 74
+Accuracy: 78%
+
+## [Posts] [Opinions] [Saved]
+
+---
+
+# 8. OPINION SCORE
+
+Create a gamification system.
+
+Users receive an **Opinion Score**.
+
+Example:
+
+Voting: +1
+Creating a post: +5
+Receiving engagement: variable
+Successful prediction: +10
+High-quality contribution: bonus
+
+Do NOT allow users to abuse the system by repeatedly voting on their own content.
+
+Use server-side validation.
+
+The exact scoring system must be configurable from Admin.
+
+---
+
+# 9. PREDICTION SYSTEM
+
+Prediction posts must support:
+
+Question:
+
+"Will X happen?"
+
+Prediction options:
+
+YES / NO
+
+The creator or moderator can define:
+
+* closing time
+* resolution date
+* outcome
+
+After resolution:
+
+Show:
+
+Prediction Result:
+CORRECT / INCORRECT
+
+Track:
+
+Total predictions
+Correct predictions
+Accuracy %
+
+Display:
+
+> 78% prediction accuracy
+
+on profiles.
+
+---
+
+# 10. FEED
+
+The feed is the most important part of the application.
+
+Build an infinite vertical feed.
+
+Prioritize:
+
+1. Fresh content
+2. Relevant content
+3. High engagement
+4. Content from followed users
+5. Trending content
+6. Category preferences
+7. Content diversity
+
+Avoid showing the same post repeatedly.
+
+Do not show posts the user already voted on unless configured otherwise.
+
+Support:
+
+* For You
+* Following
+* Trending
+* New
+* Nearby/Local later
+
+Main default:
+
+## FOR YOU
+
+---
+
+# 11. FEED ALGORITHM
+
+Create a modular scoring system.
+
+Example conceptual score:
+
+feedScore =
+freshness
+
+* engagement
+* relevance
+* creatorQuality
+* diversity
+* trendingScore
+
+- alreadySeenPenalty
+- alreadyVotedPenalty
+- reportPenalty
+
+Do not hardcode the entire recommendation engine into the frontend.
+
+All important ranking logic must live server-side.
+
+Make the algorithm configurable.
+
+---
+
+# 12. CATEGORIES
+
+Create categories such as:
+
+* Technology
+* AI
+* Startups
+* Business
+* Money
+* Fashion
+* Food
+* Travel
+* Cars
+* Movies
+* Music
+* Gaming
+* Sports
+* Design
+* Lifestyle
+* Relationships
+* Education
+* Career
+* Shopping
+* Funny
+* Random
+* Viral
+
+Allow Admin to add/edit/remove categories.
+
+---
+
+# 13. TAGS
+
+Users can add tags.
+
+Example:
+
+#iphone
+#ai
+#startup
+#fashion
+
+Store tags efficiently.
+
+Allow users to follow categories/tags.
+
+---
+
+# 14. VOTING
+
+Voting must be extremely fast.
+
+One tap.
+
+After voting:
+
+* prevent duplicate voting
+* show result
+* update percentages
+* update vote count
+* record timestamp
+* record anonymous/registered information as permitted
+
+IMPORTANT:
+
+Voting must be securely validated server-side.
+
+Never trust frontend vote counts.
+
+Use database constraints to prevent duplicate votes.
+
+---
+
+# 15. VOTE RESULT UI
+
+Before voting:
+
+YES
+NO
+
+After voting:
+
+YES ███████████████ 67%
+NO  ███████ 33%
+
+1,284 votes
+
+The selected option should visually stand out.
+
+Use smooth micro-animation.
+
+Do not make the animation slow.
+
+---
+
+# 16. COMMENTS
+
+Users can comment on posts.
+
+Features:
+
+* comment
+* reply
+* like
+* report
+* delete own comment
+* moderator deletion
+
+Keep comments secondary to voting.
+
+The main interaction remains voting.
+
+Support sorting:
+
+* Top
+* New
+* Controversial
+
+---
+
+# 17. SOCIAL FEATURES
+
+Implement:
+
+Follow user
+
+Unfollow user
+
+Like post
+
+Save post
+
+Share post
+
+Copy share link
+
+Report post
+
+Block user
+
+Mute user
+
+---
+
+# 18. SHARING
+
+Every post should have a public URL.
+
+Example:
+
+/p/abc123
+
+Create attractive share previews:
+
+WHATDO
+
+"Would you buy this?"
+
+67% said YES
+
+Share to:
+
+* WhatsApp
+* X
+* Facebook
+* LinkedIn
+* Telegram
+* Copy Link
+
+Use Open Graph metadata.
+
+---
+
+# 19. POST CREATION
+
+Create a simple "Ask People" interface.
+
+Button:
+
+## + ASK PEOPLE
+
+Flow:
+
+### Step 1
+
+Upload media or enter text.
+
+### Step 2
+
+Ask question.
+
+### Step 3
+
+Select opinion type.
+
+### Step 4
+
+Enter options.
+
+### Step 5
+
+Choose category.
+
+### Step 6
+
+Optional:
+
+* anonymous post
+* comments enabled
+* voting duration
+* audience
+* tags
+
+### Step 7
+
+Preview.
+
+### Step 8
+
+Publish.
+
+The whole flow should be extremely easy.
+
+---
+
+# 20. POST CREATION EXAMPLE
+
+User uploads an image.
+
+Question:
+
+> "Which logo should I use for my startup?"
+
+Opinion type:
+
+A vs B
+
+Uploads:
+
+Logo A
+Logo B
+
+Category:
+
+Business
+
+Click:
+
+## ASK PEOPLE
+
+Done.
+
+---
+
+# 21. ANONYMOUS POSTING
+
+Allow optional anonymous posting.
+
+When enabled:
+
+Display:
+
+> Anonymous
+
+instead of username.
+
+But internally retain appropriate ownership information for moderation, security, and abuse prevention.
+
+---
+
+# 22. TRENDING SYSTEM
+
+Create a Trending page.
+
+Trending score should consider:
+
+* votes
+* votes per minute
+* views
+* shares
+* comments
+* recent growth
+* engagement velocity
+
+Do NOT rank only by total votes.
+
+A new post with rapidly increasing engagement should be able to trend.
+
+Display:
+
+🔥 Trending Now
+
+1. "Would you buy this?"
+2. "Which logo?"
+3. "AI will replace..."
+4. etc.
+
+---
+
+# 23. DISCOVER PAGE
+
+Create discovery categories.
+
+Example:
+
+🔥 Trending
+
+🤖 AI
+
+📱 Technology
+
+👕 Fashion
+
+🍔 Food
+
+🚗 Cars
+
+💼 Business
+
+🎬 Movies
+
+🎮 Gaming
+
+😂 Funny
+
+---
+
+# 24. SEARCH
+
+Implement search for:
+
+* users
+* posts
+* questions
+* tags
+* categories
+
+Search should be fast.
+
+Use debouncing.
+
+Show suggested searches.
+
+---
+
+# 25. NOTIFICATIONS
+
+Implement notifications for:
+
+* someone voted on your post
+* someone commented
+* someone replied
+* someone followed you
+* someone liked your post
+* your prediction was resolved
+* your post started trending
+* moderation action
+
+Allow notification settings.
+
+---
+
+# 26. MODERATION
+
+This is extremely important.
+
+The platform allows user-generated content.
+
+Build a moderation pipeline.
+
+Every uploaded content item should be eligible for:
+
+* spam detection
+* NSFW detection
+* harassment detection
+* hate speech detection
+* violence detection
+* illegal content detection
+* personal information detection
+* copyright-risk detection
+* malicious URL detection
+
+Use AI moderation APIs where appropriate.
+
+Architecture should allow moderation provider replacement.
+
+Content states:
+
+PENDING
+APPROVED
+REJECTED
+HIDDEN
+REMOVED
+
+---
+
+# 27. REPORT SYSTEM
+
+Users can report:
+
+Post
+Comment
+User
+
+Report reasons:
+
+* Spam
+* Harassment
+* Hate
+* Nudity/sexual content
+* Violence
+* Scam
+* Misinformation
+* Copyright
+* Other
+
+Admin dashboard must show:
+
+Report ID
+Content
+User
+Reason
+Created date
+Status
+Moderator
+Action
+
+---
+
+# 28. ANTI-ABUSE
+
+Implement protection against:
+
+* vote manipulation
+* bot voting
+* duplicate voting
+* spam posts
+* mass account creation
+* comment spam
+* API abuse
+* scraping
+* automated attacks
+
+Use:
+
+* rate limiting
+* CAPTCHA when suspicious
+* IP/device risk signals where legally appropriate
+* server-side validation
+* database constraints
+* authentication checks
+* abuse scoring
+
+Never expose sensitive security information to normal users.
+
+---
+
+# 29. PRIVACY
+
+Do not expose:
+
+* email
+* IP address
+* internal IDs
+* moderation information
+* security signals
+
+Provide:
+
+Privacy Policy
+Terms of Service
+Community Guidelines
+Cookie Policy
+
+Provide account deletion.
+
+Provide data export capability if required by applicable privacy laws.
+
+---
+
+# 30. ADVERTISEMENT SYSTEM
+
+The business model is advertising.
+
+Design the platform so advertisements can be integrated without destroying the UX.
+
+Potential placements:
+
+### Feed Ad
+
+After every N posts.
+
+### Banner
+
+Category/discovery pages.
+
+### Native Sponsored Opinion
+
+Clearly labeled:
+
+Sponsored
+
+### Desktop sidebar
+
+Only on desktop.
+
+Do NOT put ads immediately after every vote.
+
+Do not make the site feel like an ad farm.
+
+Prepare integration for:
+
+Google AdSense / Google Ad Manager or another ad provider.
+
+Advertisement configuration should be manageable through Admin.
+
+---
+
+# 31. ADMIN DASHBOARD
+
+Create a complete admin dashboard.
+
+Sections:
+
+## Dashboard
+
+Show:
+
+DAU
+MAU
+New users
+Posts
+Votes
+Comments
+Shares
+Reports
+Retention
+Average session duration
+Posts per user
+Votes per user
+Trending posts
+Revenue
+
+## Users
+
+Search/filter:
+
+* username
+* email
+* status
+* date
+* activity
+
+Actions:
+
+* view
+* suspend
+* ban
+* restore
+* verify
+
+## Posts
+
+Search/filter:
+
+* category
+* status
+* date
+* engagement
+* reports
+
+Actions:
+
+* approve
+* hide
+* remove
+* feature
+
+## Reports
+
+Moderation queue.
+
+## Categories
+
+CRUD.
+
+## Tags
+
+CRUD.
+
+## Ads
+
+Configure:
+
+* placements
+* frequency
+* enabled/disabled
+* sponsored content
+
+## Analytics
+
+Charts for:
+
+* users
+* sessions
+* votes
+* engagement
+* retention
+* content creation
+
+---
+
+# 32. ANALYTICS
+
+Track product events.
+
+Examples:
+
+page_view
+feed_impression
+post_impression
+vote_started
+vote_completed
+post_created
+post_shared
+post_saved
+comment_created
+follow_created
+search
+report_created
+ad_impression
+ad_click
+
+Create an analytics architecture that can later integrate with:
+
+GA4
+PostHog
+Mixpanel
+Amplitude
+
+Do not tightly couple the application to one analytics provider.
+
+---
+
+# 33. DATABASE
+
+Use a relational database such as PostgreSQL.
+
+Design proper normalized tables.
+
+At minimum:
+
+users
+profiles
+posts
+post_media
+post_options
+votes
+comments
+comment_likes
+follows
+likes
+saved_posts
+categories
+tags
+post_tags
+reports
+notifications
+predictions
+prediction_results
+moderation_events
+user_blocks
+user_mutes
+ad_configurations
+analytics_events
+
+Add:
+
+created_at
+updated_at
+
+where appropriate.
+
+Use indexes for:
+
+* feed queries
+* user lookup
+* category lookup
+* trending
+* voting
+* comments
+* notifications
+* search
+
+Use foreign keys and constraints.
+
+---
+
+# 34. DATABASE VOTING CONSTRAINT
+
+A user must not be able to vote twice on the same post.
+
+Implement a unique constraint equivalent to:
+
+(user_id, post_id)
+
+For anonymous users, design an appropriate abuse-resistant strategy.
+
+Never rely only on frontend logic.
+
+---
+
+# 35. API ARCHITECTURE
+
+Build clean REST or equivalent API architecture.
+
+Examples:
+
+POST /auth/register
+POST /auth/login
+
+GET /feed
+GET /posts/:id
+POST /posts
+DELETE /posts/:id
+
+POST /posts/:id/vote
+GET /posts/:id/results
+
+POST /posts/:id/comments
+GET /posts/:id/comments
+
+POST /users/:id/follow
+DELETE /users/:id/follow
+
+POST /posts/:id/like
+POST /posts/:id/save
+
+POST /reports
+
+GET /trending
+GET /search
+
+Admin APIs must be separately protected.
+
+---
+
+# 36. FRONTEND ARCHITECTURE
+
+Use a modern production-grade frontend framework.
+
+Prefer:
+
+React / Next.js
+
+Use TypeScript.
+
+Use reusable components.
+
+Suggested components:
+
+Feed
+OpinionCard
+MediaViewer
+VoteButtons
+VoteResults
+PostCreator
+CommentSection
+UserAvatar
+UserProfile
+TrendingList
+CategorySelector
+SearchBar
+NotificationPanel
+ShareMenu
+ReportDialog
+AdminDashboard
+
+Keep components modular.
+
+---
+
+# 37. MOBILE-FIRST
+
+This is critical.
+
+The primary interface should feel like a mobile social application.
+
+Optimize for:
+
+360px
+390px
+412px
+768px
+1024px
+1440px+
+
+On mobile:
+
+* vertical feed
+* thumb-friendly buttons
+* minimal navigation
+* fast media
+* bottom navigation
+
+Bottom navigation:
+
+🏠 Home
+🔥 Trending
+➕ Ask
+🔍 Discover
+👤 Profile
+
+---
+
+# 38. DESKTOP
+
+Desktop should use:
+
+Left navigation
+Main feed
+Optional right sidebar
+
+Example:
+
+---
+
+WHATDO       FEED                  TRENDING
+Home         [POST]               #AI
+Trending     [POST]               #iPhone
+Discover     [POST]               #Startup
+Ask
+Profile
+-------
+
+Do not simply stretch the mobile design.
+
+Create a proper responsive desktop experience.
+
+---
+
+# 39. UI DESIGN
+
+Design direction:
+
+Modern
+Minimal
+Fast
+Social
+Playful
+Premium
+Highly visual
+
+Avoid:
+
+* clutter
+* excessive gradients
+* huge navigation
+* unnecessary text
+* old-fashioned forum UI
+
+Use:
+
+* rounded cards
+* strong typography
+* large media
+* clear voting buttons
+* subtle animations
+* generous whitespace
+* excellent contrast
+
+The voting buttons must be the visual focus.
+
+---
+
+# 40. MICRO INTERACTIONS
+
+Add tasteful animations:
+
+* vote selection
+* result reveal
+* progress bars
+* card transitions
+* button feedback
+* save animation
+* like animation
+
+Animations must be fast.
+
+Do not sacrifice performance.
+
+Respect prefers-reduced-motion.
+
+---
+
+# 41. DARK MODE
+
+Support:
+
+Light mode
+Dark mode
+System preference
+
+Persist preference.
+
+---
+
+# 42. ACCESSIBILITY
+
+Implement:
+
+* semantic HTML
+* keyboard navigation
+* ARIA labels
+* accessible voting buttons
+* sufficient contrast
+* focus states
+* screen-reader-friendly controls
+* reduced-motion support
+
+The voting interaction must be usable without a mouse.
+
+---
+
+# 43. PERFORMANCE
+
+Performance is a priority.
+
+Implement:
+
+* lazy image loading
+* responsive images
+* video optimization
+* pagination/infinite scroll
+* caching
+* CDN-ready media
+* code splitting
+* optimized API requests
+* optimistic UI where safe
+* database indexes
+
+Target:
+
+Lighthouse Performance > 90 where realistically achievable.
+
+Core Web Vitals should be optimized.
+
+---
+
+# 44. SEO
+
+Public posts should be indexable where appropriate.
+
+Generate:
+
+* title
+* meta description
+* canonical URL
+* Open Graph image
+* Twitter/X card
+* structured data where appropriate
+
+Example title:
+
+"Would You Buy This AI Phone? — WHATDO"
+
+Do not index private profiles/content.
+
+Create:
+
+sitemap.xml
+robots.txt
+
+---
+
+# 45. PWA
+
+Make the application installable as a Progressive Web App.
+
+Include:
+
+manifest
+icons
+theme metadata
+basic offline shell where practical
+
+Do not build a separate native mobile application for MVP.
+
+The web app must be mobile-first and PWA-ready.
+
+---
+
+# 46. CONTENT QUALITY
+
+Do not allow users to create meaningless spam such as:
+
+"hello"
+"test"
+"what do you think?"
+
+unless intentionally allowed.
+
+Require a meaningful question for opinion posts.
+
+Validate:
+
+Question length
+Option length
+Media requirements
+
+Prevent empty submissions.
+
+---
+
+# 47. CREATOR QUALITY
+
+Track creator-level metrics:
+
+Views
+Votes
+Engagement rate
+Share rate
+Comment rate
+Reports
+Follower growth
+
+Eventually use creator quality in feed ranking.
+
+---
+
+# 48. OPINION INSIGHTS
+
+For each post, display useful statistics.
+
+Example:
+
+## What People Think
+
+YES — 72%
+NO — 28%
+
+1,842 votes
+
+Men: 68% YES
+Women: 75% YES
+
+18–24: 81%
+25–34: 73%
+
+IMPORTANT:
+
+Do not expose demographic breakdowns unless collected legally, ethically, with sufficient sample sizes, and with appropriate privacy controls.
+
+For MVP, simply show:
+
+Overall
+Optional region/category breakdown where privacy-safe.
+
+---
+
+# 49. CONTROVERSY SCORE
+
+Create an optional metric:
+
+## Controversy
+
+If voting distribution is close to 50/50, controversy score increases.
+
+Example:
+
+50/50 = highly controversial
+
+95/5 = low controversy
+
+Use this for discovery.
+
+Section:
+
+🔥 Most Controversial
+
+---
+
+# 50. VIRALITY SCORE
+
+Calculate a post's velocity.
+
+Consider:
+
+votes/minute
+views/minute
+shares/minute
+comments/minute
+
+A post that suddenly becomes popular should surface quickly.
+
+---
+
+# 51. CONTENT LIFECYCLE
+
+Posts should have states:
+
+DRAFT
+PENDING_MODERATION
+PUBLISHED
+CLOSED
+HIDDEN
+REMOVED
+
+Prediction posts additionally have:
+
+OPEN
+CLOSED
+RESOLVED
+
+---
+
+# 52. POST EXPIRATION
+
+Allow creators to optionally choose:
+
+No expiration
+24 hours
+3 days
+7 days
+30 days
+
+Expired polls remain viewable but voting is closed.
+
+---
+
+# 53. SHAREABLE RESULT
+
+Create a beautiful result page.
+
+Example:
+
+---
+
+WHATDO RESULT
+
+"Would you buy this?"
+
+YES
+██████████████ 72%
+
+NO
+██████ 28%
+
+1,842 people voted
+
+What would YOU choose?
+
+## [Vote]
+
+This page should be highly shareable.
+
+---
+
+# 54. ONBOARDING
+
+Keep onboarding minimal.
+
+After signup:
+
+"What are you interested in?"
+
+Allow selection:
+
+AI
+Technology
+Business
+Cars
+Fashion
+Food
+Sports
+Movies
+Gaming
+Travel
+Lifestyle
+Funny
+Design
+
+Use preferences to seed feed.
+
+Allow skip.
+
+---
+
+# 55. NOTIFICATION STRATEGY
+
+Do not spam.
+
+Use notifications intelligently.
+
+Examples:
+
+"Your post reached 1,000 votes."
+
+"People are debating your question."
+
+"Your prediction was correct."
+
+"Your post is trending."
+
+Allow users to disable categories.
+
+---
+
+# 56. SECURITY
+
+Implement:
+
+* secure authentication
+* password hashing
+* CSRF protection where applicable
+* XSS prevention
+* SQL injection prevention
+* secure headers
+* input sanitization
+* rate limiting
+* authorization checks
+* signed media URLs where appropriate
+* secure admin authentication
+
+Never expose secrets in frontend code.
+
+Use environment variables.
+
+---
+
+# 57. ERROR HANDLING
+
+Create excellent error states.
+
+Examples:
+
+No internet
+Server error
+Post deleted
+Post unavailable
+Voting failed
+Upload failed
+Session expired
+
+Give users understandable messages.
+
+Never expose stack traces.
+
+---
+
+# 58. EMPTY STATES
+
+Design useful empty states.
+
+Example:
+
+No posts yet:
+
+> "Nothing here yet. Be the first to ask."
+
+No saved posts:
+
+> "Save opinions you want to revisit."
+
+No notifications:
+
+> "You're all caught up."
+
+---
+
+# 59. SEED DATA
+
+Create realistic development seed data.
+
+At least:
+
+50 users
+100 posts
+multiple categories
+multiple vote distributions
+comments
+followers
+trending content
+reports
+
+Use realistic content.
+
+Do not use lorem ipsum.
+
+---
+
+# 60. TESTING
+
+Implement:
+
+Unit tests
+Integration tests
+API tests
+Voting tests
+Authentication tests
+Authorization tests
+Feed tests
+Moderation tests
+
+Critical tests:
+
+1. User cannot vote twice.
+2. User cannot vote on closed poll.
+3. Unauthorized user cannot create post.
+4. Admin-only endpoints are protected.
+5. Deleted posts disappear from feed.
+6. Blocked users do not appear.
+7. Report workflow works.
+8. Vote percentages are correct.
+9. Feed pagination works.
+10. Media upload validation works.
+
+---
+
+# 61. RATE LIMITS
+
+Create configurable rate limits for:
+
+login
+signup
+vote
+post creation
+comments
+reports
+search
+API requests
+
+Do not hardcode limits throughout the application.
+
+---
+
+# 62. ENVIRONMENT CONFIGURATION
+
+Use environment variables for:
+
+DATABASE_URL
+AUTH_SECRET
+STORAGE credentials
+AI moderation credentials
+ANALYTICS credentials
+AD provider credentials
+
+Create:
+
+.env.example
+
+Never commit secrets.
+
+---
+
+# 63. STORAGE
+
+Use object storage for:
+
+images
+videos
+avatars
+
+Architecture should support:
+
+AWS S3
+Cloudflare R2
+Supabase Storage
+
+Choose a practical default based on the project stack.
+
+Keep storage provider abstraction where reasonable.
+
+---
+
+# 64. MEDIA PROCESSING
+
+For uploads:
+
+Validate MIME type.
+
+Validate file size.
+
+Generate thumbnails.
+
+Compress images.
+
+Generate video poster frames.
+
+Store metadata.
+
+Reject dangerous files.
+
+Never trust the filename extension.
+
+---
+
+# 65. ADMIN FEATURED CONTENT
+
+Admin can mark posts:
+
+Featured
+
+Featured posts can appear in:
+
+Home
+Trending
+Discovery
+
+Make this configurable.
+
+---
+
+# 66. SPONSORED CONTENT
+
+Prepare a system for sponsored questions.
+
+Example:
+
+Sponsored
+
+"Which laptop would you choose?"
+
+Clearly distinguish sponsored content from normal user content.
+
+Never disguise advertisements as ordinary organic posts.
+
+---
+
+# 67. MONETIZATION ARCHITECTURE
+
+Initially support:
+
+Display advertising
+
+Later architecture can support:
+
+Sponsored opinions
+Creator monetization
+Premium analytics
+Brand polls
+Market research
+Paid promoted posts
+
+Do NOT implement payments unless required for MVP.
+
+Prepare clean architecture for future monetization.
+
+---
+
+# 68. FUTURE B2B PRODUCT
+
+Design the data model so the platform can eventually offer:
+
+## WHATDO FOR BUSINESS
+
+Brands can ask:
+
+"Which packaging design do consumers prefer?"
+
+"Which product name?"
+
+"Which advertisement?"
+
+"Would you buy this?"
+
+Businesses pay for:
+
+* audience responses
+* demographic insights where privacy-safe
+* response volume
+* analytics
+* sentiment
+* A/B testing
+
+Do not build the entire B2B system now.
+
+But do not architect the database in a way that prevents it later.
+
+---
+
+# 69. AI FEATURES
+
+Prepare an AI service layer.
+
+Future capabilities:
+
+### AI Question Generator
+
+User uploads image.
+
+AI suggests:
+
+"What do you think of this design?"
+
+"Would you buy this?"
+
+"Rate this design."
+
+### AI Category Detection
+
+Automatically classify posts.
+
+### AI Moderation
+
+Detect unsafe content.
+
+### AI Feed Personalization
+
+Recommend content.
+
+### AI Summarization
+
+Summarize comments:
+
+"Most people like the design, but complain about the price."
+
+### AI Insight
+
+Example:
+
+"People strongly prefer Option A."
+
+Architecture should allow these features to be enabled independently.
+
+---
+
+# 70. AI API ARCHITECTURE
+
+Do not hardcode one AI provider into the entire codebase.
+
+Create an abstraction such as:
+
+AIProvider
+
+with capabilities:
+
+moderateContent()
+generateQuestion()
+classifyContent()
+summarizeComments()
+
+Allow future provider replacement.
+
+---
+
+# 71. LEGAL PAGES
+
+Create:
+
+/terms
+/privacy
+/community-guidelines
+/cookies
+
+Use professional placeholder legal content that clearly indicates it should be reviewed by qualified counsel before production.
+
+---
+
+# 72. ABOUT PAGE
+
+Explain:
+
+WHATDO helps people quickly discover what others think.
+
+Simple.
+
+---
+
+# 73. LANDING PAGE
+
+For logged-out users, create a high-conversion landing page.
+
+Hero:
+
+# SEE IT.
+
+# VOTE IT.
+
+# KNOW WHAT PEOPLE THINK.
+
+Subheading:
+
+> Scroll through questions, images, videos and ideas — and tell the world what you think in one tap.
+
+CTA:
+
+## Start Exploring
+
+Secondary:
+
+## Ask People
+
+Show example opinion cards.
+
+---
+
+# 74. CORE NAVIGATION
+
+Mobile:
+
+Home
+Trending
+Ask
+Discover
+Profile
+
+Desktop:
+
+Home
+Trending
+Discover
+Ask People
+Notifications
+Profile
+
+---
+
+# 75. DESIGN SYSTEM
+
+Create reusable design tokens:
+
+Typography
+Spacing
+Border radius
+Shadows
+Buttons
+Cards
+Inputs
+Badges
+Progress bars
+Modals
+Toasts
+
+Use consistent components throughout the application.
+
+---
+
+# 76. TECHNICAL QUALITY
+
+Write clean, maintainable TypeScript.
+
+Avoid:
+
+* duplicated code
+* massive components
+* hardcoded configuration
+* insecure API routes
+* unnecessary dependencies
+
+Use clear folder structure.
+
+Document important architectural decisions.
+
+---
+
+# 77. README
+
+Create a complete README containing:
+
+Product overview
+Architecture
+Tech stack
+Setup
+Environment variables
+Database setup
+Migration
+Seed data
+Running locally
+Testing
+Production deployment
+Storage configuration
+AI configuration
+Analytics configuration
+Admin setup
+
+---
+
+# 78. DEPLOYMENT
+
+Prepare the application for production deployment.
+
+Prefer a practical stack such as:
+
+Frontend/API:
+Next.js
+
+Database:
+PostgreSQL
+
+Storage:
+S3-compatible storage
+
+Authentication:
+secure managed authentication or robust custom implementation
+
+Deployment:
+Vercel / equivalent
+
+Database:
+managed PostgreSQL
+
+Make deployment instructions explicit.
+
+---
+
+# 79. OBSERVABILITY
+
+Prepare:
+
+Error logging
+Server logs
+Performance monitoring
+API latency monitoring
+
+Admin should be able to see basic system health.
+
+---
+
+# 80. PRODUCT ANALYTICS DASHBOARD
+
+Admin dashboard should calculate:
+
+DAU
+WAU
+MAU
+
+DAU/MAU
+
+Average session duration
+
+Votes per session
+
+Posts per user
+
+Votes per user
+
+Percentage of users who vote
+
+Percentage of users who create posts
+
+D1 retention
+D7 retention
+D30 retention
+
+Top categories
+
+Top posts
+
+Top creators
+
+Report rate
+
+Moderation rate
+
+---
+
+# 81. THE MOST IMPORTANT KPI
+
+Track:
+
+## Votes per active user per session
+
+This is the core engagement metric.
+
+Also track:
+
+## Feed scroll depth
+
+## Time spent
+
+## Return rate
+
+## Posts created
+
+## Share rate
+
+---
+
+# 82. UX PRINCIPLE
+
+The application must NEVER feel like work.
+
+A user should be able to:
+
+Open website
+
+↓
+See opinion
+
+↓
+Tap
+
+↓
+See result
+
+↓
+Scroll
+
+↓
+Tap
+
+↓
+Scroll
+
+without reading documentation or understanding complex features.
+
+---
+
+# 83. FIRST-TIME USER FLOW
+
+Visitor opens site.
+
+Immediately sees a post.
+
+They try to vote.
+
+If not logged in:
+
+Show lightweight login/signup prompt.
+
+After authentication:
+
+Return them to the exact post.
+
+Vote.
+
+Reveal results.
+
+Continue feed.
+
+Do not lose their context.
+
+---
+
+# 84. FEED CARD DESIGN
+
+Every card should contain:
+
+Creator
+Avatar
+Category
+Question
+Media
+Voting controls
+Result
+Vote count
+Comment count
+Share
+Save
+More menu
+
+Example:
+
+---
+
+@alex     • Technology
+
+Would you buy this AI phone?
+
+[ LARGE IMAGE ]
+
+[ YES ]       [ NO ]
+
+67% YES
+
+1,284 votes
+
+💬 128    ↗ Share    🔖 Save
+
+---
+
+---
+
+# 85. FEED GESTURES
+
+On mobile:
+
+Swipe up → next post
+
+Swipe down → previous post
+
+Tap → interact
+
+Long press → optionally pause media
+
+But also support normal browser scrolling.
+
+Do NOT break native browser scrolling.
+
+---
+
+# 86. VIDEO FEED
+
+For video posts:
+
+Use an experience inspired by modern short-video feeds, but keep WHATDO's core purpose:
+
+Video
+
+↓
+
+Question
+
+↓
+
+Vote
+
+Example:
+
+[VIDEO]
+
+"Is this the future of cars?"
+
+YES / NO
+
+---
+
+# 87. CONTENT DISCOVERY
+
+Users should be able to discover:
+
+Trending
+Popular
+New
+Controversial
+Following
+Categories
+
+---
+
+# 88. SORTING
+
+Support:
+
+Trending
+Newest
+Most votes
+Most controversial
+Most discussed
+
+---
+
+# 89. COMMENTS SHOULD NOT DOMINATE
+
+Do not make comments the primary UI.
+
+Voting is the primary action.
+
+Comments are secondary.
+
+The product is about **opinions at scale**, not long discussions.
+
+---
+
+# 90. DATABASE SCALABILITY
+
+Design for future scale.
+
+Avoid database queries that load all votes.
+
+Store aggregated counters where appropriate:
+
+vote_count
+view_count
+comment_count
+share_count
+
+Update safely.
+
+Use background jobs if necessary for heavy aggregation.
+
+---
+
+# 91. CACHING
+
+Cache:
+
+Trending posts
+Categories
+Popular tags
+Public post results where appropriate
+
+Invalidate cache when important content changes.
+
+---
+
+# 92. BACKGROUND JOBS
+
+Architecture should support jobs for:
+
+* media processing
+* moderation
+* notifications
+* analytics aggregation
+* trending calculation
+* prediction resolution
+* cleanup
+
+Use a queue system if appropriate.
+
+---
+
+# 93. ADMIN SECURITY
+
+Admin dashboard must require:
+
+* authenticated admin user
+* role-based authorization
+* secure sessions
+
+Never rely on hiding the admin URL.
+
+---
+
+# 94. ABUSE DASHBOARD
+
+Admin should see:
+
+Users with unusual voting patterns
+Rapid account creation
+High report counts
+Suspicious vote velocity
+Repeated content
+Spam patterns
+
+Allow manual review.
+
+---
+
+# 95. CONTENT DUPLICATION
+
+Detect obvious duplicate posts.
+
+At minimum:
+
+* duplicate text detection
+* repeated media hash detection where practical
+
+Prevent users from flooding the feed with identical content.
+
+---
+
+# 96. USER BLOCKING
+
+If User A blocks User B:
+
+B's content should not appear to A.
+
+B should not be able to interact with A through normal platform functionality.
+
+Apply this consistently across:
+
+feed
+comments
+profiles
+notifications
+search
+
+---
+
+# 97. USER REPORTING
+
+Allow users to report accounts.
+
+Admin should see report history.
+
+Repeated violations should influence moderation decisions.
+
+---
+
+# 98. ACCOUNT DELETION
+
+When a user deletes their account:
+
+* remove/anonymize personal data according to policy
+* preserve necessary aggregate statistics
+* handle their posts according to configured deletion policy
+* invalidate sessions
+* remove private media
+
+Implement securely.
+
+---
+
+# 99. ACCESSIBILITY + INTERNATIONALIZATION
+
+Prepare architecture for multiple languages.
+
+Initially launch English.
+
+Keep UI strings separate from application logic.
+
+Future languages:
+
+Hindi
+Marathi
+Spanish
+etc.
+
+---
+
+# 100. FINAL PRODUCT STRUCTURE
+
+Build these primary pages:
+
+/
+/login
+/register
+/feed
+/trending
+/discover
+/ask
+/post/[id]
+/profile/[username]
+/settings
+/notifications
+/search
+/saved
+/admin
+
+---
+
+# 101. MVP PRIORITY
+
+If you cannot implement everything simultaneously, prioritize in exactly this order:
+
+### P0 — MUST WORK
+
+1. Authentication
+2. Feed
+3. Post creation
+4. Image upload
+5. YES/NO voting
+6. Vote results
+7. Database
+8. User profiles
+9. Infinite scrolling
+10. Basic moderation
+11. Reporting
+12. Responsive mobile UI
+
+### P1
+
+13. Comments
+14. Likes
+15. Saves
+16. Follow
+17. Trending
+18. Categories
+19. Search
+20. Notifications
+21. Admin dashboard
+22. Analytics
+
+### P2
+
+23. Video
+24. Predictions
+25. AI moderation
+26. AI question generation
+27. Advanced recommendation system
+28. Ads
+29. PWA
+30. Advanced gamification
+
+---
+
+# 102. IMPORTANT DEVELOPMENT RULE
+
+Do NOT generate a fake frontend prototype with static data and call the project complete.
+
+Every important feature must be connected to a real backend/database.
+
+The following must persist after page refresh:
+
+* accounts
+* posts
+* votes
+* results
+* comments
+* likes
+* follows
+* saved posts
+* notifications
+* reports
+
+---
+
+# 103. DO NOT USE MOCK DATA IN PRODUCTION PATHS
+
+Seed data is acceptable for development.
+
+But production pages must retrieve real data from the database.
+
+Clearly separate:
+
+development seed data
+
+from
+
+production data.
+
+---
+
+# 104. BUILD ORDER
+
+Build in phases.
+
+## Phase 1
+
+Architecture
+Database
+Authentication
+Basic layout
+
+## Phase 2
+
+Post creation
+Media upload
+Voting
+Results
+
+## Phase 3
+
+Feed
+Infinite scroll
+Categories
+Trending
+
+## Phase 4
+
+Social features
+Comments
+Likes
+Follows
+Saves
+Notifications
+
+## Phase 5
+
+Moderation
+Reports
+Admin dashboard
+
+## Phase 6
+
+Analytics
+SEO
+Performance
+PWA
+
+## Phase 7
+
+AI
+Predictions
+Advertising
+Advanced recommendation
+
+---
+
+# 105. BEFORE CODING
+
+First analyze this specification and create:
+
+1. System architecture
+2. Database schema
+3. API design
+4. Component architecture
+5. User flows
+6. Admin flows
+7. Security model
+8. Moderation architecture
+9. Deployment architecture
+
+Then implement.
+
+Do not ask unnecessary questions.
+
+Make sensible engineering decisions where the specification does not dictate a particular implementation.
+
+---
+
+# 106. FINAL ACCEPTANCE CRITERIA
+
+The application is considered complete only when a new user can:
+
+1. Open WHATDO.
+2. Browse the opinion feed.
+3. Sign up.
+4. Vote on a post.
+5. Immediately see results.
+6. Scroll to another post.
+7. Create their own opinion post.
+8. Upload an image.
+9. Ask a question.
+10. Select voting options.
+11. Publish it.
+12. Receive votes.
+13. See voting analytics.
+14. Comment.
+15. Follow another user.
+16. Save a post.
+17. Share a post.
+18. Receive notifications.
+19. Report inappropriate content.
+20. View their profile and statistics.
+
+And an admin can:
+
+1. Log into admin.
+2. View users.
+3. View posts.
+4. View reports.
+5. Moderate content.
+6. Suspend users.
+7. Manage categories.
+8. View analytics.
+9. Manage featured posts.
+10. Configure advertising.
+
+---
+
+# 107. MOST IMPORTANT PRODUCT PRINCIPLE
+
+The winning feature is NOT the number of features.
+
+The winning feature is:
+
+# "I have nothing to do. Let me scroll and tell you what I think."
+
+Optimize the entire product around this behavior.
+
+Every additional feature must support one of these goals:
+
+**DISCOVER**
+
+**OPINIONATE**
+
+**SHARE**
+
+**CREATE**
+
+**RETURN**
+
+Do not turn WHATDO into a complicated social network.
+
+Make it extremely easy to consume and extremely easy to give an opinion.
+
+---
+
+# START NOW
+
+First inspect the existing project/repository and determine whether this is a new project or an existing application.
+
+Then:
+
+1. Set up the architecture.
+2. Create the database schema.
+3. Create the core UI.
+4. Implement authentication.
+5. Implement real post creation.
+6. Implement real voting.
+7. Implement result calculation.
+8. Implement the infinite feed.
+9. Implement moderation foundations.
+10. Implement the admin foundation.
+
+After each major phase, verify that the application actually runs.
+
+Fix errors before moving forward.
+
+Do not leave broken imports, placeholder routes, fake APIs, dead buttons, or unfinished critical flows.
+
+Build the application as a **real production-ready product**, not merely a visual prototype.

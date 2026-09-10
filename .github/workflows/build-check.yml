@@ -1,0 +1,55 @@
+name: Build & Quality Gate
+
+on:
+  pull_request:
+    branches: [main, master, staging, develop]
+  push:
+    branches: [main, master, staging, develop]
+
+concurrency:
+  group: build-check-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  quality:
+    name: TypeCheck + Lint + Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit --no-fund
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Prettier format check
+        run: npm run format:check || true
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: TypeScript strict check
+        run: npm run typecheck
+
+      - name: Next.js production build
+        env:
+          # Minimal env required for `next build` to succeed without a real DB.
+          # Values are placeholders; build should never hit them only references type-check.
+          DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder?schema=public
+          AUTH_SECRET: ci-build-secret-do-not-use
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+        run: npm run build
