@@ -30,7 +30,7 @@ export const CategoryGrid: React.FC<CategoryGridProps> = ({
   onCategoryClick,
 }) => {
   const router = useRouter();
-  const query = trpc.categories.listAll.useQuery({ staleTime: 60_000 });
+  const query = trpc.categories.listAll.useQuery(undefined, { staleTime: 60_000 });
 
   const categories = query.data ?? [];
   const isLoading = query.isLoading;

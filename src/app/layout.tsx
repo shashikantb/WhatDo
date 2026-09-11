@@ -43,7 +43,7 @@ export const metadata: Metadata = {
     ],
     shortcut: ["/favicon.svg"],
   },
-  appleWebKit: {
+  appleWebApp: {
     title: "WHATDO",
     statusBarStyle: "black-translucent",
     startupImage: [],

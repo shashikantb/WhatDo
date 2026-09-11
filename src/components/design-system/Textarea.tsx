@@ -24,7 +24,8 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
     },
     ref
   ) => {
-    const inputId = id ?? React.useId();
+    const autoId = React.useId();
+    const inputId = id ?? autoId;
 
     return (
       <div className="w-full space-y-1.5">

@@ -2,12 +2,14 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Home, Flame, Plus, Search, User } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { Home, Flame, Plus, Search, User, LogIn } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Modal } from "@/components/design-system/Modal";
 import { CreatePostFlow } from "@/components/post-creator/CreatePostFlow";
 import { MessageCircleQuestion } from "lucide-react";
+import { useLoginModal } from "@/components/auth/LoginModal";
 
 interface NavItem {
   label: string;
@@ -17,7 +19,7 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { label: "Home", href: "/feed", icon: Home },
+  { label: "Home", href: "/", icon: Home },
   { label: "Trending", href: "/trending", icon: Flame },
   { label: "Ask", href: "/ask", icon: Plus, isCenterButton: true },
   { label: "Discover", href: "/discover", icon: Search },
@@ -26,6 +28,10 @@ const navItems: NavItem[] = [
 
 export const BottomNav: React.FC = () => {
   const pathname = usePathname();
+  const router = useRouter();
+  const { data: session, status } = useSession();
+  const { openLogin } = useLoginModal();
+  const isAuthenticated = status === "authenticated";
   const [askModalOpen, setAskModalOpen] = React.useState(false);
 
   const isActive = (href: string) => {
@@ -61,6 +67,27 @@ export const BottomNav: React.FC = () => {
                   aria-label={item.label}
                 >
                   <Icon className="h-7 w-7" />
+                </button>
+              );
+            }
+
+            if (item.label === "Profile" && !isAuthenticated) {
+              return (
+                <button
+                  key={item.href}
+                  type="button"
+                  onClick={() => openLogin()}
+                  className={cn(
+                    "flex flex-col items-center justify-center gap-0.5 py-1.5 px-3 rounded-lg min-w-[60px]",
+                    "transition-colors duration-200",
+                    "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  )}
+                  aria-label={item.label}
+                >
+                  <LogIn className="h-5 w-5" />
+                  <span className="text-[10px] font-medium leading-tight">
+                    Login
+                  </span>
                 </button>
               );
             }

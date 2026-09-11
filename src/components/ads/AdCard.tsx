@@ -41,7 +41,7 @@ function useImpressionRegister(adId: string | undefined) {
       void registerMut.mutateAsync({ adId }).catch(() => {});
     } catch {
     }
-  }, [adId]);
+  }, [adId, registerMut]);
 }
 
 export function AdCard({ placement, className, onLoaded }: AdCardProps) {
@@ -54,26 +54,27 @@ export function AdCard({ placement, className, onLoaded }: AdCardProps) {
     },
   );
 
-  React.useEffect(() => {
-    if (query.data && query.data.length > 0) {
-      onLoaded?.();
-    }
-  }, [query.data, onLoaded]);
-
   const ads = query.data ?? [];
-  if (ads.length === 0) return null;
-
+  const adsKey = ads.map((a) => a.id).join("|");
   const selectedIdx = React.useMemo(() => {
     return Math.floor(Math.random() * Math.max(1, ads.length));
-  }, [ads.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adsKey, ads.length]);
 
-  const ad = ads[Math.min(selectedIdx, ads.length - 1)];
-  if (!ad) return null;
-  const content = (ad.contentJson ?? {}) as AdContentShape;
+  const ad = ads.length > 0 ? ads[Math.min(selectedIdx, ads.length - 1)] : undefined;
 
-  useImpressionRegister(ad.id);
+  useImpressionRegister(ad?.id);
 
   const registerClick = trpc.ads.registerClick.useMutation();
+
+  React.useEffect(() => {
+    if (ads.length > 0) {
+      onLoaded?.();
+    }
+  }, [ads.length, onLoaded]);
+
+  if (!ad) return null;
+  const content = (ad.contentJson ?? {}) as AdContentShape;
 
   const handleClick = () => {
     if (!ad.id) return;

@@ -121,7 +121,7 @@ export function DiscoverPageClient() {
     { limit: 6 },
     { staleTime: 60_000 },
   );
-  const catsQuery = trpc.categories.listAll.useQuery({ staleTime: 60_000 });
+  const catsQuery = trpc.categories.listAll.useQuery(undefined, { staleTime: 60_000 });
 
   const trending = trendingQuery.data ?? [];
   const newPosts = (newPostsQuery.data as any)?.items ?? newPostsQuery.data ?? [];

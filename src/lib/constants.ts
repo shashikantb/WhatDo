@@ -10,7 +10,7 @@ export const POST_TYPES = [
   "PREDICTION",
 ] as const;
 export const ROLES = ["USER", "MODERATOR", "ADMIN", "SUPER_ADMIN"] as const;
-export const POST_STATUS = ["DRAFT", "PUBLISHED", "ARCHIVED", "REMOVED"] as const;
+export const POST_STATUS = ["DRAFT", "PENDING_MODERATION", "PUBLISHED", "CLOSED", "HIDDEN", "REMOVED"] as const;
 export const VOTE_OPTIONS = ["UP", "DOWN"] as const;
 export const NOTIFICATION_TYPES = [
   "VOTE",

@@ -77,7 +77,6 @@ export default function AdminUsersPage() {
       limit: 50,
     },
     {
-      keepPreviousData: true,
       staleTime: 30_000,
     }
   );

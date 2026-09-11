@@ -56,7 +56,8 @@ export default function AdminLayout({
     const groups: Record<string, typeof navItems> = {};
     for (const item of navItems) {
       if (!groups[item.section]) groups[item.section] = [];
-      groups[item.section].push(item);
+      const bucket = groups[item.section];
+      if (bucket) bucket.push(item);
     }
     return groups;
   }, []);
@@ -67,6 +68,7 @@ export default function AdminLayout({
     const crumbs = [{ label: "Admin", href: "/admin" }];
     for (let i = 1; i < parts.length; i++) {
       const slug = parts[i];
+      if (!slug) continue;
       const label = slug.charAt(0).toUpperCase() + slug.slice(1);
       crumbs.push({
         label,

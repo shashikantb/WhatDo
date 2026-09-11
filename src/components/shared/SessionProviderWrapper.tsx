@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { SessionProvider as NextAuthSessionProvider } from "next-auth/react";
 
 interface SessionProviderWrapperProps {
   children: React.ReactNode;
@@ -11,32 +12,7 @@ export const SessionProviderWrapper: React.FC<SessionProviderWrapperProps> = ({
   children,
   session,
 }) => {
-  const [NextAuthSessionProvider, setNextAuthSessionProvider] =
-    React.useState<null | React.ComponentType<{
-      children: React.ReactNode;
-      session?: unknown;
-    }>>(null);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    import("next-auth/react")
-      .then((mod) => {
-        if (!cancelled && mod?.SessionProvider) {
-          setNextAuthSessionProvider(() => mod.SessionProvider);
-        }
-      })
-      .catch(() => {
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  if (NextAuthSessionProvider) {
-    return (
-      <NextAuthSessionProvider session={session}>{children}</NextAuthSessionProvider>
-    );
-  }
-
-  return <>{children}</>;
+  return (
+    <NextAuthSessionProvider session={session}>{children}</NextAuthSessionProvider>
+  );
 };

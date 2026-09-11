@@ -15,7 +15,7 @@ import {
   Star,
   Flag,
   ExternalLink,
-  Image,
+  Image as ImageIcon,
   AlertTriangle,
   Clock,
 } from "lucide-react";
@@ -301,7 +301,7 @@ export default function AdminPostsPage() {
                     <td className="py-3 pr-2 text-center">
                       {Array.isArray(p.media) && p.media.length > 0 ? (
                       <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                        <Image className="h-3.5 w-3.5" />
+                        <ImageIcon className="h-3.5 w-3.5" aria-hidden={true} />
                         {p.media.length}
                       </span>
                     ) : (

@@ -6,7 +6,7 @@ import {
   Save,
   Zap,
   TrendingUp,
-  Feed,
+  Rss as Feed,
   Shield,
   Bot,
   ShieldCheck,

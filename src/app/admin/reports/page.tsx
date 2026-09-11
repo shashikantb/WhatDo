@@ -4,8 +4,6 @@ import * as React from "react";
 import Link from "next/link";
 import {
   Flag,
-  Search,
-  Filter,
   ChevronLeft,
   ChevronRight,
   User as UserIcon,
@@ -14,33 +12,28 @@ import {
   Eye,
   CheckCircle,
   XCircle,
-  AlertCircle,
-  Shield,
-  Clock,
   ShieldCheck,
   AlertTriangle,
   UserCheck,
-  ChevronDown,
-  GripVertical,
   ShieldX,
   UserX,
   Ban,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 import { useToast } from "@/components/design-system/Toaster";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/design-system/Card";
+import { Card, CardContent, CardHeader } from "@/components/design-system/Card";
 import { Badge } from "@/components/design-system/Badge";
 import { Button } from "@/components/design-system/Button";
-import { Input } from "@/components/design-system/Input";
 import { Select } from "@/components/design-system/Select";
 import { Modal } from "@/components/design-system/Modal";
 import { Textarea } from "@/components/design-system/Textarea";
 import { Avatar } from "@/components/design-system/Avatar";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/design-system/Tabs";
-import { formatNumber, formatRelativeTime } from "@/lib/utils";
+import { Tabs, TabsList, TabsTrigger } from "@/components/design-system/Tabs";
+import { formatRelativeTime } from "@/lib/utils";
 import { useSession } from "next-auth/react";
 
 const REASONS = ["SPAM", "HARASSMENT", "HATE", "NUDITY", "VIOLENCE", "SCAM", "MISINFORMATION", "COPYRIGHT", "OTHER"] as const;
+const ALL_STATUSES = ["ALL", "OPEN", "UNDER_REVIEW", "RESOLVED", "DISMISSED"] as const;
 const STATUSES = ["OPEN", "UNDER_REVIEW", "RESOLVED", "DISMISSED"] as const;
 const TYPES = ["POST", "COMMENT", "USER", "ALL"] as const;
 
@@ -77,7 +70,7 @@ export default function AdminReportsPage() {
   const { show } = useToast();
   const utils = trpc.useUtils();
 
-  const [tab, setTab] = React.useState<(typeof STATUSES)[number]>("OPEN");
+  const [tab, setTab] = React.useState<(typeof ALL_STATUSES)[number]>("OPEN");
   const [typeFilter, setTypeFilter] = React.useState<(typeof TYPES)[number]>("ALL");
   const [assignedFilter, setAssignedFilter] = React.useState<"all" | "me" | "unassigned">("all");
   const [reasonFilter, setReasonFilter] = React.useState<string>("ALL");
@@ -97,7 +90,7 @@ export default function AdminReportsPage() {
       cursor,
       limit: 50,
     },
-    { keepPreviousData: true, staleTime: 15_000, refetchInterval: 60_000 }
+    { staleTime: 15_000, refetchInterval: 60_000 }
   );
 
   const resolveMut = trpc.reports.resolve.useMutation({
@@ -250,13 +243,6 @@ export default function AdminReportsPage() {
           )}
 
           {pageItems.map((r) => {
-            const target =
-              r.type === "POST"
-                ? r.reportedPost
-                : r.type === "COMMENT"
-                ? r.reportedComment
-                : r.reportedUser;
-
             const count = (r as any).count ?? 1;
 
             return (

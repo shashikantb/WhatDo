@@ -9,7 +9,51 @@ import {
 } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL,
+    },
+  },
+});
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
+  return chunks;
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Run Promise-returning functions in chunks (sequential between chunks, parallel within a chunk).
+ * Prevents Neon Free 1CU P2024 pool exhaustion on large seed inserts.
+ */
+async function runChunked<T>(
+  name: string,
+  makePromises: () => Promise<T>[],
+  options: { chunkSize?: number; sleepMs?: number; parallelFactor?: number } = {}
+): Promise<T[]> {
+  const chunkSize = options.chunkSize ?? 200;
+  const sleepMs = options.sleepMs ?? 250;
+  const parallelFactor = options.parallelFactor ?? 1;
+  const all = makePromises();
+  if (all.length === 0) return [];
+  const chunks = chunkArray(all, Math.max(1, Math.round(chunkSize / parallelFactor)));
+  const results: T[] = [];
+  for (let i = 0; i < chunks.length; i++) {
+    const c = chunks[i];
+    if (!c) continue;
+    // eslint-disable-next-line no-await-in-loop
+    results.push(...((await Promise.all(c as unknown as Promise<T>[])) as T[]));
+    if (i !== chunks.length - 1 && sleepMs > 0) {
+      // eslint-disable-next-line no-await-in-loop
+      await sleep(sleepMs);
+    }
+  }
+  console.log(`   → ${name}: ${all.length} ops in ${chunks.length} chunks (${chunkSize}/chunk)`);
+  return results;
+}
 
 const FIRST_NAMES = [
   "Alex", "Nisha", "Sam", "Priya", "Jordan", "Rahul", "Taylor", "Aisha",
@@ -204,7 +248,11 @@ const COMMENT_TEMPLATES = [
 const EMOJI_REACTIONS = ["🔥", "😂", "🤔", "😍", "😮", "👏", "💯", "🚀"];
 
 function pick<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
+  if (arr.length === 0) throw new Error("pick() called on empty array");
+  const idx = Math.floor(Math.random() * arr.length);
+  const v = arr[idx];
+  if (v === undefined) throw new Error("pick() undefined result");
+  return v;
 }
 
 function pickMany<T>(arr: T[], n: number): T[] {
@@ -212,7 +260,8 @@ function pickMany<T>(arr: T[], n: number): T[] {
   const out: T[] = [];
   while (out.length < n && copy.length > 0) {
     const i = Math.floor(Math.random() * copy.length);
-    out.push(copy.splice(i, 1)[0]);
+    const v = copy.splice(i, 1)[0];
+    if (v !== undefined) out.push(v);
   }
   return out;
 }
@@ -225,8 +274,16 @@ function slugify(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
+function at<T>(arr: T[], i: number): T {
+  if (arr.length === 0) throw new Error("at() called on empty array");
+  const mod = ((i % arr.length) + arr.length) % arr.length;
+  const v = arr[mod];
+  if (v === undefined) throw new Error(`at() undefined at index ${mod}`);
+  return v;
+}
+
 function avatarUrl(seed: string, idx: number): string {
-  const style = AVATAR_STYLES[idx % AVATAR_STYLES.length];
+  const style = at(AVATAR_STYLES, idx);
   return `https://api.dicebear.com/7.x/${style}/svg?seed=${encodeURIComponent(seed)}`;
 }
 
@@ -279,8 +336,8 @@ async function main() {
   const userData: any[] = [];
   const usedUsernames = new Set<string>();
   for (let i = 0; i < 50; i++) {
-    const first = FIRST_NAMES[i % FIRST_NAMES.length];
-    const last = LAST_NAMES[(i * 7) % LAST_NAMES.length];
+    const first = at(FIRST_NAMES, i);
+    const last = at(LAST_NAMES, i * 7);
     let username = `${first.toLowerCase()}_${last.charAt(0).toLowerCase()}`;
     let suffix = 1;
     while (usedUsernames.has(username)) {
@@ -296,7 +353,7 @@ async function main() {
       email,
       username,
       displayName,
-      role: roles[i],
+      role: at(roles, i),
       passwordHash: PASSWORD,
       avatarUrl: avatarUrl(username, i),
       bio: pick([
@@ -423,11 +480,11 @@ async function main() {
 
   for (let i = 0; i < 100; i++) {
     const creator = pick(allUsers);
-    const postType = POST_TYPE_DIST[i % POST_TYPE_DIST.length];
-    const question = REALISTIC_QUESTIONS[i % REALISTIC_QUESTIONS.length];
+    const postType = at(POST_TYPE_DIST, i);
+    const question = at(REALISTIC_QUESTIONS, i);
     const categorySlugs = ["technology", "ai", "startups", "money", "career", "lifestyle", "design", "food", "movies", "gaming"];
-    const chosenCatSlug = categorySlugs[i % categorySlugs.length];
-    const category = allCategories.find((c) => c.slug === chosenCatSlug) ?? allCategories[0];
+    const chosenCatSlug = at(categorySlugs, i);
+    const category = allCategories.find((c) => c.slug === chosenCatSlug) ?? at(allCategories, 0);
 
     const isTrending = trendingIndices.has(i);
     const createdAt = new Date(Date.now() - rand(0, 30) * 86400_000 - rand(0, 23) * 3600_000);
@@ -480,7 +537,7 @@ async function main() {
   console.log(`✅ Created ${createdPosts.length} posts with options`);
 
   console.log("🗳️ Generating votes (10-500 votes per post, no duplicates)...");
-  const voteCreations: Promise<any>[] = [];
+  const voteBulkData: any[] = [];
   const optionVoteCounts: Record<string, number> = {};
   const postVoteCounts: Record<string, number> = {};
 
@@ -525,6 +582,7 @@ async function main() {
     for (let k = 0; k < finalVoters.length; k++) {
       const user = finalVoters[k];
       const optionId = pool[k];
+      if (!user || !optionId) continue;
       optionVoteCounts[optionId] = (optionVoteCounts[optionId] ?? 0) + 1;
 
       const extra: any = {};
@@ -536,22 +594,29 @@ async function main() {
         extra.emojiValue = opt ? opt.value : pick(EMOJI_REACTIONS);
       }
 
-      voteCreations.push(
-        prisma.vote.create({
-          data: {
-            postId: post.id,
-            userId: user.id,
-            optionId,
-            ...extra,
-            createdAt: new Date(Date.now() - rand(0, 20) * 86400_000),
-          },
-        })
-      );
+      voteBulkData.push({
+        postId: post.id,
+        userId: user.id,
+        optionId,
+        ...extra,
+        createdAt: new Date(Date.now() - rand(0, 20) * 86400_000),
+      });
     }
   }
 
-  await Promise.all(voteCreations);
-  console.log(`✅ Inserted ${voteCreations.length} votes`);
+  // Insert votes in chunks (500 / chunk) to avoid exhausting Neon Free connection pool
+  // (neon 1CU has connection limit ≈ 20, Promise.all of 10k starves the pool).
+  const VOTE_BATCH = 500;
+  const chunks = chunkArray(voteBulkData, VOTE_BATCH);
+  let inserted = 0;
+  for (let i = 0; i < chunks.length; i++) {
+    const c = chunks[i];
+    if (!c) continue;
+    await prisma.vote.createMany({ data: c, skipDuplicates: true });
+    inserted += c.length;
+    if (i !== chunks.length - 1) await sleep(300);
+  }
+  console.log(`✅ Inserted ${inserted} votes in ${chunks.length} batches (${VOTE_BATCH}/batch)`);
 
   console.log("🔢 Updating vote counters on Post + PostOption...");
   const counterUpdates: Promise<any>[] = [];
@@ -571,7 +636,7 @@ async function main() {
       );
     }
   }
-  await Promise.all(counterUpdates);
+  await runChunked("Post+Option vote counters", () => counterUpdates, { chunkSize: 150, sleepMs: 150 });
   console.log("✅ Counters updated");
 
   console.log("💭 Creating comments (0-30 per post)...");
@@ -583,6 +648,7 @@ async function main() {
     let pCommentCount = 0;
     for (let k = 0; k < commenters.length; k++) {
       const commenter = commenters[k];
+      if (!commenter) continue;
       const text = pick(COMMENT_TEMPLATES);
       commentCreates.push(
         prisma.comment
@@ -610,8 +676,8 @@ async function main() {
       );
     }
   }
-  await Promise.all(commentCreates);
-  console.log(`✅ Created comments`);
+  await runChunked("Comments + per-post comment counters", () => commentCreates, { chunkSize: 150, sleepMs: 200 });
+  console.log(`✅ Created comments (commentList.length = ${commentList.length})`);
 
   console.log("❤️ Adding comment likes (random subset)...");
   const commentLikes: Promise<any>[] = [];
@@ -634,7 +700,7 @@ async function main() {
       );
     }
   }
-  await Promise.all(commentLikes);
+  await runChunked("Comment likes + per-comment counters", () => commentLikes, { chunkSize: 100, sleepMs: 150 });
   console.log(`✅ Added ${commentLikes.length} comment-like ops`);
 
   console.log("👥 Building social follow graph (10-40% rate)...");
@@ -660,7 +726,7 @@ async function main() {
       }
     }
   }
-  await Promise.all(followCreates);
+  await runChunked("Follow edges", () => followCreates, { chunkSize: 200, sleepMs: 300 });
   console.log(`✅ Created ${followCreates.length} follow edges`);
 
   console.log("📌 Adding Likes & SavedPosts (10% posts × 20 users)...");
@@ -688,7 +754,7 @@ async function main() {
       }
     }
   }
-  await Promise.all([...likeCreates, ...saveCreates]);
+  await runChunked("Likes + SavedPosts inserts", () => [...likeCreates, ...saveCreates], { chunkSize: 250, sleepMs: 200 });
   const counterUpdates2: Promise<any>[] = [];
   for (const post of createdPosts) {
     counterUpdates2.push(
@@ -703,7 +769,7 @@ async function main() {
       })
     );
   }
-  await Promise.all(counterUpdates2);
+  await runChunked("Post like/save/view/share counters", () => counterUpdates2, { chunkSize: 100, sleepMs: 150 });
   console.log(`✅ Likes: ${likeCreates.length}, Saves: ${saveCreates.length}`);
 
   console.log("🚩 Creating 12 reports (OPEN / UNDER_REVIEW)...");
@@ -772,7 +838,7 @@ async function main() {
       );
     }
   }
-  await Promise.all(reports);
+  await runChunked("Reports", () => reports, { chunkSize: 50, sleepMs: 200 });
   console.log("✅ Created 12 reports");
 
   console.log("🔮 Resolving 2 predictions (marking correct option)...");
@@ -831,7 +897,11 @@ async function main() {
         );
       }
     }
-    await Promise.all([...resultCreates, ...scoreUpdates]);
+    await runChunked(
+      `Prediction ${predictionsToResolve.indexOf(post) + 1} results + user score updates`,
+      () => [...resultCreates, ...scoreUpdates],
+      { chunkSize: 200, sleepMs: 250 }
+    );
     await prisma.post.update({
       where: { id: post.id },
       data: {
@@ -862,14 +932,14 @@ async function main() {
       );
     }
   }
-  await Promise.all(interestCreates);
+  await runChunked("User category interests", () => interestCreates, { chunkSize: 200, sleepMs: 200 });
   console.log(`✅ Created ${interestCreates.length} category interests`);
 
   console.log("\n🌱 Seed completed successfully!");
   console.log(`   Users: ${allUsers.length}`);
   console.log(`   Categories: ${allCategories.length}`);
   console.log(`   Posts: ${createdPosts.length}`);
-  console.log(`   Votes: ${voteCreations.length}`);
+  console.log(`   Votes: ${voteBulkData.length}`);
   console.log(`   Follows: ${followCreates.length}`);
   console.log(`   Admin: ${adminUser.email} / admin1234`);
   console.log(`   All seeded users: whatdo1234`);

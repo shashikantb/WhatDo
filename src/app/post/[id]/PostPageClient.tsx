@@ -63,7 +63,7 @@ export default function PostPageClient({ params }: PostPageClientProps) {
     if (postQuery.isSuccess) {
       void incrementView.mutateAsync({ id });
     }
-  }, [postQuery.isSuccess, id]);
+  }, [postQuery.isSuccess, id, incrementView]);
 
   const post = postQuery.data;
   const isLoading = postQuery.isLoading;
@@ -72,11 +72,10 @@ export default function PostPageClient({ params }: PostPageClientProps) {
   const relatedQuery = trpc.feed.getByCategory.useQuery(
     {
       categoryId: post?.categoryId ?? undefined,
-      slug: post?.category?.slug ?? undefined,
       limit: 5,
     },
     {
-      enabled: !!post?.categoryId || !!post?.category?.slug,
+      enabled: !!post?.categoryId,
       staleTime: 60_000,
     },
   );

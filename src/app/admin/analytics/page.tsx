@@ -338,7 +338,10 @@ export default function AdminAnalyticsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0 space-y-3">
-            {topCategories.map((c, i) => (
+            {topCategories.map((c, i) => {
+              const first = topCategories[0];
+              const denom = first?.value ?? 1;
+              return (
               <div key={c.name}>
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-2">
@@ -351,13 +354,14 @@ export default function AdminAnalyticsPage() {
                   <div
                     className="h-full rounded-full transition-all"
                     style={{
-                      width: `${(c.value / topCategories[0].value) * 100}%`,
+                      width: `${(c.value / denom) * 100}%`,
                       background: c.color,
                     }}
                   />
                 </div>
               </div>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
 

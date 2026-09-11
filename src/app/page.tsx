@@ -6,95 +6,20 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useLoginModal } from "@/components/auth/LoginModal";
 import { Button } from "@/components/design-system/Button";
-import { Card, CardContent } from "@/components/design-system/Card";
-import { Badge } from "@/components/design-system/Badge";
 import { SkeletonCard } from "@/components/design-system/Skeleton";
-import { PostCard } from "@/components/feed/PostCard";
+import { ReelsPostCard } from "@/components/feed/ReelsPostCard";
+import { BottomNav } from "@/components/layout/BottomNav";
 import { trpc } from "@/lib/trpc/client";
 import {
   Sparkles,
-  MessageCircleQuestion,
-  Vote,
-  BarChart3,
-  Shield,
+  LogIn,
   ChevronRight,
-  HelpCircle,
   Flame,
-  Globe2,
-  Zap,
+  LogIn as LoginIcon,
+  User as UserIcon,
+  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-function HeroShine() {
-  return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      <div className="absolute top-0 left-1/4 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/20 blur-3xl opacity-40" />
-      <div className="absolute bottom-0 right-1/4 h-[500px] w-[500px] translate-x-1/2 translate-y-1/2 rounded-full bg-accent/20 blur-3xl opacity-40" />
-      <div
-        className="absolute inset-0 opacity-[0.04]"
-        style={{
-          backgroundImage:
-            "radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)",
-          backgroundSize: "24px 24px",
-        }}
-      />
-    </div>
-  );
-}
-
-const FEATURES = [
-  {
-    icon: Vote,
-    title: "Cast Your Vote",
-    description:
-      "Quickly weigh in on thousands of questions. Swipe, tap, and share your opinion in seconds.",
-    gradient: "from-violet-500/20 via-purple-500/10 to-fuchsia-500/20",
-    iconColor: "text-violet-500",
-  },
-  {
-    icon: BarChart3,
-    title: "See Real Results",
-    description:
-      "Instantly see how the community voted. Beautiful breakdowns by demographics and interests.",
-    gradient: "from-emerald-500/20 via-teal-500/10 to-green-500/20",
-    iconColor: "text-emerald-500",
-  },
-  {
-    icon: Globe2,
-    title: "Follow Communities",
-    description:
-      "Dive into categories you love — from AI to startups to fashion to gaming and beyond.",
-    gradient: "from-sky-500/20 via-cyan-500/10 to-blue-500/20",
-    iconColor: "text-sky-500",
-  },
-  {
-    icon: Shield,
-    title: "Your Privacy First",
-    description:
-      "Vote anonymously when you want. Your opinions belong to you.",
-    gradient: "from-amber-500/20 via-orange-500/10 to-yellow-500/20",
-    iconColor: "text-amber-500",
-  },
-];
-
-const FAQS = [
-  {
-    q: "What is WHATDO?",
-    a: "WHATDO is the opinion-first social platform. Ask any question, let the community vote, and see real-time results on what people actually think.",
-  },
-  {
-    q: "Is WHATDO free to use?",
-    a: "Yes! WHATDO is free. Browse opinions, vote, and post your own questions without paying anything.",
-  },
-  {
-    q: "Can I vote anonymously?",
-    a: "Absolutely. Any post can be voted anonymously, and you can even post your own questions incognito.",
-  },
-  {
-    q: "How do trending questions work?",
-    a: "Trending is driven by a combination of votes, comments, shares, and recency. The hottest questions rise to the top automatically.",
-  },
-];
 
 const SAMPLE_POSTS = [
   {
@@ -122,11 +47,12 @@ const SAMPLE_POSTS = [
       displayName: "Tech Thinker",
       avatarUrl: null,
       isVerified: true,
+      opinionScore: 2480,
     },
-    tags: [],
+    tags: ["airegulation", "socialmedia"],
     options: [
-      { id: "o1", label: "Yes", voteCount: 8942, color: "#10B981" },
-      { id: "o2", label: "No", voteCount: 3905, color: "#EF4444" },
+      { id: "o1", label: "Yes, always", voteCount: 8942, color: "#10B981" },
+      { id: "o2", label: "No, too complex", voteCount: 3905, color: "#EF4444" },
     ],
     media: [],
     userVote: null,
@@ -158,8 +84,9 @@ const SAMPLE_POSTS = [
       displayName: "Dev Life",
       avatarUrl: null,
       isVerified: false,
+      opinionScore: 942,
     },
-    tags: [],
+    tags: ["webdev", "frameworks"],
     options: [
       { id: "o1", label: "Next.js", voteCount: 3102, color: "#000000" },
       { id: "o2", label: "Remix", voteCount: 1054, color: "#000000" },
@@ -196,419 +123,447 @@ const SAMPLE_POSTS = [
       displayName: "Career Sage",
       avatarUrl: null,
       isVerified: true,
+      opinionScore: 5120,
     },
-    tags: [],
+    tags: ["remotework", "4dayweek"],
     options: [
       { id: "o1", label: "Absolutely yes", voteCount: 19890, color: "#10B981" },
-      { id: "o2", label: "I'd prefer 5 days full pay", voteCount: 4619, color: "#EF4444" },
+      { id: "o2", label: "Prefer 5 days full pay", voteCount: 4619, color: "#EF4444" },
     ],
     media: [],
     userVote: null,
     userLiked: false,
     userSaved: false,
   },
+  {
+    id: "sample-4",
+    type: "YES_NO",
+    question: "Will we achieve true AGI (human-level) within 10 years?",
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 26),
+    voteCount: 18321,
+    commentCount: 902,
+    likeCount: 1200,
+    saveCount: 450,
+    shareCount: 312,
+    isAnonymous: false,
+    isClosed: false,
+    category: {
+      id: "cat-future",
+      name: "Future",
+      slug: "future",
+      icon: "🚀",
+      color: "#F59E0B",
+    },
+    creator: {
+      id: "u-4",
+      username: "futurologist",
+      displayName: "Future Mind",
+      avatarUrl: null,
+      isVerified: true,
+      opinionScore: 8100,
+    },
+    tags: ["ai", "agi", "futuretech"],
+    options: [
+      { id: "o1", label: "Yes, within 10 years", voteCount: 6200, color: "#10B981" },
+      { id: "o2", label: "No, not this decade", voteCount: 12121, color: "#EF4444" },
+    ],
+    media: [],
+    userVote: null,
+    userLiked: false,
+    userSaved: false,
+  },
+  {
+    id: "sample-5",
+    type: "MULTIPLE_CHOICE",
+    question: "Which cuisine do you prefer for Friday night dinner?",
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 36),
+    voteCount: 9210,
+    commentCount: 612,
+    likeCount: 410,
+    saveCount: 180,
+    shareCount: 102,
+    isAnonymous: true,
+    isClosed: false,
+    category: {
+      id: "cat-food",
+      name: "Food",
+      slug: "food",
+      icon: "🍕",
+      color: "#EC4899",
+    },
+    creator: {
+      id: "u-5",
+      username: "foodieanon",
+      displayName: "Hungry Soul",
+      avatarUrl: null,
+      isVerified: false,
+    },
+    tags: ["food", "weekend", "dinner"],
+    options: [
+      { id: "o1", label: "Italian 🍝", voteCount: 2810, color: "#EF4444" },
+      { id: "o2", label: "Japanese 🍣", voteCount: 2600, color: "#3B82F6" },
+      { id: "o3", label: "Indian 🍛", voteCount: 2300, color: "#F59E0B" },
+      { id: "o4", label: "Mexican 🌮", voteCount: 1500, color: "#10B981" },
+    ],
+    media: [],
+    userVote: null,
+    userLiked: false,
+    userSaved: false,
+  },
+  {
+    id: "sample-6",
+    type: "PREDICTION",
+    question: "Where will Bitcoin end 2026?",
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48),
+    voteCount: 4821,
+    commentCount: 210,
+    likeCount: 290,
+    saveCount: 170,
+    shareCount: 98,
+    isAnonymous: false,
+    isClosed: false,
+    category: {
+      id: "cat-finance",
+      name: "Finance",
+      slug: "finance",
+      icon: "📈",
+      color: "#6366F1",
+    },
+    creator: {
+      id: "u-6",
+      username: "cryptoking",
+      displayName: "Options King",
+      avatarUrl: null,
+      isVerified: true,
+      opinionScore: 3410,
+    },
+    tags: ["crypto", "btc", "prediction"],
+    options: [
+      { id: "o1", label: "< $50k", voteCount: 1100, color: "#3B82F6" },
+      { id: "o2", label: "$50k–$100k", voteCount: 2100, color: "#10B981" },
+      { id: "o3", label: "> $100k", voteCount: 1621, color: "#F59E0B" },
+    ],
+    media: [],
+    prediction: {
+      status: "OPEN",
+      correctOptionId: null,
+    },
+    userVote: null,
+    userLiked: false,
+    userSaved: false,
+  },
 ];
+
+function ReelsSkeleton() {
+  return (
+    <div className="snap-start snap-always w-full h-[100dvh] flex items-center justify-center bg-gradient-to-br from-muted/60 via-background to-card">
+      <div className="w-full max-w-sm space-y-4 px-4">
+        <SkeletonCard className="h-[80vh] w-full rounded-3xl" />
+      </div>
+    </div>
+  );
+}
 
 export default function Home() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const { openLogin } = useLoginModal();
+  const utils = trpc.useUtils();
   const isAuthenticated = status === "authenticated";
-  const [openFaq, setOpenFaq] = React.useState<number | null>(0);
+  const reelsRef = React.useRef<HTMLDivElement | null>(null);
+  const [activeIndex, setActiveIndex] = React.useState(0);
 
   const trendingQuery = trpc.feed.getTrending.useQuery(
-    { timeRange: "24h", limit: 3 },
+    { timeRange: "7d", limit: 30 },
     {
       staleTime: 60_000,
-      enabled: !isAuthenticated,
+      refetchOnMount: true,
     },
   );
 
-  React.useEffect(() => {
+  const forYouQuery = trpc.feed.getForYou.useInfiniteQuery(
+    { limit: 20 },
+    {
+      enabled: isAuthenticated,
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+      staleTime: 10_000,
+    },
+  );
+
+  const items: any[] = React.useMemo(() => {
     if (isAuthenticated) {
-      router.replace("/feed");
+      const pages = (forYouQuery.data as any)?.pages ?? [];
+      const flat = pages.flatMap((p: any) => p.items ?? []);
+      if (flat.length > 0) return flat;
     }
-  }, [isAuthenticated, router]);
+    const trending = trendingQuery.data ?? [];
+    if (Array.isArray(trending) && trending.length > 0) {
+      const out: any[] = [];
+      out.push(...trending);
+      if (out.length < 6) {
+        out.push(...SAMPLE_POSTS.slice(0, Math.max(0, 6 - out.length)));
+      }
+      return out;
+    }
+    return SAMPLE_POSTS;
+  }, [isAuthenticated, forYouQuery.data, trendingQuery.data]);
 
-  if (status === "loading") {
-    return (
-      <main className="min-h-screen bg-background">
-        <div className="max-w-3xl mx-auto p-6 space-y-6 pt-20">
-          <SkeletonCard className="h-96" />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <SkeletonCard className="h-40" />
-            <SkeletonCard className="h-40" />
-            <SkeletonCard className="h-40" />
-            <SkeletonCard className="h-40" />
-          </div>
-        </div>
-      </main>
+  const isLoading =
+    (isAuthenticated && forYouQuery.isLoading) ||
+    (!isAuthenticated && trendingQuery.isLoading);
+
+  const handlePostClick = (post: any, index: number) => {
+    router.push(`/post/${post.id}`);
+  };
+
+  const handleVoteSuccess = (postId: string) => {
+    void utils.feed.getTrending.invalidate();
+  };
+
+  const hasNextPage = (forYouQuery as any).hasNextPage ?? false;
+  const isFetchingNextPage = (forYouQuery as any).isFetchingNextPage ?? false;
+  const rawFetchNextPage = (forYouQuery as any).fetchNextPage;
+  const fetchNextPage = React.useCallback(async () => {
+    if (typeof rawFetchNextPage === "function") {
+      await rawFetchNextPage();
+    }
+  }, [rawFetchNextPage]);
+
+  React.useEffect(() => {
+    const el = reelsRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const idx = Number(
+              (entry.target as HTMLElement).dataset.reelsIndex,
+            );
+            if (!Number.isNaN(idx)) {
+              setActiveIndex(idx);
+            }
+            if (
+              isAuthenticated &&
+              hasNextPage &&
+              !isFetchingNextPage &&
+              idx >= items.length - 3
+            ) {
+              void fetchNextPage();
+            }
+          }
+        });
+      },
+      {
+        threshold: 0.6,
+      },
     );
-  }
-
-  if (isAuthenticated) {
-    return (
-      <main className="min-h-screen flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4 text-center animate-pulse">
-          <div className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-          <p className="text-sm text-muted-foreground">
-            Taking you to your feed...
-          </p>
-        </div>
-      </main>
-    );
-  }
-
-  const trendingPosts = trendingQuery.data ?? [];
-  const hasTrending = trendingPosts.length >= 3;
-  const displayPosts = hasTrending ? trendingPosts : SAMPLE_POSTS;
+    el.querySelectorAll("[data-reels-index]").forEach((child) => {
+      io.observe(child);
+    });
+    return () => io.disconnect();
+  }, [
+    items.length,
+    isAuthenticated,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  ]);
 
   return (
-    <main className="relative bg-gradient-to-br from-primary/5 via-background to-accent/5 overflow-hidden">
-      <HeroShine />
+    <main className="relative w-full h-[100dvh] overflow-hidden bg-black md:bg-background">
+      {/* Top brand bar (over reels) */}
+      <header className="fixed top-0 inset-x-0 z-50 pointer-events-none">
+        <div className="pointer-events-auto bg-gradient-to-b from-black/80 via-black/40 to-transparent pt-3 pb-6 px-4">
+          <div className="flex items-center justify-between">
+            <Link href="/" className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/30">
+                <span className="text-white font-black text-base">W</span>
+              </div>
+              <span className="font-black text-xl tracking-tight text-white drop-shadow-lg">
+                WHATDO
+              </span>
+            </Link>
 
-      <header className="relative z-10 sticky top-0 backdrop-blur-xl bg-background/70 border-b border-border/50">
-        <div className="max-w-7xl mx-auto flex items-center justify-between px-5 py-4">
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/20">
-              <span className="text-white font-black text-lg">W</span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => router.push("/trending")}
+                className="flex items-center gap-1.5 h-9 px-3 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-white text-xs font-semibold hover:bg-white/20 transition-colors"
+                aria-label="Trending"
+              >
+                <Flame className="h-3.5 w-3.5 text-orange-400" />
+                <span className="hidden sm:inline">Trending</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push("/discover")}
+                className="h-9 w-9 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-white flex items-center justify-center hover:bg-white/20 transition-colors"
+                aria-label="Search"
+              >
+                <Search className="h-4 w-4" />
+              </button>
+              {!isAuthenticated ? (
+                <Button
+                  size="sm"
+                  onClick={() => openLogin()}
+                  className="h-9 px-4 rounded-full bg-white text-black border-0 shadow-lg shadow-black/20 hover:bg-white/90 gap-1.5"
+                  leftIcon={<LogIn className="h-4 w-4" />}
+                >
+                  Login
+                </Button>
+              ) : (
+                <Link
+                  href="/profile/me"
+                  className="h-9 w-9 rounded-full bg-white/10 backdrop-blur-md border border-white/15 flex items-center justify-center hover:bg-white/20 transition-colors"
+                  aria-label="Profile"
+                >
+                  <UserIcon className="h-4 w-4 text-white" />
+                </Link>
+              )}
             </div>
-            <span className="font-black text-xl tracking-tight bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">
-              WHATDO
-            </span>
-          </Link>
-
-          <nav className="hidden md:flex items-center gap-1">
-            <Link
-              href="/trending"
-              className="px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            >
-              Trending
-            </Link>
-            <Link
-              href="/discover"
-              className="px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            >
-              Discover
-            </Link>
-          </nav>
-
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => openLogin()}
-            >
-              Sign in
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => openLogin()}
-              rightIcon={<ChevronRight className="h-4 w-4" />}
-            >
-              Get started
-            </Button>
           </div>
+
+          {/* Scroll indicator chip */}
+          {!isAuthenticated && status !== "loading" && items.length > 0 && (
+            <div className="mt-3 flex justify-center gap-2 overflow-x-auto no-scrollbar">
+              <div className="flex items-center gap-1 rounded-full bg-white/10 backdrop-blur border border-white/15 px-3 py-1 text-[10px] font-semibold text-white/90">
+                <Sparkles className="h-3 w-3 text-amber-300 mr-1" />
+                Swipe up for more opinions · {items.length} questions
+              </div>
+            </div>
+          )}
         </div>
       </header>
 
-      <section className="relative z-10 pt-20 pb-24 px-5">
-        <div className="max-w-4xl mx-auto text-center space-y-8">
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/70 backdrop-blur px-4 py-1.5 text-xs font-medium text-muted-foreground shadow-sm">
-            <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
-            <Sparkles className="h-3.5 w-3.5 text-primary" />
-            The opinion platform for everyone
-          </div>
+      {/* Reels snap-scroll container */}
+      <div
+        ref={reelsRef}
+        className={cn(
+          "w-full h-[100dvh] overflow-y-scroll snap-y snap-mandatory",
+          "scroll-smooth scrollbar-hide",
+        )}
+        style={
+          {
+            scrollbarWidth: "none",
+            msOverflowStyle: "none",
+            WebkitOverflowScrolling: "touch",
+          } as React.CSSProperties
+        }
+      >
+        {isLoading && items.length === 0 && (
+          <>
+            <ReelsSkeleton />
+            <ReelsSkeleton />
+            <ReelsSkeleton />
+          </>
+        )}
 
-          <div className="space-y-5">
-            <h1 className="font-black tracking-tight text-5xl sm:text-6xl md:text-7xl leading-[1.05]">
-              <span className="bg-gradient-to-r from-primary via-fuchsia-500 to-accent bg-clip-text text-transparent">
-                SEE IT.
-              </span>{" "}
-              <span className="bg-gradient-to-r from-accent via-primary to-fuchsia-500 bg-clip-text text-transparent">
-                VOTE IT.
-              </span>
-              <br />
-              <span className="bg-gradient-to-r from-fuchsia-500 via-primary to-accent bg-clip-text text-transparent">
-                KNOW WHAT PEOPLE THINK.
-              </span>
-            </h1>
-
-            <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              Post a question. Watch thousands vote. See real-time results on
-              everything from tech to food to life&apos;s biggest decisions.
-              Opinions you can actually count.
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
-            <Button
-              size="lg"
-              onClick={() => router.push("/feed")}
-              rightIcon={<ChevronRight className="h-5 w-5" />}
-              className="px-8 shadow-xl shadow-primary/20 hover:shadow-2xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all"
-            >
-              Start Exploring
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              onClick={() => openLogin({ type: "create_post" })}
-              leftIcon={<MessageCircleQuestion className="h-5 w-5" />}
-              className="px-8 border-2 hover:-translate-y-0.5 transition-all"
-            >
-              Ask People
-            </Button>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-2 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <Zap className="h-3.5 w-3.5 text-amber-500" />
-              No credit card required
-            </span>
-            <span className="h-1 w-1 rounded-full bg-border" />
-            <span>Vote in seconds</span>
-            <span className="h-1 w-1 rounded-full bg-border" />
-            <span>Anonymous mode available</span>
-          </div>
-        </div>
-      </section>
-
-      <section className="relative z-10 px-5 pb-20">
-        <div className="max-w-4xl mx-auto space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Flame className="h-5 w-5 text-warning" />
-              <h2 className="text-lg font-semibold tracking-tight">
-                Trending questions right now
+        {!isLoading && items.length === 0 && (
+          <div className="snap-start snap-always w-full h-[100dvh] flex items-center justify-center px-6">
+            <div className="text-center max-w-sm space-y-5 p-8 rounded-3xl bg-card border border-border/50 backdrop-blur">
+              <div className="mx-auto h-16 w-16 rounded-2xl bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
+                <Sparkles className="h-8 w-8 text-primary" />
+              </div>
+              <h2 className="text-2xl font-black tracking-tight">
+                Welcome to WHATDO
               </h2>
-            </div>
-            <Link
-              href="/trending"
-              className="text-sm font-medium text-primary hover:underline flex items-center gap-0.5"
-            >
-              View all <ChevronRight className="h-4 w-4" />
-            </Link>
-          </div>
-
-          <div className="space-y-4">
-            {displayPosts.map((post: any, idx: number) => (
-              <div
-                key={post.id}
-                className={cn(
-                  "transition-all duration-200",
-                  idx === 0 && "md:-mx-4 md:scale-[1.02]",
-                )}
-              >
-                <PostCard
-                  post={post}
-                  index={idx}
-                  onClick={(p) => router.push(`/post/${p.id}`)}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="relative z-10 px-5 pb-24">
-        <div className="max-w-6xl mx-auto space-y-10">
-          <div className="text-center space-y-3 max-w-2xl mx-auto">
-            <Badge variant="default" size="sm" className="bg-primary/10 text-primary border-primary/30">
-              Features
-            </Badge>
-            <h2 className="text-3xl sm:text-4xl font-black tracking-tight">
-              Why people love{" "}
-              <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                WHATDO
-              </span>
-            </h2>
-            <p className="text-muted-foreground">
-              Everything you need to tap into the pulse of public opinion.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-5">
-            {FEATURES.map((f, i) => {
-              const Icon = f.icon;
-              return (
-                <Card key={i} className="overflow-hidden group hover:shadow-elevated transition-all duration-200 hover:-translate-y-0.5">
-                  <CardContent
-                    className={cn(
-                      "p-6 space-y-3 bg-gradient-to-br",
-                      f.gradient,
-                    )}
-                  >
-                    <div className="h-12 w-12 rounded-xl bg-card/80 backdrop-blur flex items-center justify-center shadow-sm">
-                      <Icon className={cn("h-6 w-6", f.iconColor)} />
-                    </div>
-                    <h3 className="font-bold text-lg text-foreground">
-                      {f.title}
-                    </h3>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
-                      {f.description}
-                    </p>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      <section className="relative z-10 px-5 pb-24">
-        <div className="max-w-3xl mx-auto space-y-8">
-          <div className="text-center space-y-3">
-            <Badge variant="default" size="sm" className="bg-info/10 text-info border-info/30">
-              FAQ
-            </Badge>
-            <h2 className="text-3xl sm:text-4xl font-black tracking-tight">
-              Frequently asked questions
-            </h2>
-          </div>
-
-          <div className="space-y-3">
-            {FAQS.map((faq, i) => {
-              const isOpen = openFaq === i;
-              return (
-                <Card
-                  key={i}
-                  className="overflow-hidden cursor-pointer hover:border-primary/30 transition-colors"
-                  onClick={() => setOpenFaq(isOpen ? null : i)}
-                >
-                  <CardContent className="p-5">
-                    <div className="flex items-start gap-3">
-                      <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <HelpCircle className="h-4 w-4 text-primary" />
-                      </div>
-                      <div className="flex-1 min-w-0 space-y-1.5">
-                        <div className="flex items-start justify-between gap-3">
-                          <p className="font-semibold text-foreground text-sm md:text-base">
-                            {faq.q}
-                          </p>
-                          <ChevronRight
-                            className={cn(
-                              "h-5 w-5 flex-shrink-0 text-muted-foreground transition-transform duration-200",
-                              isOpen && "rotate-90",
-                            )}
-                          />
-                        </div>
-                        {isOpen && (
-                          <p className="text-sm text-muted-foreground leading-relaxed pt-1 animate-fadeIn">
-                            {faq.a}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      <section className="relative z-10 px-5 pb-20">
-        <div className="max-w-4xl mx-auto">
-          <Card className="overflow-hidden border-0 bg-gradient-to-br from-primary/10 via-accent/10 to-primary/5">
-            <CardContent className="p-8 md:p-12 text-center space-y-6">
-              <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-background/60 backdrop-blur px-4 py-1.5 text-xs font-bold text-primary uppercase tracking-wider">
-                <Zap className="h-3.5 w-3.5" />
-                Join millions today
-              </div>
-              <h3 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight">
-                Ready to see what people really think?
-              </h3>
-              <p className="text-muted-foreground max-w-lg mx-auto">
-                Create a free account in 20 seconds. Start asking, voting, and
-                discovering what the world actually wants.
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Ask questions, vote on thousands of opinions, and see
+                real-time results on what the world actually thinks.
               </p>
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-2">
                 <Button
                   size="lg"
                   onClick={() => openLogin()}
                   rightIcon={<ChevronRight className="h-5 w-5" />}
-                  className="px-8 shadow-xl shadow-primary/20"
+                  className="px-7 shadow-xl shadow-primary/20"
                 >
-                  Get started — it&apos;s free
+                  Create your questions
                 </Button>
                 <Button
                   size="lg"
                   variant="outline"
-                  onClick={() => router.push("/feed")}
-                  className="px-8"
+                  onClick={() => router.push("/trending")}
                 >
-                  Continue browsing
+                  Browse trending
                 </Button>
               </div>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
+            </div>
+          </div>
+        )}
 
-      <footer className="relative z-10 border-t border-border/50 bg-background/60 backdrop-blur px-5 py-10">
-        <div className="max-w-6xl mx-auto space-y-8">
-          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-8">
-            <div className="space-y-3 max-w-sm">
-              <div className="flex items-center gap-2.5">
-                <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-sm">
-                  <span className="text-white font-black text-sm">W</span>
-                </div>
-                <span className="font-black text-lg tracking-tight bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                  WHATDO
-                </span>
+        {items.map((post: any, idx: number) => (
+          <div key={post.id || idx} data-reels-index={idx}>
+            <ReelsPostCard
+              post={post}
+              index={idx}
+              onClick={handlePostClick}
+              onVoteSuccess={handleVoteSuccess}
+            />
+          </div>
+        ))}
+
+        {isFetchingNextPage && <ReelsSkeleton />}
+
+        {/* End card */}
+        {!hasNextPage && items.length > 0 && (
+          <div className="snap-start snap-always w-full h-[100dvh] flex items-center justify-center px-6">
+            <div className="text-center max-w-sm space-y-5 p-8 rounded-3xl bg-card/90 backdrop-blur border border-border/50">
+              <div className="mx-auto h-16 w-16 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-emerald-500/10 flex items-center justify-center">
+                <Flame className="h-8 w-8 text-emerald-400" />
               </div>
+              <h3 className="text-2xl font-black tracking-tight">
+                You&apos;ve scrolled to the end 🎉
+              </h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                The opinion-first social platform. Post, vote, know what people think.
+                {isAuthenticated
+                  ? "More content coming — try asking your own questions to spark conversation!"
+                  : "Create a free account to unlock a personalized feed and thousands more questions."}
               </p>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 text-sm">
-              <div className="space-y-2.5">
-                <p className="font-semibold text-foreground">Product</p>
-                <div className="space-y-2">
-                  <Link href="/feed" className="block text-muted-foreground hover:text-foreground transition-colors">Feed</Link>
-                  <Link href="/trending" className="block text-muted-foreground hover:text-foreground transition-colors">Trending</Link>
-                  <Link href="/discover" className="block text-muted-foreground hover:text-foreground transition-colors">Discover</Link>
-                  <Link href="/ask" className="block text-muted-foreground hover:text-foreground transition-colors">Ask question</Link>
-                </div>
-              </div>
-              <div className="space-y-2.5">
-                <p className="font-semibold text-foreground">Company</p>
-                <div className="space-y-2">
-                  <Link href="/about" className="block text-muted-foreground hover:text-foreground transition-colors">About</Link>
-                  <Link href="/contact" className="block text-muted-foreground hover:text-foreground transition-colors">Contact</Link>
-                  <Link href="/careers" className="block text-muted-foreground hover:text-foreground transition-colors">Careers</Link>
-                  <Link href="/press" className="block text-muted-foreground hover:text-foreground transition-colors">Press</Link>
-                </div>
-              </div>
-              <div className="space-y-2.5">
-                <p className="font-semibold text-foreground">Legal</p>
-                <div className="space-y-2">
-                  <Link href="/terms" className="block text-muted-foreground hover:text-foreground transition-colors">Terms</Link>
-                  <Link href="/privacy" className="block text-muted-foreground hover:text-foreground transition-colors">Privacy</Link>
-                  <Link href="/cookies" className="block text-muted-foreground hover:text-foreground transition-colors">Cookies</Link>
-                </div>
-              </div>
-              <div className="space-y-2.5">
-                <p className="font-semibold text-foreground">Support</p>
-                <div className="space-y-2">
-                  <Link href="/help" className="block text-muted-foreground hover:text-foreground transition-colors">Help Center</Link>
-                  <Link href="/community" className="block text-muted-foreground hover:text-foreground transition-colors">Community</Link>
-                  <Link href="/guidelines" className="block text-muted-foreground hover:text-foreground transition-colors">Guidelines</Link>
-                </div>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-2">
+                {isAuthenticated ? (
+                  <Button
+                    size="lg"
+                    onClick={() => router.push("/ask")}
+                    rightIcon={<ChevronRight className="h-5 w-5" />}
+                  >
+                    Ask a question
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      size="lg"
+                      onClick={() => openLogin({ type: "create_post" })}
+                      leftIcon={<LoginIcon className="h-5 w-5" />}
+                      rightIcon={<ChevronRight className="h-5 w-5" />}
+                      className="shadow-xl shadow-primary/20"
+                    >
+                      Sign up free
+                    </Button>
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      onClick={() => {
+                        if (reelsRef.current) {
+                          reelsRef.current.scrollTo({
+                            top: 0,
+                            behavior: "smooth",
+                          });
+                        }
+                      }}
+                    >
+                      Back to top
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
           </div>
+        )}
+      </div>
 
-          <div className="border-t border-border/50 pt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs text-muted-foreground">
-            <p>© {new Date().getFullYear()} WHATDO. All rights reserved.</p>
-            <p className="flex items-center gap-1.5">
-              Made with <span className="text-rose-500">♥</span> for curious minds
-            </p>
-          </div>
-        </div>
-      </footer>
+      {/* Bottom navigation (Instagram style) */}
+      <BottomNav />
     </main>
   );
 }

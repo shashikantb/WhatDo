@@ -125,8 +125,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   callbacks: {
     async jwt({ token, user, account }) {
       if (user) {
-        token.uid = user.id as string;
-        token.role = (user as any).role;
+        token.userId = user.id as string;
+        token.userRole = (user as any).role;
         token.username = (user as any).username;
       }
       if (account?.provider === "credentials" && !token.sub)
@@ -134,12 +134,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return token;
     },
     async session({ session, token }) {
-      if (token.uid && session.user) {
-        session.user.id = token.uid as string;
-        session.user.role = token.role as any;
+      if (token.userId && session.user) {
+        session.user.id = token.userId as string;
+        session.user.role = (token.userRole ?? "USER") as "USER" | "MODERATOR" | "ADMIN";
         session.user.username = token.username as string;
         const fresh = await prisma.user.findUnique({
-          where: { id: token.uid as string },
+          where: { id: token.userId as string },
           select: {
             isBanned: true,
             isSuspended: true,
@@ -166,19 +166,21 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         });
         if (existing?.isBanned) return false;
         if (!existing) {
-          let base =
-            (profile as any)?.given_name ||
-            (user.name || (user.email as string).split("@")[0])
-              .replace(/[^a-zA-Z0-9_]/g, "_")
-              .slice(0, 18);
+          const emailLower = (user.email as string).toLowerCase();
+          const baseName =
+            (profile as any)?.given_name ??
+            user.name ??
+            emailLower.split("@")[0] ??
+            "whatdo_user";
+          const base = String(baseName).replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 18);
           let username = base;
           let i = 1;
           while (!(await validateUniqueUsername(username))) {
             username = `${base.slice(0, 18)}${i++}`;
           }
           await prisma.user.update({
-            where: { email: (user.email as string).toLowerCase() },
-            data: { username, displayName: user.name || username },
+            where: { email: emailLower },
+            data: { username, displayName: user.name ?? username },
           });
         }
       }
@@ -209,16 +211,16 @@ declare module "next-auth" {
     };
   }
   interface JWT {
-    uid?: string;
-    role?: "USER" | "MODERATOR" | "ADMIN";
+    userId?: string;
+    userRole?: "USER" | "MODERATOR" | "ADMIN";
     username?: string;
   }
 }
 
 declare module "@auth/core/jwt" {
   interface JWT {
-    uid?: string;
-    role?: "USER" | "MODERATOR" | "ADMIN";
+    userId?: string;
+    userRole?: "USER" | "MODERATOR" | "ADMIN";
     username?: string;
   }
 }

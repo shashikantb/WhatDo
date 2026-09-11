@@ -7,7 +7,6 @@ const nextConfig = {
   compress: true,
   generateEtags: true,
   experimental: {
-    serverActions: true,
     serverComponentsExternalPackages: ["@prisma/client"],
   },
   images: {
@@ -134,19 +133,29 @@ const nextConfig = {
       },
     ];
   },
-  sentry: {
-    disableServerWebpackPlugin: true,
-    disableClientWebpackPlugin: true,
-    hideSourceMaps: true,
-  },
 };
 
-export default withSentryConfig(nextConfig, {
-  org: "your-org",
-  project: "whatdo",
-  silent: true,
-  widenClientFileUpload: true,
-  tunnelRoute: "/monitoring",
-  disableLogger: true,
-  automaticVercelMonitors: true,
-});
+export default withSentryConfig(
+  nextConfig,
+  {
+    org: "your-org",
+    project: "whatdo",
+    silent: process.env.CI === "true" || !process.env.SENTRY_AUTH_TOKEN,
+    widenClientFileUpload: true,
+    tunnelRoute: process.env.SENTRY_AUTH_TOKEN ? "/monitoring" : undefined,
+    disableLogger: true,
+    automaticVercelMonitors: Boolean(process.env.VERCEL),
+    telemetry: false,
+    sourcemaps: {
+      disable: !process.env.SENTRY_AUTH_TOKEN,
+      deleteSourcemapsAfterUpload: Boolean(process.env.SENTRY_AUTH_TOKEN),
+    },
+  },
+  {
+    // Sentry build options for Next.js (v8 style). Wrapped separately so
+    // `sentry` key on `nextConfig` — deprecated in Sentry SDK 8+ — is not used.
+    disableServerWebpackPlugin: !process.env.SENTRY_AUTH_TOKEN,
+    disableClientWebpackPlugin: !process.env.SENTRY_AUTH_TOKEN,
+    hideSourceMaps: true,
+  }
+);

@@ -43,7 +43,7 @@ export async function generateMetadata({
     return {
       title: "Post not found • WHATDO",
       description: "This post may have been removed or doesn't exist.",
-      robots: { noindex: true, nofollow: true },
+      robots: { index: false, follow: false },
     };
   }
 
@@ -121,7 +121,7 @@ export default async function PostPage({ params }: PageProps) {
     notFound();
   }
 
-  if (exists.status === "REMOVED" || exists.status === "ARCHIVED") {
+  if (exists.status === "REMOVED" || exists.status === "HIDDEN") {
     notFound();
   }
 
