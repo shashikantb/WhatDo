@@ -449,240 +449,243 @@ export const ReelsPostCard: React.FC<ReelsPostCardProps> = ({
       </div>
 
       {/* Content layer */}
-      <div className="relative z-10 flex flex-col h-full pt-[4.5rem] pb-[6.5rem]">
-        {/* Top spacer for status/nav bar */}
-        <div className="flex-1 min-h-0 flex flex-col justify-end px-4 pr-20">
-          {/* Main content area — question + vote UI */}
-          <div className="space-y-3 max-w-full">
-            {/* Prediction badges */}
-            {predictionStatus && (
-              <div className="flex flex-wrap items-center gap-2">
-                {predictionStatus === "OPEN" && (
-                  <Badge
-                    variant="default"
-                    size="sm"
-                    className="bg-info/90 text-white border-info/30 backdrop-blur"
-                  >
-                    <span className="h-1.5 w-1.5 rounded-full bg-white mr-1.5 animate-pulse" />
-                    PREDICTION · OPEN
-                  </Badge>
-                )}
-                {predictionStatus === "CLOSED" && (
-                  <Badge
-                    variant="default"
-                    size="sm"
-                    className="bg-warning/90 text-white border-warning/30 backdrop-blur"
-                  >
-                    <Lock className="w-3 h-3 mr-1" />
-                    AWAITING RESULT
-                  </Badge>
-                )}
-                {predictionStatus === "RESOLVED" &&
-                  userPredictionCorrect && (
-                    <Badge
-                      variant="default"
-                      size="sm"
-                      className="bg-success/90 text-white border-success/30 backdrop-blur"
-                    >
-                      <CheckCircle2 className="w-3 h-3 mr-1" />
-                      YOU WON ✅
-                    </Badge>
-                  )}
-                {predictionStatus === "RESOLVED" &&
-                  userPredictionIncorrect && (
-                    <Badge
-                      variant="default"
-                      size="sm"
-                      className="bg-danger/90 text-white border-danger/30 backdrop-blur"
-                    >
-                      ❌ MISSED
-                    </Badge>
-                  )}
-                {predictionStatus === "RESOLVED" &&
-                  !userPredictionCorrect &&
-                  !userPredictionIncorrect && (
-                    <Badge
-                      variant="default"
-                      size="sm"
-                      className="bg-success/90 text-white border-success/30 backdrop-blur"
-                    >
-                      <CheckCircle2 className="w-3 h-3 mr-1" />
-                      FINAL RESULT
-                    </Badge>
-                  )}
-              </div>
-            )}
-
-            {/* Question */}
-            <div>
-              <h2 className="text-xl md:text-2xl font-black leading-snug text-white drop-shadow-xl">
-                {displayQuestion || (
-                  <span className="text-white/60 italic">
-                    Untitled post
-                  </span>
-                )}
-              </h2>
-              {questionTooLong && (
-                <button
-                  type="button"
-                  onClick={() => setIsExpanded((v) => !v)}
-                  className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-white/80 hover:text-white"
+      <div className="relative z-10 flex flex-col h-full pt-[3.25rem] pb-[6.5rem]">
+        {/* HEADING at TOP: always visible, never pushed above the viewport clip */}
+        <div className="px-4 pr-20 shrink-0 pb-2">
+          {/* Prediction badges */}
+          {predictionStatus && (
+            <div className="flex flex-wrap items-center gap-2 pb-1">
+              {predictionStatus === "OPEN" && (
+                <Badge
+                  variant="default"
+                  size="sm"
+                  className="bg-info/90 text-white border-info/30 backdrop-blur"
                 >
-                  {isExpanded ? (
-                    <>
-                      Show less{" "}
-                      <ChevronDown className="h-3 w-3 rotate-180" />
-                    </>
-                  ) : (
-                    <>
-                      Show more <ChevronDown className="h-3 w-3" />
-                    </>
-                  )}
-                </button>
+                  <span className="h-1.5 w-1.5 rounded-full bg-white mr-1.5 animate-pulse" />
+                  PREDICTION · OPEN
+                </Badge>
               )}
+              {predictionStatus === "CLOSED" && (
+                <Badge
+                  variant="default"
+                  size="sm"
+                  className="bg-warning/90 text-white border-warning/30 backdrop-blur"
+                >
+                  <Lock className="w-3 h-3 mr-1" />
+                  AWAITING RESULT
+                </Badge>
+              )}
+              {predictionStatus === "RESOLVED" &&
+                userPredictionCorrect && (
+                  <Badge
+                    variant="default"
+                    size="sm"
+                    className="bg-success/90 text-white border-success/30 backdrop-blur"
+                  >
+                    <CheckCircle2 className="w-3 h-3 mr-1" />
+                    YOU WON ✅
+                  </Badge>
+                )}
+              {predictionStatus === "RESOLVED" &&
+                userPredictionIncorrect && (
+                  <Badge
+                    variant="default"
+                    size="sm"
+                    className="bg-danger/90 text-white border-danger/30 backdrop-blur"
+                  >
+                    ❌ MISSED
+                  </Badge>
+                )}
+              {predictionStatus === "RESOLVED" &&
+                !userPredictionCorrect &&
+                !userPredictionIncorrect && (
+                  <Badge
+                    variant="default"
+                    size="sm"
+                    className="bg-success/90 text-white border-success/30 backdrop-blur"
+                  >
+                    <CheckCircle2 className="w-3 h-3 mr-1" />
+                    FINAL RESULT
+                  </Badge>
+                )}
             </div>
+          )}
 
-            {/* Vote buttons */}
-            <div className="pt-1 space-y-2">
-              <VoteButtons
-                postId={postId}
-                postType={postType}
-                options={optionShapes}
-                userVote={userVote}
+          {/* Question */}
+          <div>
+            <h2 className="text-lg md:text-xl font-black leading-snug text-white drop-shadow-xl line-clamp-[8]">
+              {displayQuestion || (
+                <span className="text-white/60 italic">
+                  Untitled post
+                </span>
+              )}
+            </h2>
+            {questionTooLong && (
+              <button
+                type="button"
+                onClick={() => setIsExpanded((v) => !v)}
+                className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-white/80 hover:text-white"
+              >
+                {isExpanded ? (
+                  <>
+                    Show less{" "}
+                    <ChevronDown className="h-3 w-3 rotate-180" />
+                  </>
+                ) : (
+                  <>
+                    Show more <ChevronDown className="h-3 w-3" />
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Spacer pushes the vote+creator block to the bottom */}
+        <div className="flex-1 min-h-0" />
+
+        {/* BOTTOM BLOCK: vote UI + tags + creator info (anchored to bottom) */}
+        <div className="px-4 pr-20 shrink-0 min-h-0 flex flex-col justify-end space-y-2">
+          {/* Vote buttons */}
+          <div className="space-y-1.5">
+            <VoteButtons
+              postId={postId}
+              postType={postType}
+              options={optionShapes}
+              userVote={userVote}
+              isClosed={effectiveClosed}
+              expiresAt={expiresAt}
+              onVoteSubmitted={handleVoteSubmitted}
+              className="bg-black/25 backdrop-blur-md rounded-2xl p-2 border border-white/10"
+            />
+          </div>
+
+          {/* Vote results */}
+          {showResults && resultOptions.length > 0 && (
+            <div className="bg-black/20 backdrop-blur-md rounded-2xl p-2 border border-white/10">
+              <VoteResults
+                options={resultOptions}
+                totalVotes={voteCount}
+                postType={postType as PostTypeForResults}
+                selectedOptionId={userVote?.optionId ?? null}
+                userRating={userVote?.ratingValue ?? null}
+                userEmoji={userVote?.emojiValue ?? null}
+                userPrice={userVote?.priceValue ?? null}
+                prediction={{
+                  isResolved: predictionStatus === "RESOLVED",
+                  correctOptionId: prediction?.correctOptionId,
+                  userVotedOptionId: userVote?.optionId,
+                  status: predictionStatus,
+                }}
+                allVotes={(post.votes as any[]) ?? []}
+                isNewVote={justVoted}
                 isClosed={effectiveClosed}
-                expiresAt={expiresAt}
-                onVoteSubmitted={handleVoteSubmitted}
-                className="bg-black/25 backdrop-blur-md rounded-2xl p-2.5 border border-white/10"
               />
             </div>
+          )}
 
-            {/* Vote results */}
-            {showResults && resultOptions.length > 0 && (
-              <div className="bg-black/20 backdrop-blur-md rounded-2xl p-2.5 border border-white/10">
-                <VoteResults
-                  options={resultOptions}
-                  totalVotes={voteCount}
-                  postType={postType as PostTypeForResults}
-                  selectedOptionId={userVote?.optionId ?? null}
-                  userRating={userVote?.ratingValue ?? null}
-                  userEmoji={userVote?.emojiValue ?? null}
-                  userPrice={userVote?.priceValue ?? null}
-                  prediction={{
-                    isResolved: predictionStatus === "RESOLVED",
-                    correctOptionId: prediction?.correctOptionId,
-                    userVotedOptionId: userVote?.optionId,
-                    status: predictionStatus,
-                  }}
-                  allVotes={(post.votes as any[]) ?? []}
-                  isNewVote={justVoted}
-                  isClosed={effectiveClosed}
-                />
-              </div>
-            )}
-
-            {/* Tags */}
-            {Array.isArray(post.tags) && post.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {post.tags.slice(0, 5).map((t: any) => {
-                  const tagName =
-                    typeof t === "string" ? t : t?.tag?.name ?? t?.name ?? "";
-                  if (!tagName) return null;
-                  return (
-                    <span
-                      key={tagName}
-                      className="text-[10px] font-semibold text-white/80 bg-white/10 backdrop-blur px-2 py-0.5 rounded-full"
-                    >
-                      #{String(tagName).toLowerCase()}
-                    </span>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Creator meta + follow */}
-            <div className="flex items-center gap-3 pt-3 pb-1">
-              <Avatar
-                avatarUrl={authorAvatar}
-                displayName={displayAuthorName}
-                username={displayUsername}
-                size="sm"
-                className="ring-2 ring-white/80 rounded-full"
-              />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-bold text-white truncate drop-shadow">
-                    @{displayUsername.replace(/^@/, "")}
+          {/* Tags */}
+          {Array.isArray(post.tags) && post.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-0.5">
+              {post.tags.slice(0, 5).map((t: any) => {
+                const tagName =
+                  typeof t === "string" ? t : t?.tag?.name ?? t?.name ?? "";
+                if (!tagName) return null;
+                return (
+                  <span
+                    key={tagName}
+                    className="text-[10px] font-semibold text-white/80 bg-white/10 backdrop-blur px-2 py-0.5 rounded-full"
+                  >
+                    #{String(tagName).toLowerCase()}
                   </span>
-                  {!isAnonymous &&
-                    typeof creatorScore === "number" &&
-                    creatorScore > 0 && (
-                      <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-orange-300 bg-orange-500/20 backdrop-blur px-1.5 py-0.5 rounded-full">
-                        <Flame className="w-2.5 h-2.5" />
-                        {formatNumber(creatorScore)}
-                      </span>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Creator meta + follow */}
+          <div className="flex items-center gap-3 pt-2 pb-1">
+            <Avatar
+              avatarUrl={authorAvatar}
+              displayName={displayAuthorName}
+              username={displayUsername}
+              size="sm"
+              className="ring-2 ring-white/80 rounded-full"
+            />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-bold text-white truncate drop-shadow">
+                  @{displayUsername.replace(/^@/, "")}
+                </span>
+                {!isAnonymous &&
+                  typeof creatorScore === "number" &&
+                  creatorScore > 0 && (
+                    <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-orange-300 bg-orange-500/20 backdrop-blur px-1.5 py-0.5 rounded-full">
+                      <Flame className="w-2.5 h-2.5" />
+                      {formatNumber(creatorScore)}
+                    </span>
+                  )}
+                {isAnonymous && (
+                  <span className="text-[10px] font-semibold text-white/70 bg-white/10 backdrop-blur px-1.5 py-0.5 rounded-full">
+                    Incognito
+                  </span>
+                )}
+                {category && (
+                  <span
+                    className="inline-flex items-center gap-1 text-[10px] font-semibold backdrop-blur px-1.5 py-0.5 rounded-full"
+                    style={
+                      category.color
+                        ? {
+                            backgroundColor: `${category.color}33`,
+                            border: `1px solid ${category.color}55`,
+                            color: "white",
+                          }
+                        : undefined
+                    }
+                  >
+                    {category.icon && (
+                      <span className="text-[10px]">{category.icon}</span>
                     )}
-                  {isAnonymous && (
-                    <span className="text-[10px] font-semibold text-white/70 bg-white/10 backdrop-blur px-1.5 py-0.5 rounded-full">
-                      Incognito
-                    </span>
-                  )}
-                  {category && (
-                    <span
-                      className="inline-flex items-center gap-1 text-[10px] font-semibold backdrop-blur px-1.5 py-0.5 rounded-full"
-                      style={
-                        category.color
-                          ? {
-                              backgroundColor: `${category.color}33`,
-                              border: `1px solid ${category.color}55`,
-                              color: "white",
-                            }
-                          : undefined
-                      }
-                    >
-                      {category.icon && (
-                        <span className="text-[10px]">{category.icon}</span>
-                      )}
-                      {category.name}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 text-[11px] text-white/70">
-                  <span className="drop-shadow">
-                    {formatRelativeTime(post.createdAt ?? new Date())}
+                    {category.name}
                   </span>
-                  {expiresAt && !effectiveClosed && (
-                    <>
-                      <span>·</span>
-                      <span className="inline-flex items-center gap-1 text-amber-300">
-                        Expires {formatRelativeTime(expiresAt)}
-                      </span>
-                    </>
-                  )}
-                </div>
+                )}
               </div>
-              {!isSelf && !isAnonymous && creatorId && (
-                <button
-                  type="button"
-                  onClick={handleFollowClick}
-                  className={cn(
-                    "text-xs font-bold px-3 py-1.5 rounded-full backdrop-blur transition-all duration-200",
-                    effectiveFollowing
-                      ? "bg-white/10 text-white/90 border border-white/20 hover:bg-white/20"
-                      : "bg-white text-black border border-white hover:bg-white/90"
-                  )}
-                >
-                  {effectiveFollowing ? (
-                    <span className="inline-flex items-center gap-1">
-                      <UserCheck className="w-3 h-3" /> Following
+              <div className="flex items-center gap-2 text-[11px] text-white/70">
+                <span className="drop-shadow">
+                  {formatRelativeTime(post.createdAt ?? new Date())}
+                </span>
+                {expiresAt && !effectiveClosed && (
+                  <>
+                    <span>·</span>
+                    <span className="inline-flex items-center gap-1 text-amber-300">
+                      Expires {formatRelativeTime(expiresAt)}
                     </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1">
-                      <UserPlus className="w-3 h-3" /> Follow
-                    </span>
-                  )}
-                </button>
-              )}
+                  </>
+                )}
+              </div>
             </div>
+            {!isSelf && !isAnonymous && creatorId && (
+              <button
+                type="button"
+                onClick={handleFollowClick}
+                className={cn(
+                  "text-xs font-bold px-3 py-1.5 rounded-full backdrop-blur transition-all duration-200",
+                  effectiveFollowing
+                    ? "bg-white/10 text-white/90 border border-white/20 hover:bg-white/20"
+                    : "bg-white text-black border border-white hover:bg-white/90"
+                )}
+              >
+                {effectiveFollowing ? (
+                  <span className="inline-flex items-center gap-1">
+                    <UserCheck className="w-3 h-3" /> Following
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1">
+                    <UserPlus className="w-3 h-3" /> Follow
+                  </span>
+                )}
+              </button>
+            )}
           </div>
         </div>
       </div>
