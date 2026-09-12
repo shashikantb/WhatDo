@@ -9,6 +9,10 @@ import { LoginModalProvider } from "@/components/auth/LoginModal";
 import { CookieConsent } from "@/components/shared/CookieConsent";
 import { PageViewTracker } from "@/components/shared/PageViewTracker";
 
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+export const revalidate = 0;
+
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-sans",
