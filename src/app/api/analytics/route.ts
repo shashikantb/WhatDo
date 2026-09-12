@@ -3,6 +3,10 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { auth } from "../../../../auth";
 
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+export const fetchCache = "force-no-store";
+
 const THROTTLE_WINDOW_MS = 5000;
 const lastSent = new Map<string, number>();
 

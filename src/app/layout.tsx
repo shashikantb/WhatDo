@@ -19,10 +19,26 @@ const inter = Inter({
   display: "swap",
 });
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+function buildMetadataBase(): URL {
+  const raw =
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
+    process.env.SITE_URL?.trim() ||
+    process.env.VERCEL_URL?.trim() ||
+    "";
+  if (!raw) return new URL("https://whatdo.app");
+  try {
+    if (/^https?:\/\//i.test(raw)) return new URL(raw);
+    return new URL(`https://${raw}`);
+  } catch {
+    return new URL("https://whatdo.app");
+  }
+}
+
+const APP_URL = buildMetadataBase().toString();
 
 export const metadata: Metadata = {
-  metadataBase: new URL(APP_URL),
+  metadataBase: buildMetadataBase(),
   title: {
     default: "WHATDO — See it. Vote it. Know what people think.",
     template: "%s | WHATDO",

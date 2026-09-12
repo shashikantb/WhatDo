@@ -6,6 +6,10 @@ import {
   validateUniqueUsername,
 } from "@/../auth";
 import prisma from "@/lib/db";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+export const fetchCache = "force-no-store";
 import { Role } from "@prisma/client";
 
 const registerSchema = z.object({
