@@ -26,7 +26,9 @@ export async function createTRPCContext(opts: {
   headers: Headers;
   req?: NextRequest;
 }): Promise<TRPCContext> {
-  const session = await auth();
+  const session = opts.req
+    ? await auth(opts.req as any).catch(() => null)
+    : await auth().catch(() => null);
 
   let userIp: string | undefined;
   const fwd = opts.headers.get("x-forwarded-for");

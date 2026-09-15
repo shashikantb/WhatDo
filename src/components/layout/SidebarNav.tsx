@@ -48,9 +48,10 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
   const pathname = usePathname();
   const { status } = useSession();
   const isAuthenticated = status === "authenticated";
+  const sessionSettled = status !== "loading";
 
   const { data: liveUnread } = trpc.notifications.unreadCount.useQuery(undefined, {
-    enabled: isAuthenticated,
+    enabled: sessionSettled && isAuthenticated,
     refetchInterval: 30000,
     refetchOnWindowFocus: true,
     staleTime: 5000,

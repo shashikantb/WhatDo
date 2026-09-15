@@ -45,11 +45,12 @@ export const TopBar: React.FC<TopBarProps> = ({
   const router = useRouter();
   const { status } = useSession();
   const isAuthenticated = status === "authenticated";
+  const sessionSettled = status !== "loading";
   const [menuOpen, setMenuOpen] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
 
   const { data: liveUnread } = trpc.notifications.unreadCount.useQuery(undefined, {
-    enabled: isAuthenticated,
+    enabled: sessionSettled && isAuthenticated,
     refetchInterval: 30000,
     refetchOnWindowFocus: true,
     staleTime: 5000,

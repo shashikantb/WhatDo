@@ -1,13 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { ThemeProvider } from "@/components/shared/ThemeProvider";
-import { SessionProviderWrapper } from "@/components/shared/SessionProviderWrapper";
-import { ToastProvider } from "@/components/design-system/Toaster";
-import TRPCProvider from "@/lib/trpc/Provider";
-import { LoginModalProvider } from "@/components/auth/LoginModal";
-import { CookieConsent } from "@/components/shared/CookieConsent";
-import { PageViewTracker } from "@/components/shared/PageViewTracker";
+import { AppProviders } from "@/components/shared/AppProviders";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
@@ -122,19 +116,7 @@ export default function RootLayout({
       <body
         className={`${inter.className} min-h-screen bg-background font-sans antialiased scrollbar-thin`}
       >
-        <TRPCProvider>
-          <ThemeProvider>
-            <SessionProviderWrapper>
-              <ToastProvider>
-                <LoginModalProvider>
-                  {children}
-                  <CookieConsent />
-                  <PageViewTracker />
-                </LoginModalProvider>
-              </ToastProvider>
-            </SessionProviderWrapper>
-          </ThemeProvider>
-        </TRPCProvider>
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   );

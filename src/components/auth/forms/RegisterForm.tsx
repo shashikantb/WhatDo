@@ -23,7 +23,7 @@ const registerFormSchema = z
     username: z
       .string()
       .min(3, "Username must be at least 3 characters")
-      .max(20, "Username must be at most 20 characters")
+      .max(30, "Username must be at most 30 characters")
       .regex(
         /^[a-zA-Z0-9_]+$/,
         "Only letters, numbers, and underscores allowed"
@@ -154,7 +154,16 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
     <form onSubmit={handleSubmit(onSubmit)} className={cn("space-y-4", className)}>
       {registerState.message && !registerState.success && (
         <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl text-sm">
-          {registerState.message}
+          <div className="font-semibold">{registerState.message}</div>
+          {Object.keys(registerState.issues ?? {}).length > 0 && (
+            <ul className="mt-2 list-disc list-inside space-y-0.5 text-xs">
+              {Object.entries(registerState.issues ?? {}).map(([key, msg]) => (
+                <li key={key}>
+                  <span className="font-medium capitalize">{key}:</span> {msg}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
@@ -172,9 +181,9 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
               className="w-full bg-slate-800/50 border border-slate-700 rounded-xl pl-10 pr-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all"
             />
           </div>
-          {errors.username && (
+          {(errors.username || registerState.issues?.username) && (
             <p className="mt-1.5 text-sm text-red-400">
-              {registerState.issues?.username || errors.username.message}
+              {registerState.issues?.username || errors.username?.message}
             </p>
           )}
         </div>
@@ -192,9 +201,9 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
               className="w-full bg-slate-800/50 border border-slate-700 rounded-xl pl-10 pr-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all"
             />
           </div>
-          {errors.displayName && (
+          {(errors.displayName || registerState.issues?.displayName) && (
             <p className="mt-1.5 text-sm text-red-400">
-              {errors.displayName.message}
+              {registerState.issues?.displayName || errors.displayName?.message}
             </p>
           )}
         </div>
@@ -213,9 +222,9 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
             className="w-full bg-slate-800/50 border border-slate-700 rounded-xl pl-10 pr-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all"
           />
         </div>
-        {errors.email && (
+        {(errors.email || registerState.issues?.email) && (
           <p className="mt-1.5 text-sm text-red-400">
-            {registerState.issues?.email || errors.email.message}
+            {registerState.issues?.email || errors.email?.message}
           </p>
         )}
       </div>
@@ -245,9 +254,9 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
               )}
             </button>
           </div>
-          {errors.password && (
+          {(errors.password || registerState.issues?.password) && (
             <p className="mt-1.5 text-sm text-red-400">
-              {errors.password.message}
+              {registerState.issues?.password || errors.password?.message}
             </p>
           )}
         </div>
@@ -265,9 +274,9 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
               className="w-full bg-slate-800/50 border border-slate-700 rounded-xl pl-10 pr-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all"
             />
           </div>
-          {errors.confirmPassword && (
+          {(errors.confirmPassword || registerState.issues?.confirmPassword) && (
             <p className="mt-1.5 text-sm text-red-400">
-              {errors.confirmPassword.message}
+              {registerState.issues?.confirmPassword || errors.confirmPassword?.message}
             </p>
           )}
         </div>

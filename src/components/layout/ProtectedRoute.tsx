@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRouter, usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { Button } from "@/components/design-system/Button";
 import {
@@ -23,55 +24,19 @@ export interface ProtectedRouteProps {
   loginUrl?: string;
 }
 
-interface SessionState {
+function useNextAuthSession(): {
   status: "loading" | "authenticated" | "unauthenticated";
-  data?: {
+  data: {
     user?: {
       role?: string;
     };
   } | null;
-}
-
-function useNextAuthSession(): SessionState {
-  const [session, setSession] = React.useState<SessionState>({
-    status: "loading",
-    data: null,
-  });
-  const [useSessionHook, setUseSessionHook] = React.useState<null | (() => {
-    status: "loading" | "authenticated" | "unauthenticated";
-    data?: SessionState["data"] | null;
-  })>(null);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    import("next-auth/react")
-      .then((mod) => {
-        if (!cancelled && mod?.useSession) {
-          setUseSessionHook(() => mod.useSession);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setSession({ status: "unauthenticated", data: null });
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const hookResult = useSessionHook?.();
-  React.useEffect(() => {
-    if (hookResult) {
-      setSession({
-        status: hookResult.status ?? "loading",
-        data: (hookResult.data ?? null) as SessionState["data"],
-      });
-    } else if (!useSessionHook) {
-    }
-  }, [hookResult, useSessionHook]);
-
-  return session;
+} {
+  const { status, data } = useSession();
+  return {
+    status: status ?? "loading",
+    data: (data ?? null) as any,
+  };
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({

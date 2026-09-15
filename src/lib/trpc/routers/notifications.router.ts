@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   createTRPCRouter,
   protectedProcedure,
+  publicProcedure,
 } from "../trpc";
 
 export const notificationsRouter = createTRPCRouter({
@@ -64,9 +65,11 @@ export const notificationsRouter = createTRPCRouter({
       });
     }),
 
-  unreadCount: protectedProcedure.query(async ({ ctx }) => {
+  unreadCount: publicProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session?.user?.id;
+    if (!userId) return 0;
     return ctx.prisma.notification.count({
-      where: { recipientId: ctx.session.user.id, isRead: false },
+      where: { recipientId: userId, isRead: false },
     });
   }),
 });

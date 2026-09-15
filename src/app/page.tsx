@@ -482,16 +482,6 @@ export default function Home() {
               )}
             </div>
           </div>
-
-          {/* Scroll indicator chip */}
-          {!isAuthenticated && status !== "loading" && items.length > 0 && (
-            <div className="mt-3 flex justify-center gap-2 overflow-x-auto no-scrollbar">
-              <div className="flex items-center gap-1 rounded-full bg-white/10 backdrop-blur border border-white/15 px-3 py-1 text-[10px] font-semibold text-white/90">
-                <Sparkles className="h-3 w-3 text-amber-300 mr-1" />
-                Swipe up for more opinions · {items.length} questions
-              </div>
-            </div>
-          )}
         </div>
       </header>
 

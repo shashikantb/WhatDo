@@ -16,7 +16,7 @@ const registerSchema = z.object({
   username: z
     .string()
     .min(3)
-    .max(20)
+    .max(30)
     .regex(/^[a-zA-Z0-9_]+$/),
   displayName: z.string().min(2).max(50),
   email: z.string().email(),
