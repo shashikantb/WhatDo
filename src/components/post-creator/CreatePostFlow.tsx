@@ -197,6 +197,9 @@ export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
                 : defaults.options,
             tags: Array.isArray(parsed.tags) ? parsed.tags : [],
             media: Array.isArray(parsed.media) ? parsed.media : [],
+            question: typeof parsed.question === "string" ? parsed.question : "",
+            isAnonymous: typeof parsed.isAnonymous === "boolean" ? parsed.isAnonymous : false,
+            allowComments: typeof parsed.allowComments === "boolean" ? parsed.allowComments : true,
           } as CreatePostInput;
           return merged;
         }
@@ -219,14 +222,14 @@ export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
     getValues,
   } = methods;
 
-  const watchedQuestion = watch("question");
+  const watchedQuestion = watch("question") ?? "";
   const watchedType = watch("type") as OpinionTypeValue;
   const watchedCategoryId = watch("categoryId");
-  const watchedOptions = watch("options") as PostOptionInput[];
-  const watchedMedia = watch("media") as PostMediaInput[];
-  const watchedTags = watch("tags") as string[];
-  const watchedAnonymous = watch("isAnonymous");
-  const watchedAllowComments = watch("allowComments");
+  const watchedOptions = (watch("options") as PostOptionInput[] | undefined) ?? [];
+  const watchedMedia = (watch("media") as PostMediaInput[] | undefined) ?? [];
+  const watchedTags = (watch("tags") as string[] | undefined) ?? [];
+  const watchedAnonymous = watch("isAnonymous") ?? false;
+  const watchedAllowComments = watch("allowComments") ?? true;
   const watchedExpiresAt = watch("expiresAt") as Date | undefined;
 
   const [durationChoice, setDurationChoice] = React.useState<string>("");
