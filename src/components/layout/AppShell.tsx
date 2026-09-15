@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
+import { signOut } from "next-auth/react";
 import { MainLayout } from "./MainLayout";
 import { ProtectedRoute } from "./ProtectedRoute";
 import type { Role } from "@/lib/types";
@@ -33,6 +35,20 @@ export const AppShell: React.FC<AppShellProps> = ({
   isLoading,
   isAuthenticated,
 }) => {
+  const router = useRouter();
+  const handleLogout = React.useCallback(async () => {
+    if (onLogout) {
+      onLogout();
+      return;
+    }
+    try {
+      await signOut({ redirect: false, callbackUrl: "/" });
+    } catch {
+    }
+    router.push("/feed");
+    router.refresh();
+  }, [onLogout, router]);
+
   return (
     <ProtectedRoute
       requireAuth={requireAuth}
@@ -44,7 +60,7 @@ export const AppShell: React.FC<AppShellProps> = ({
       <MainLayout
         user={user}
         notificationCount={notificationCount}
-        onLogout={onLogout}
+        onLogout={handleLogout}
       >
         {children}
       </MainLayout>

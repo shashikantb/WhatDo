@@ -18,7 +18,13 @@ import {
   LogIn as LoginIcon,
   User as UserIcon,
   Search,
+  LogOut,
+  Settings as SettingsIcon,
+  Bookmark,
+  ChevronDown,
 } from "lucide-react";
+import { signOut } from "next-auth/react";
+import { UserAvatar } from "@/components/shared/UserAvatar";
 import { cn } from "@/lib/utils";
 
 const SAMPLE_POSTS = [
@@ -332,6 +338,27 @@ export default function Home() {
   const isAuthenticated = status === "authenticated";
   const reelsRef = React.useRef<HTMLDivElement | null>(null);
   const [activeIndex, setActiveIndex] = React.useState(0);
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  const menuRef = React.useRef<HTMLDivElement>(null);
+  const user = session?.user as any;
+
+  React.useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleLogout = React.useCallback(async () => {
+    try {
+      await signOut({ redirect: false, callbackUrl: "/" });
+    } catch {}
+    router.push("/feed");
+    router.refresh();
+  }, [router]);
 
   const trendingQuery = trpc.feed.getTrending.useQuery(
     { timeRange: "7d", limit: 30 },
@@ -472,13 +499,79 @@ export default function Home() {
                   Login
                 </Button>
               ) : (
-                <Link
-                  href="/profile/me"
-                  className="h-9 w-9 rounded-full bg-white/10 backdrop-blur-md border border-white/15 flex items-center justify-center hover:bg-white/20 transition-colors"
-                  aria-label="Profile"
-                >
-                  <UserIcon className="h-4 w-4 text-white" />
-                </Link>
+                <div ref={menuRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setMenuOpen((prev) => !prev)}
+                    className="flex items-center gap-1.5 h-9 pl-1 pr-2 rounded-full bg-white/10 backdrop-blur-md border border-white/15 hover:bg-white/20 transition-colors"
+                    aria-label="Profile menu"
+                  >
+                    <UserAvatar user={user} size="xs" />
+                    <ChevronDown
+                      className={cn(
+                        "h-3.5 w-3.5 text-white/80 transition-transform duration-200",
+                        menuOpen && "rotate-180",
+                      )}
+                    />
+                  </button>
+
+                  {menuOpen && (
+                    <div className="absolute right-0 top-full mt-2 z-50 w-52 rounded-xl border border-white/15 bg-neutral-900/95 backdrop-blur-2xl shadow-2xl animate-scaleIn">
+                      <div className="p-3 border-b border-white/10">
+                        <div className="flex items-center gap-3">
+                          <UserAvatar user={user} size="sm" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-white truncate">
+                              {user?.displayName ?? user?.name ?? "User"}
+                            </p>
+                            <p className="text-xs text-white/60 truncate">
+                              @{user?.username ?? "guest"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="p-1">
+                        <Link
+                          href="/profile/me"
+                          onClick={() => setMenuOpen(false)}
+                          className="flex items-center gap-2.5 w-full rounded-lg px-3 py-2 text-sm text-white hover:bg-white/10 transition-colors"
+                        >
+                          <UserIcon className="h-4 w-4 text-white/60" />
+                          <span>Profile</span>
+                        </Link>
+                        <Link
+                          href="/saved"
+                          onClick={() => setMenuOpen(false)}
+                          className="flex items-center gap-2.5 w-full rounded-lg px-3 py-2 text-sm text-white hover:bg-white/10 transition-colors"
+                        >
+                          <Bookmark className="h-4 w-4 text-white/60" />
+                          <span>Saved Posts</span>
+                        </Link>
+                        <Link
+                          href="/settings"
+                          onClick={() => setMenuOpen(false)}
+                          className="flex items-center gap-2.5 w-full rounded-lg px-3 py-2 text-sm text-white hover:bg-white/10 transition-colors"
+                        >
+                          <SettingsIcon className="h-4 w-4 text-white/60" />
+                          <span>Settings</span>
+                        </Link>
+                      </div>
+                      <div className="p-1 border-t border-white/10">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMenuOpen(false);
+                            handleLogout();
+                          }}
+                          className="flex items-center gap-2.5 w-full rounded-lg px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+                        >
+                          <LogOut className="h-4 w-4" />
+                          <span>Log out</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>

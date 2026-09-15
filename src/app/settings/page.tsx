@@ -27,9 +27,11 @@ import {
   Mail,
   Smartphone,
   AlertTriangle,
+  LogOut,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { useTheme } from "@/components/shared/ThemeProvider";
 import { UserAvatar } from "@/components/shared/UserAvatar";
 import { trpc } from "@/lib/trpc/client";
@@ -157,6 +159,7 @@ export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const { show } = useToast();
   const utils = trpc.useUtils();
+  const router = useRouter();
 
   const { data: me, isLoading: meLoading } = trpc.auth.me.useQuery();
   const { data: prefs, isLoading: prefsLoading } = trpc.auth.getUserPreferences.useQuery();
@@ -639,7 +642,41 @@ export default function SettingsPage() {
                     </button>
                   }
                 />
-                <div className="pt-3">
+                <div className="pt-3 space-y-3">
+                  <div className="rounded-lg border border-border bg-muted/30 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-2 flex-1 min-w-0">
+                        <div className="h-9 w-9 rounded-lg bg-secondary/70 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <LogOut className="h-4.5 w-4.5 text-foreground/80" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-foreground">
+                            Log out of your account
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            End your current session on this device. You'll need to sign in again to access your profile and saved posts.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex-shrink-0">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={async () => {
+                            try {
+                              await signOut({ redirect: false });
+                            } catch {}
+                            router.push("/feed");
+                            router.refresh();
+                          }}
+                        >
+                          <LogOut className="h-4 w-4 mr-1.5" />
+                          Log out
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="rounded-lg border border-danger/30 bg-danger/5 p-3">
                     <div className="flex items-start gap-2">
                       <AlertTriangle className="h-5 w-5 text-danger flex-shrink-0 mt-0.5" />
