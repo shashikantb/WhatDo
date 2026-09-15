@@ -118,6 +118,9 @@ export const PostCard: React.FC<PostCardProps> = ({
   const effectiveClosed = isClosed || postIsExpired;
   const hasVoted = !!userVote;
   const isGuest = status === "unauthenticated";
+  const sessionUserId = (session?.user as any)?.id as string | undefined;
+  const isCreator = !!sessionUserId && !!creator?.id && sessionUserId === creator.id;
+  const showResults = hasVoted || isGuest || isCreator || effectiveClosed;
 
   React.useEffect(() => {
     try {
@@ -339,8 +342,6 @@ export const PostCard: React.FC<PostCardProps> = ({
   const displayQuestion = shouldTruncate
     ? question.slice(0, 160).trimEnd() + "…"
     : question;
-
-  const showResults = hasVoted || isGuest;
 
   return (
     <Card className={cn("overflow-hidden", className)}>

@@ -168,6 +168,9 @@ export const ReelsPostCard: React.FC<ReelsPostCardProps> = ({
   const effectiveClosed = isClosed || postIsExpired;
   const hasVoted = !!userVote;
   const isGuest = status === "unauthenticated";
+  const sessionUserId = (session?.user as any)?.id as string | undefined;
+  const isCreator = !!sessionUserId && !!creator?.id && sessionUserId === creator.id;
+  const showResults = hasVoted || isGuest || isCreator || effectiveClosed;
 
   React.useEffect(() => {
     try {
@@ -404,8 +407,6 @@ export const ReelsPostCard: React.FC<ReelsPostCardProps> = ({
   const displayQuestion = shouldTruncate
     ? question.slice(0, 180).trimEnd() + "…"
     : question;
-
-  const showResults = hasVoted || isGuest;
 
   const postUrl = `/post/${postId}`;
 

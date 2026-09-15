@@ -13,8 +13,14 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
-  const post = await prisma.post.findUnique({
-    where: { id: params.id, status: "PUBLISHED" },
+  const identifier = params.id;
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(identifier);
+
+  const post = await prisma.post.findFirst({
+    where: {
+      status: "PUBLISHED",
+      OR: isUuid ? [{ id: identifier }] : [{ slug: identifier }, { id: identifier }],
+    },
     include: {
       creator: {
         select: {
@@ -112,8 +118,13 @@ export async function generateMetadata({
 }
 
 export default async function PostPage({ params }: PageProps) {
-  const exists = await prisma.post.findUnique({
-    where: { id: params.id },
+  const identifier = params.id;
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(identifier);
+
+  const exists = await prisma.post.findFirst({
+    where: {
+      OR: isUuid ? [{ id: identifier }] : [{ slug: identifier }, { id: identifier }],
+    },
     select: { id: true, status: true },
   });
 
@@ -125,5 +136,5 @@ export default async function PostPage({ params }: PageProps) {
     notFound();
   }
 
-  return <PostPageClient params={params} />;
+  return <PostPageClient params={{ id: exists.id }} />;
 }

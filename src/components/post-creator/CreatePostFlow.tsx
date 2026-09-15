@@ -422,9 +422,7 @@ export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
       }
       utils.feed.getFeed.invalidate();
       utils.posts.getById.invalidate({ id: result.id });
-      const target = result.slug
-        ? `/post/${result.slug}`
-        : `/post/${result.id}`;
+      const target = result.id ? `/post/${result.id}` : "/feed";
       onPublished?.(result.id, result.slug);
       router.push(target);
       reset();
