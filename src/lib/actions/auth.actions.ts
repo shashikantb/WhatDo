@@ -2,12 +2,13 @@
 
 import { z } from "zod";
 import { redirect } from "next/navigation";
-import { signIn, signOut, auth } from "@/../auth";
+import { signOut, auth } from "@/auth";
 import {
   hashPassword,
   validateUniqueEmail,
   validateUniqueUsername,
-} from "@/../auth";
+  verifyPassword,
+} from "@/auth";
 import prisma from "@/lib/db";
 import { Role } from "@prisma/client";
 
@@ -86,35 +87,43 @@ export async function registerUser(prevState: any, formData: FormData) {
 }
 
 export async function loginUserAction(_prev: any, formData: FormData) {
-  const email = formData.get("email") as string;
+  const email = (formData.get("email") as string)?.toLowerCase();
   const password = formData.get("password") as string;
 
+  if (!email || !password) {
+    return { success: false, error: "Invalid email or password" };
+  }
+
   try {
-    const result = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        passwordHash: true,
+        isBanned: true,
+        isSuspended: true,
+        suspensionExpiresAt: true,
+      },
     });
 
-    if (result?.error) {
-      if (result.error === "AccountBanned") {
-        return { success: false, error: "This account has been banned" };
-      }
-      if (result.error === "AccountSuspended") {
-        return { success: false, error: "This account is currently suspended" };
-      }
+    if (!user || !user.passwordHash) {
       return { success: false, error: "Invalid email or password" };
     }
-
-    return { success: true };
-  } catch (error) {
-    const err = error as Error;
-    if (err.message === "AccountBanned") {
+    if (user.isBanned) {
       return { success: false, error: "This account has been banned" };
     }
-    if (err.message === "AccountSuspended") {
+    if (
+      user.isSuspended &&
+      (!user.suspensionExpiresAt || user.suspensionExpiresAt > new Date())
+    ) {
       return { success: false, error: "This account is currently suspended" };
     }
+    const valid = await verifyPassword(password, user.passwordHash);
+    if (!valid) {
+      return { success: false, error: "Invalid email or password" };
+    }
+    return { success: true, userId: user.id };
+  } catch {
     return { success: false, error: "Invalid email or password" };
   }
 }

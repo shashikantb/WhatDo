@@ -81,6 +81,13 @@ export default function TRPCProvider({
               return true;
             },
           },
+          mutations: {
+            retry: (failureCount, error) => {
+              if (failureCount >= 1) return false;
+              if (isNonRetryableTRPCError(error)) return false;
+              return false;
+            },
+          },
         },
       }),
   );

@@ -4,7 +4,7 @@ import {
   hashPassword,
   validateUniqueEmail,
   validateUniqueUsername,
-} from "@/../auth";
+} from "@/auth";
 import prisma from "@/lib/db";
 
 export const dynamic = "force-dynamic";

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
+import { TRPCError } from "@trpc/server";
 import {
   createTRPCRouter,
   publicProcedure,
@@ -69,7 +70,7 @@ export const votingRouter = createTRPCRouter({
         const voteData: Record<string, unknown> = {
           postId: input.postId,
           userId,
-          userIp: ctx.userIp ? ctx.userIp.slice(0, 50) : undefined,
+          ipHash: ctx.userIp ? ctx.userIp.slice(0, 50) : undefined,
         };
         if (input.optionId) voteData.optionId = input.optionId;
         if (input.ratingValue !== undefined) voteData.ratingValue = input.ratingValue;
@@ -80,7 +81,6 @@ export const votingRouter = createTRPCRouter({
         await ctx.prisma.vote.create({ data: voteData as any });
       } catch (e: any) {
         if (e?.code === "P2002") {
-          const { TRPCError } = await import("@trpc/server");
           throw new TRPCError({
             code: "CONFLICT",
             message: "Already voted on this post",

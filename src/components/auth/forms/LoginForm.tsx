@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useFormState, useFormStatus } from "react-dom";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -15,7 +14,6 @@ import {
   EyeOff,
   Chrome,
 } from "lucide-react";
-import { loginUserAction } from "@/lib/actions/auth.actions";
 import { cn } from "@/lib/utils";
 
 const loginFormSchema = z.object({
@@ -28,11 +26,12 @@ type LoginFormValues = z.infer<typeof loginFormSchema>;
 function SubmitButton({
   children,
   variant = "primary",
+  disabled,
 }: {
   children: React.ReactNode;
   variant?: "primary" | "secondary";
+  disabled?: boolean;
 }) {
-  const { pending } = useFormStatus();
   const baseStyles =
     "w-full py-3 px-4 rounded-xl font-semibold text-white transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2";
   const variants = {
@@ -44,10 +43,10 @@ function SubmitButton({
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={disabled}
       className={`${baseStyles} ${variants[variant]}`}
     >
-      {pending && (
+      {disabled && (
         <svg
           className="animate-spin h-4 w-4"
           xmlns="http://www.w3.org/2000/svg"
@@ -89,9 +88,8 @@ export const LoginForm: React.FC<LoginFormProps> = ({
 }) => {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
-  const [loginState, loginAction] = useFormState(loginUserAction, {
-    success: false,
-  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   const {
     register,
@@ -102,21 +100,46 @@ export const LoginForm: React.FC<LoginFormProps> = ({
     defaultValues: { email: "", password: "" },
   });
 
-  const onSubmit = (data: LoginFormValues) => {
-    const formData = new FormData();
-    formData.append("email", data.email);
-    formData.append("password", data.password);
-    loginAction(formData);
-  };
+  const onSubmit = async (data: LoginFormValues) => {
+    setIsSubmitting(true);
+    setLoginError(null);
+    try {
+      const result = await signIn("credentials", {
+        email: data.email,
+        password: data.password,
+        redirect: false,
+      });
 
-  if (loginState.success) {
-    if (onSuccess) {
-      onSuccess();
-    } else {
-      router.push("/feed");
-      router.refresh();
+      if (result?.error) {
+        if (result.error === "AccountBanned") {
+          setLoginError("This account has been banned");
+        } else if (result.error === "AccountSuspended") {
+          setLoginError("This account is currently suspended");
+        } else {
+          setLoginError("Invalid email or password");
+        }
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        router.push("/feed");
+        router.refresh();
+      }
+    } catch (err) {
+      const e = err as Error;
+      if (e.message === "AccountBanned") {
+        setLoginError("This account has been banned");
+      } else if (e.message === "AccountSuspended") {
+        setLoginError("This account is currently suspended");
+      } else {
+        setLoginError("Invalid email or password");
+      }
+      setIsSubmitting(false);
     }
-  }
+  };
 
   const handleOAuthDefault = async (provider: string) => {
     if (onOAuthClick) {
@@ -128,9 +151,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className={cn("space-y-5", className)}>
-      {loginState.error && (
+      {loginError && (
         <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl text-sm">
-          {loginState.error}
+          {loginError}
         </div>
       )}
 
@@ -201,7 +224,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
         </div>
       )}
 
-      <SubmitButton>Sign In</SubmitButton>
+      <SubmitButton disabled={isSubmitting}>Sign In</SubmitButton>
 
       <div className="relative my-6">
         <div className="absolute inset-0 flex items-center">

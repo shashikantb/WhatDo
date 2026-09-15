@@ -84,6 +84,9 @@ export const VoteButtons: React.FC<VoteButtonsProps> = ({
   const utils = trpc.useUtils();
   const previewMode = !!onVote || !postId;
 
+  const voteInFlightRef = React.useRef(false);
+  const attemptedPostIdsRef = React.useRef<Set<string>>(new Set());
+
   const [prefersReducedMotion, setPrefersReducedMotion] = React.useState(false);
   const [selectedOptionId, setSelectedOptionId] = React.useState<string | null>(null);
   const [selectedRating, setSelectedRating] = React.useState<number | null>(null);
@@ -121,27 +124,44 @@ export const VoteButtons: React.FC<VoteButtonsProps> = ({
       }
     },
     onError: (error) => {
-      setSelectedOptionId(null);
-      setSelectedRating(null);
-      setSelectedEmoji(null);
-      setSelectedPrice(null);
+      const code = error.data?.code ?? (error as any).code ?? null;
 
-      if (error.data?.code === "CONFLICT") {
+      if (code === "CLIENT_CLOSED_REQUEST" || (error as any).name === "AbortError" || !error.message) {
+        return;
+      }
+
+      if (code === "UNAUTHORIZED") {
+        triggerLogin({});
+        return;
+      }
+
+      if (code === "CONFLICT") {
         show("You already voted on this", "info");
         if (postId) {
           void utils.voting.getResults.invalidate({ id: postId });
           void utils.posts.getById.invalidate({ id: postId });
         }
-      } else {
-        show("Vote failed, please retry", "danger");
+        return;
       }
+
+      if (code === "TOO_MANY_REQUESTS") {
+        show(error.message ?? "Too many votes, slow down", "warning");
+        return;
+      }
+
+      show("Vote failed, please retry", "danger");
+    },
+    onSettled: () => {
+      voteInFlightRef.current = false;
     },
   });
 
   const isLoading = !previewMode && submitVoteMutation.isPending;
   const hasVoted = !!userVote;
   const isDisabled = disabled || isLoading || isClosed || hasVoted;
-  const isUnauthenticated = !previewMode && status === "unauthenticated";
+  const sessionSettled = status !== "loading";
+  const isUnauthenticated = !previewMode && sessionSettled && status === "unauthenticated";
+  const isAuthenticated = !previewMode && sessionSettled && status === "authenticated";
 
   const triggerLogin = (intentExtra: Partial<Extract<ReturnIntent, { type: "vote" }>> = {}) => {
     openLogin({
@@ -166,11 +186,24 @@ export const VoteButtons: React.FC<VoteButtonsProps> = ({
       }
       return;
     }
+
+    if (!sessionSettled) return;
+
     if (isUnauthenticated) {
       triggerLogin(payload);
       return;
     }
-    if (isDisabled || !postId) return;
+    if (isDisabled || !postId || !isAuthenticated) return;
+    if (voteInFlightRef.current) return;
+    if (attemptedPostIdsRef.current.has(postId)) return;
+
+    if (payload.optionId && userVote?.optionId) return;
+    if (payload.ratingValue !== undefined && userVote?.ratingValue !== undefined) return;
+    if (payload.emojiValue && userVote?.emojiValue) return;
+    if (payload.priceValue !== undefined && userVote?.priceValue !== undefined) return;
+
+    voteInFlightRef.current = true;
+    attemptedPostIdsRef.current.add(postId);
 
     try {
       trackEvent("vote_started", {
@@ -189,18 +222,25 @@ export const VoteButtons: React.FC<VoteButtonsProps> = ({
 
   const handleOptionClick = (optionId: string) => {
     if (isDisabled) return;
+    if (!previewMode && !sessionSettled) return;
     if (!previewMode && isUnauthenticated) {
       triggerLogin({ optionId });
       return;
     }
+    if (!previewMode && attemptedPostIdsRef.current.has(postId ?? "preview")) return;
     setSelectedOptionId(optionId);
     submitVote({ optionId });
   };
 
   const handleRatingChange = (value: number) => {
     if (isDisabled) return;
+    if (!previewMode && !sessionSettled) return;
     if (!previewMode && isUnauthenticated) {
       triggerLogin({ ratingValue: value });
+      return;
+    }
+    if (!previewMode && attemptedPostIdsRef.current.has(postId ?? "preview")) {
+      setSelectedRating(value);
       return;
     }
     setSelectedRating(value);
@@ -209,8 +249,13 @@ export const VoteButtons: React.FC<VoteButtonsProps> = ({
 
   const handleEmojiSelect = (emoji: string) => {
     if (isDisabled) return;
+    if (!previewMode && !sessionSettled) return;
     if (!previewMode && isUnauthenticated) {
       triggerLogin({ emojiValue: emoji });
+      return;
+    }
+    if (!previewMode && attemptedPostIdsRef.current.has(postId ?? "preview")) {
+      setSelectedEmoji(emoji);
       return;
     }
     setSelectedEmoji(emoji);
@@ -219,8 +264,13 @@ export const VoteButtons: React.FC<VoteButtonsProps> = ({
 
   const handlePriceSelect = (tier: PriceTier) => {
     if (isDisabled) return;
+    if (!previewMode && !sessionSettled) return;
     if (!previewMode && isUnauthenticated) {
       triggerLogin({ priceValue: tier.value });
+      return;
+    }
+    if (!previewMode && attemptedPostIdsRef.current.has(postId ?? "preview")) {
+      setSelectedPrice(tier.value);
       return;
     }
     setSelectedPrice(tier.value);

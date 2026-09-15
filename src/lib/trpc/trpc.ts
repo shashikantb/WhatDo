@@ -2,7 +2,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import { ZodError } from "zod";
 import type { NextRequest } from "next/server";
-import { auth } from "../auth";
+import { auth } from "@/auth";
 import prisma from "../db";
 import { rateLimit } from "../utils/rate-limit";
 
@@ -26,9 +26,7 @@ export async function createTRPCContext(opts: {
   headers: Headers;
   req?: NextRequest;
 }): Promise<TRPCContext> {
-  const session = opts.req
-    ? await auth(opts.req as any).catch(() => null)
-    : await auth().catch(() => null);
+  const session = await auth().catch(() => null);
 
   let userIp: string | undefined;
   const fwd = opts.headers.get("x-forwarded-for");
