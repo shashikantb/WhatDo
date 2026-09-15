@@ -166,47 +166,17 @@ export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
     resolver: zodResolver(createPostSchema),
     mode: "onTouched",
     reValidateMode: "onChange",
-    defaultValues: () => {
-      const defaults = {
-        question: "",
-        type: defaultType as ZodPostType,
-        categoryId: undefined as string | undefined,
-        isAnonymous: false,
-        allowComments: true,
-        tags: [] as string[],
-        options: getDefaultOptionsForType(defaultType),
-        media: [] as PostMediaInput[],
-        expiresAt: undefined as Date | undefined,
-        anonymous: false,
-      };
-      try {
-        const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw) as Partial<CreatePostInput> & {
-            expiresAt?: string;
-          };
-          const merged: CreatePostInput = {
-            ...defaults,
-            ...parsed,
-            expiresAt: parsed.expiresAt
-              ? new Date(parsed.expiresAt)
-              : undefined,
-            options:
-              parsed.options?.length && parsed.options.length >= 2
-                ? (parsed.options as PostOptionInput[])
-                : defaults.options,
-            tags: Array.isArray(parsed.tags) ? parsed.tags : [],
-            media: Array.isArray(parsed.media) ? parsed.media : [],
-            question: typeof parsed.question === "string" ? parsed.question : "",
-            isAnonymous: typeof parsed.isAnonymous === "boolean" ? parsed.isAnonymous : false,
-            allowComments: typeof parsed.allowComments === "boolean" ? parsed.allowComments : true,
-          } as CreatePostInput;
-          return merged;
-        }
-      } catch {
-        // ignore
-      }
-      return defaults;
+    defaultValues: {
+      question: "",
+      type: defaultType as ZodPostType,
+      categoryId: undefined as string | undefined,
+      isAnonymous: false,
+      allowComments: true,
+      tags: [] as string[],
+      options: getDefaultOptionsForType(defaultType),
+      media: [] as PostMediaInput[],
+      expiresAt: undefined as Date | undefined,
+      anonymous: false,
     },
   });
 
@@ -221,6 +191,38 @@ export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
     formState: { errors, isSubmitting, isValid, dirtyFields },
     getValues,
   } = methods;
+
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<CreatePostInput> & {
+          expiresAt?: string;
+        };
+        const defaults = getValues();
+        const merged: CreatePostInput = {
+          ...defaults,
+          ...parsed,
+          expiresAt: parsed.expiresAt
+            ? new Date(parsed.expiresAt)
+            : undefined,
+          options:
+            parsed.options?.length && parsed.options.length >= 2
+              ? (parsed.options as PostOptionInput[])
+              : defaults.options,
+          tags: Array.isArray(parsed.tags) ? parsed.tags : [],
+          media: Array.isArray(parsed.media) ? parsed.media : [],
+          question: typeof parsed.question === "string" ? parsed.question : "",
+          isAnonymous: typeof parsed.isAnonymous === "boolean" ? parsed.isAnonymous : false,
+          allowComments: typeof parsed.allowComments === "boolean" ? parsed.allowComments : true,
+        } as CreatePostInput;
+        reset(merged, { keepDefaultValues: false, keepDirty: false, keepTouched: false, keepIsSubmitted: true });
+      }
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const watchedQuestion = watch("question") ?? "";
   const watchedType = watch("type") as OpinionTypeValue;
