@@ -65,17 +65,15 @@ export const PostCard: React.FC<PostCardProps> = ({
   onVoteSuccess,
   className,
 }) => {
-  const postIdGuard: string = post?.id ?? "";
-  const isPostIdCuidGuard: boolean =
-    typeof postIdGuard === "string" && /^c[a-z0-9]{24}$/.test(postIdGuard);
-  if (!isPostIdCuidGuard) {
-    return null;
-  }
   const { data: session, status } = useSession();
   const router = useRouter();
   const { openLogin } = useLoginModal();
   const { show } = useToast();
   const utils = trpc.useUtils();
+
+  const postIdGuard: string = post?.id ?? "";
+  const isPostIdCuidGuard: boolean =
+    typeof postIdGuard === "string" && /^c[a-z0-9]{24}$/.test(postIdGuard);
 
   const [isExpanded, setIsExpanded] = React.useState(false);
   const [menuOpen, setMenuOpen] = React.useState(false);
@@ -406,9 +404,13 @@ export const PostCard: React.FC<PostCardProps> = ({
     ? question.slice(0, 160).trimEnd() + "…"
     : question;
 
+  if (!isPostIdCuidGuard || !isPostIdCuid) {
+    return null;
+  }
+
   return (
-    <Card className={cn("overflow-hidden", className)}>
-      <article className="p-4 md:p-5 space-y-4">
+    <Card suppressHydrationWarning className={cn("overflow-hidden", className)}>
+      <article suppressHydrationWarning className="p-4 md:p-5 space-y-4">
         <header className="flex items-start gap-3">
           <Avatar
             avatarUrl={authorAvatar}

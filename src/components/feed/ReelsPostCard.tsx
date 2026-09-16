@@ -112,17 +112,15 @@ export const ReelsPostCard: React.FC<ReelsPostCardProps> = ({
   onVoteSuccess,
   className,
 }) => {
-  const postIdGuard: string = post?.id ?? "";
-  const isPostIdCuidGuard: boolean =
-    typeof postIdGuard === "string" && /^c[a-z0-9]{24}$/.test(postIdGuard);
-  if (!isPostIdCuidGuard) {
-    return null;
-  }
   const { data: session, status } = useSession();
   const router = useRouter();
   const { openLogin } = useLoginModal();
   const { show } = useToast();
   const utils = trpc.useUtils();
+
+  const postIdGuard: string = post?.id ?? "";
+  const isPostIdCuidGuard: boolean =
+    typeof postIdGuard === "string" && /^c[a-z0-9]{24}$/.test(postIdGuard);
 
   const [isExpanded, setIsExpanded] = React.useState(false);
   const [menuOpen, setMenuOpen] = React.useState(false);
@@ -481,8 +479,13 @@ export const ReelsPostCard: React.FC<ReelsPostCardProps> = ({
       ? "bg-gradient-to-t from-black/90 via-black/50 to-black/10"
       : `bg-gradient-to-br from-[${categoryColor}]/40 via-background to-background`;
 
+  if (!isPostIdCuidGuard || !isPostIdCuid) {
+    return null;
+  }
+
   return (
     <article
+      suppressHydrationWarning
       className={cn(
         "relative snap-start snap-always w-full h-[100dvh] overflow-hidden",
         "flex flex-col justify-between",
