@@ -116,8 +116,9 @@ export const PostCard: React.FC<PostCardProps> = ({
   const resultsQuery = trpc.voting.getResults.useQuery(
     { id: postId },
     {
-      enabled: !!postId,
-      staleTime: 5 * 60 * 1000,
+      enabled: !!(postId && !userVoteSSR),
+      staleTime: 10 * 60 * 1000,
+      gcTime: 30 * 60 * 1000,
       refetchOnMount: true,
       refetchOnReconnect: true,
       refetchOnWindowFocus: false,

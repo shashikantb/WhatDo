@@ -3,6 +3,7 @@ import {
   createTRPCRouter,
   publicProcedure,
   protectedProcedure,
+  type TRPCContext,
 } from "../trpc";
 import { USER_SELECT_PUBLIC } from "../../constants";
 import {
@@ -10,6 +11,7 @@ import {
   computeViralityScore,
   feedScoreWeighted,
 } from "../../utils/scoring";
+import type { Prisma } from "@prisma/client";
 
 const PostSort = z.enum(["hot", "new", "top", "rising"]);
 const TrendingRange = z.enum(["1h", "24h", "7d"]);
@@ -29,6 +31,67 @@ const postBasicInclude = {
     },
   },
 };
+
+type PostWithBasic = Prisma.PostGetPayload<{ include: typeof postBasicInclude }>;
+
+async function enrichPostsWithViewerState<T extends PostWithBasic>(
+  ctx: TRPCContext,
+  posts: T[],
+): Promise<Array<T & { userVote: unknown | null; userLiked: boolean; userSaved: boolean; creatorIsFollowed: boolean }>> {
+  const viewerId = ctx.session?.user?.id;
+  const postIds = posts.map((p) => p.id);
+  const creatorIds = posts.map((p) => p.creatorId).filter(Boolean) as string[];
+
+  if (!viewerId || postIds.length === 0) {
+    return posts.map((p) => ({
+      ...p,
+      userVote: null,
+      userLiked: false,
+      userSaved: false,
+      creatorIsFollowed: false,
+    }));
+  }
+
+  const [votes, likes, saved, follows] = await ctx.prisma.$transaction([
+    ctx.prisma.vote.findMany({
+      where: { userId: viewerId, postId: { in: postIds } },
+      select: {
+        postId: true,
+        optionId: true,
+        ratingValue: true,
+        emojiValue: true,
+        priceValue: true,
+      },
+    }),
+    ctx.prisma.like.findMany({
+      where: { userId: viewerId, postId: { in: postIds } },
+      select: { postId: true },
+    }),
+    ctx.prisma.savedPost.findMany({
+      where: { userId: viewerId, postId: { in: postIds } },
+      select: { postId: true },
+    }),
+    creatorIds.length
+      ? ctx.prisma.follow.findMany({
+          where: { followerId: viewerId, followingId: { in: creatorIds } },
+          select: { followingId: true },
+        })
+      : Promise.resolve([] as { followingId: string }[]),
+  ]);
+
+  const voteByPost = new Map(votes.map((v) => [v.postId, v]));
+  const likedSet = new Set(likes.map((l) => l.postId));
+  const savedSet = new Set(saved.map((s) => s.postId));
+  const followSet = new Set(follows.map((f) => f.followingId));
+
+  return posts.map((p) => ({
+    ...p,
+    userVote: voteByPost.get(p.id) ?? null,
+    userLiked: likedSet.has(p.id),
+    userSaved: savedSet.has(p.id),
+    creatorIsFollowed: p.creatorId ? followSet.has(p.creatorId) : false,
+  }));
+}
 
 export const feedRouter = createTRPCRouter({
   getForYou: publicProcedure
@@ -71,6 +134,8 @@ export const feedRouter = createTRPCRouter({
         include: postBasicInclude,
       });
 
+      const enriched = await enrichPostsWithViewerState(ctx, posts);
+
       let categoryWeights: Record<string, number> = {};
       if (userId) {
         const interests = await ctx.prisma.userCategoryInterest.findMany({
@@ -83,7 +148,7 @@ export const feedRouter = createTRPCRouter({
       }
 
       const creatorPostCount: Record<string, number> = {};
-      const items = posts.map((p) => {
+      const items = enriched.map((p) => {
         const count = (creatorPostCount[p.creatorId] ?? 0) + 1;
         creatorPostCount[p.creatorId] = count;
 
@@ -178,9 +243,11 @@ export const feedRouter = createTRPCRouter({
         include: postBasicInclude,
       });
 
+      const enriched = await enrichPostsWithViewerState(ctx, items);
+
       let nextCursor: string | undefined = undefined;
       let hasMore = false;
-      const formatted = items.map((p) => ({
+      const formatted = enriched.map((p) => ({
         ...p,
         voteCount: p._count.votes,
         commentCount: p._count.comments,
@@ -228,7 +295,9 @@ export const feedRouter = createTRPCRouter({
         include: postBasicInclude,
       });
 
-      return items.map((p) => ({
+      const enriched = await enrichPostsWithViewerState(ctx, items);
+
+      return enriched.map((p) => ({
         ...p,
         voteCount: p._count.votes,
         commentCount: p._count.comments,
@@ -253,9 +322,10 @@ export const feedRouter = createTRPCRouter({
         skip: input.cursor ? 1 : 0,
         include: postBasicInclude,
       });
+      const enriched = await enrichPostsWithViewerState(ctx, items);
       let nextCursor: string | undefined = undefined;
       let hasMore = false;
-      const formatted = items.map((p) => ({
+      const formatted = enriched.map((p) => ({
         ...p,
         voteCount: p._count.votes,
         commentCount: p._count.comments,
@@ -310,9 +380,10 @@ export const feedRouter = createTRPCRouter({
         skip: input.cursor ? 1 : 0,
         include: postBasicInclude,
       });
+      const enriched = await enrichPostsWithViewerState(ctx, items);
       let nextCursor: string | undefined = undefined;
       let hasMore = false;
-      const formatted = items.map((p) => ({
+      const formatted = enriched.map((p) => ({
         ...p,
         voteCount: p._count.votes,
         commentCount: p._count.comments,
