@@ -47,7 +47,12 @@ export default function Home() {
   const [activeIndex, setActiveIndex] = React.useState(0);
   const [menuOpen, setMenuOpen] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
+  const [isHydrated, setIsHydrated] = React.useState(false);
   const user = session?.user as any;
+
+  React.useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   React.useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -105,6 +110,7 @@ export default function Home() {
   const isLoading =
     (isAuthenticated && forYouQuery.isLoading) ||
     (!isAuthenticated && trendingQuery.isLoading);
+  const showSkeleton = isLoading || !isHydrated;
 
   const handlePostClick = (post: any, index: number) => {
     router.push(`/post/${post.id}`);
@@ -300,7 +306,7 @@ export default function Home() {
           } as React.CSSProperties
         }
       >
-        {isLoading && items.length === 0 && (
+        {showSkeleton && (
           <>
             <ReelsSkeleton />
             <ReelsSkeleton />
@@ -308,7 +314,7 @@ export default function Home() {
           </>
         )}
 
-        {!isLoading && items.length === 0 && (
+        {!showSkeleton && items.length === 0 && (
           <div className="snap-start snap-always w-full h-[100dvh] flex items-center justify-center px-6">
             <div className="text-center max-w-sm space-y-5 p-8 rounded-3xl bg-card border border-border/50 backdrop-blur">
               <div className="mx-auto h-16 w-16 rounded-2xl bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
@@ -342,21 +348,22 @@ export default function Home() {
           </div>
         )}
 
-        {items.map((post: any, idx: number) => (
-          <div key={post.id || idx} data-reels-index={idx}>
-            <ReelsPostCard
-              post={post}
-              index={idx}
-              onClick={handlePostClick}
-              onVoteSuccess={handleVoteSuccess}
-            />
-          </div>
-        ))}
+        {!showSkeleton &&
+          items.map((post: any, idx: number) => (
+            <div key={post.id || idx} data-reels-index={idx}>
+              <ReelsPostCard
+                post={post}
+                index={idx}
+                onClick={handlePostClick}
+                onVoteSuccess={handleVoteSuccess}
+              />
+            </div>
+          ))}
 
-        {isFetchingNextPage && <ReelsSkeleton />}
+        {!showSkeleton && isFetchingNextPage && <ReelsSkeleton />}
 
         {/* End card */}
-        {!hasNextPage && items.length > 0 && (
+        {!showSkeleton && !hasNextPage && items.length > 0 && (
           <div className="snap-start snap-always w-full h-[100dvh] flex items-center justify-center px-6">
             <div className="text-center max-w-sm space-y-5 p-8 rounded-3xl bg-card/90 backdrop-blur border border-border/50">
               <div className="mx-auto h-16 w-16 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-emerald-500/10 flex items-center justify-center">
