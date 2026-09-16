@@ -97,8 +97,28 @@ export default function TRPCProvider({
       links: [
         loggerLink({
           enabled: (opts) =>
-            (process.env.NODE_ENV === "development" && typeof window !== "undefined") ||
+            (process.env.NODE_ENV === "development" &&
+              typeof window !== "undefined") ||
             (opts.direction === "down" && opts.result instanceof Error),
+          console: {
+            ...console,
+            error: (...args: unknown[]) => {
+              const first = args[0];
+              const looksLikeError =
+                first instanceof Error ||
+                (typeof first === "string" &&
+                  first.toLowerCase().includes("error")) ||
+                (args.length >= 2 &&
+                  typeof args[1] === "string" &&
+                  args[1].toLowerCase().includes("error"));
+              if (looksLikeError) {
+                console.error(...args);
+              } else {
+                console.info(...args);
+              }
+            },
+            log: (...args: unknown[]) => console.info(...args),
+          },
         }),
         httpBatchLink({
           url: `${resolvedBaseUrl}/api/trpc`,

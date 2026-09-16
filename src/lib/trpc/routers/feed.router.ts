@@ -34,16 +34,20 @@ const postBasicInclude = {
 
 type PostWithBasic = Prisma.PostGetPayload<{ include: typeof postBasicInclude }>;
 
+const isCuid = (id: unknown): id is string =>
+  typeof id === "string" && /^c[a-z0-9]{24}$/.test(id);
+
 async function enrichPostsWithViewerState<T extends PostWithBasic>(
   ctx: TRPCContext,
   posts: T[],
 ): Promise<Array<T & { userVote: unknown | null; userLiked: boolean; userSaved: boolean; creatorIsFollowed: boolean }>> {
+  const safePosts = posts.filter((p) => isCuid(p.id));
   const viewerId = ctx.session?.user?.id;
-  const postIds = posts.map((p) => p.id);
-  const creatorIds = posts.map((p) => p.creatorId).filter(Boolean) as string[];
+  const postIds = safePosts.map((p) => p.id);
+  const creatorIds = safePosts.map((p) => p.creatorId).filter(Boolean) as string[];
 
   if (!viewerId || postIds.length === 0) {
-    return posts.map((p) => ({
+    return safePosts.map((p) => ({
       ...p,
       userVote: null,
       userLiked: false,
@@ -84,7 +88,7 @@ async function enrichPostsWithViewerState<T extends PostWithBasic>(
   const savedSet = new Set(saved.map((s) => s.postId));
   const followSet = new Set(follows.map((f) => f.followingId));
 
-  return posts.map((p) => ({
+  return safePosts.map((p) => ({
     ...p,
     userVote: voteByPost.get(p.id) ?? null,
     userLiked: likedSet.has(p.id),

@@ -112,6 +112,12 @@ export const ReelsPostCard: React.FC<ReelsPostCardProps> = ({
   onVoteSuccess,
   className,
 }) => {
+  const postIdGuard: string = post?.id ?? "";
+  const isPostIdCuidGuard: boolean =
+    typeof postIdGuard === "string" && /^c[a-z0-9]{24}$/.test(postIdGuard);
+  if (!isPostIdCuidGuard) {
+    return null;
+  }
   const { data: session, status } = useSession();
   const router = useRouter();
   const { openLogin } = useLoginModal();
@@ -133,6 +139,8 @@ export const ReelsPostCard: React.FC<ReelsPostCardProps> = ({
   const menuRef = React.useRef<HTMLDivElement>(null);
 
   const postId: string = post.id;
+  const isPostIdCuid: boolean =
+    typeof postId === "string" && /^c[a-z0-9]{24}$/.test(postId);
   const postType: PostType = post.type ?? "YES_NO";
   const question: string = post.question ?? "";
   const isAnonymous: boolean = !!post.isAnonymous;
@@ -166,7 +174,7 @@ export const ReelsPostCard: React.FC<ReelsPostCardProps> = ({
   const resultsQuery = trpc.voting.getResults.useQuery(
     { id: postId },
     {
-      enabled: !!(postId && !userVoteSSR),
+      enabled: !!(postId && isPostIdCuid && !userVoteSSR),
       staleTime: 10 * 60 * 1000,
       gcTime: 30 * 60 * 1000,
       refetchOnMount: true,
