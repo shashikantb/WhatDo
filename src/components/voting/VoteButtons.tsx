@@ -85,10 +85,9 @@ export const VoteButtons: React.FC<VoteButtonsProps> = ({
   const { data: session, status } = useSession();
   const utils = trpc.useUtils();
   const { show } = useToast();
-  const { open: openLogin } = useLoginModal();
+  const { openLogin } = useLoginModal();
 
   const voteInFlightRef = React.useRef<boolean>(false);
-  const attemptedPostIdsRef = React.useRef<Set<string>>(new Set());
   const lastSentPayloadRef = React.useRef<UserVoteShape | null>(null);
   const [prefersReducedMotion, setPrefersReducedMotion] = React.useState<boolean>(false);
   const [successOptionId, setSuccessOptionId] = React.useState<string | null>(null);
@@ -170,7 +169,8 @@ export const VoteButtons: React.FC<VoteButtonsProps> = ({
 
   const isLoading = !previewMode && submitVoteMutation.isPending;
   const hasVoted = !!userVote;
-  const isDisabled = disabled || isLoading || isClosed || hasVoted;
+  const isSessionLoading = !previewMode && status === "loading";
+  const isDisabled = disabled || isLoading || isSessionLoading || isClosed || hasVoted;
   const sessionSettled = status !== "loading";
   const isUnauthenticated = !previewMode && sessionSettled && status === "unauthenticated";
   const isAuthenticated = !previewMode && sessionSettled && status === "authenticated";
@@ -207,7 +207,6 @@ export const VoteButtons: React.FC<VoteButtonsProps> = ({
     }
     if (isDisabled || !postId || !isAuthenticated) return;
     if (voteInFlightRef.current) return;
-    if (attemptedPostIdsRef.current.has(postId)) return;
 
     if (payload.optionId && userVote?.optionId) return;
     if (payload.ratingValue !== undefined && userVote?.ratingValue !== undefined) return;
@@ -215,7 +214,6 @@ export const VoteButtons: React.FC<VoteButtonsProps> = ({
     if (payload.priceValue !== undefined && userVote?.priceValue !== undefined) return;
 
     voteInFlightRef.current = true;
-    attemptedPostIdsRef.current.add(postId);
     lastSentPayloadRef.current = { ...payload };
 
     try {
@@ -240,7 +238,6 @@ export const VoteButtons: React.FC<VoteButtonsProps> = ({
       triggerLogin({ optionId });
       return;
     }
-    if (!previewMode && attemptedPostIdsRef.current.has(postId ?? "preview")) return;
     setSelectedOptionId(optionId);
     submitVote({ optionId });
   };
@@ -250,10 +247,6 @@ export const VoteButtons: React.FC<VoteButtonsProps> = ({
     if (!previewMode && !sessionSettled) return;
     if (!previewMode && isUnauthenticated) {
       triggerLogin({ ratingValue: value });
-      return;
-    }
-    if (!previewMode && attemptedPostIdsRef.current.has(postId ?? "preview")) {
-      setSelectedRating(value);
       return;
     }
     setSelectedRating(value);
@@ -267,10 +260,6 @@ export const VoteButtons: React.FC<VoteButtonsProps> = ({
       triggerLogin({ emojiValue: emoji });
       return;
     }
-    if (!previewMode && attemptedPostIdsRef.current.has(postId ?? "preview")) {
-      setSelectedEmoji(emoji);
-      return;
-    }
     setSelectedEmoji(emoji);
     submitVote({ emojiValue: emoji });
   };
@@ -280,10 +269,6 @@ export const VoteButtons: React.FC<VoteButtonsProps> = ({
     if (!previewMode && !sessionSettled) return;
     if (!previewMode && isUnauthenticated) {
       triggerLogin({ priceValue: tier.value });
-      return;
-    }
-    if (!previewMode && attemptedPostIdsRef.current.has(postId ?? "preview")) {
-      setSelectedPrice(tier.value);
       return;
     }
     setSelectedPrice(tier.value);

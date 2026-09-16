@@ -80,50 +80,53 @@ export const votingRouter = createTRPCRouter({
 
         const isSelfVote = post.creatorId === userId;
 
-        const [, voterBefore, , , , postAfterVote] = (await ctx.prisma.$transaction([
+        const [createdVote, voterBefore] = (await ctx.prisma.$transaction([
           ctx.prisma.vote.create({ data: voteData as any, select: { id: true } }),
           ctx.prisma.user.findUnique({
             where: { id: userId },
             select: { opinionScore: true, totalVotes: true },
           }),
-          input.optionId
-            ? ctx.prisma.postOption.update({
-                where: { id: input.optionId },
-                data: { voteCount: { increment: 1 } },
-                select: { id: true },
-              })
-            : Promise.resolve(null),
-          ctx.prisma.post.update({
-            where: { id: input.postId },
+        ])) as any;
+
+        const tx1mid: Promise<any>[] = [];
+        if (input.optionId) {
+          tx1mid.push(ctx.prisma.postOption.update({
+            where: { id: input.optionId },
             data: { voteCount: { increment: 1 } },
             select: { id: true },
-          }),
-          post.categoryId
-            ? ctx.prisma.userCategoryInterest.upsert({
-                where: {
-                  userId_categoryId: { userId, categoryId: post.categoryId },
-                },
-                create: { userId, categoryId: post.categoryId, voteCount: 1 },
-                update: { voteCount: { increment: 1 } },
-                select: { userId: true },
-              })
-            : Promise.resolve(null),
-          ctx.prisma.post.findUnique({
-            where: { id: input.postId },
-            select: {
-              id: true,
-              voteCount: true,
-              options: {
-                select: { id: true, voteCount: true },
-                orderBy: { sortOrder: "asc" },
-              },
-              commentCount: true,
-              likeCount: true,
-              shareCount: true,
-              createdAt: true,
+          }));
+        }
+        tx1mid.push(ctx.prisma.post.update({
+          where: { id: input.postId },
+          data: { voteCount: { increment: 1 } },
+          select: { id: true },
+        }));
+        if (post.categoryId) {
+          tx1mid.push(ctx.prisma.userCategoryInterest.upsert({
+            where: {
+              userId_categoryId: { userId, categoryId: post.categoryId },
             },
-          }),
-        ])) as any;
+            create: { userId, categoryId: post.categoryId, voteCount: 1 },
+            update: { voteCount: { increment: 1 } },
+            select: { userId: true },
+          }));
+        }
+        tx1mid.push(ctx.prisma.post.findUnique({
+          where: { id: input.postId },
+          select: {
+            id: true,
+            voteCount: true,
+            options: {
+              select: { id: true, voteCount: true },
+              orderBy: { sortOrder: "asc" },
+            },
+            commentCount: true,
+            likeCount: true,
+            shareCount: true,
+            createdAt: true,
+          },
+        }));
+        const postAfterVote: any = (await ctx.prisma.$transaction(tx1mid))[tx1mid.length - 1];
 
         try {
           await ctx.prisma.analyticsEvent.create({
@@ -198,10 +201,9 @@ export const votingRouter = createTRPCRouter({
             });
           }
 
-          await ctx.prisma.$transaction([
-            ...scoringUpdates,
-            notificationPromise ?? Promise.resolve(null),
-          ]);
+          const tx2: Promise<any>[] = [...scoringUpdates];
+          if (notificationPromise) tx2.push(notificationPromise);
+          await ctx.prisma.$transaction(tx2);
 
           const returnResult = {
             id: updatedPost.id,
