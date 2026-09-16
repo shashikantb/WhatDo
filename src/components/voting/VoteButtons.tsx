@@ -60,6 +60,7 @@ export interface VoteButtonsProps {
   isClosed?: boolean;
   expiresAt?: Date | string | null;
   onVoteSubmitted?: (result: VoteResultData) => void;
+  onVotePayload?: (vote: UserVoteShape) => void;
   onVote?: (vote: UserVoteShape) => void;
   className?: string;
 }
@@ -75,24 +76,24 @@ export const VoteButtons: React.FC<VoteButtonsProps> = ({
   isClosed,
   expiresAt,
   onVoteSubmitted,
+  onVotePayload,
   onVote,
   className,
 }) => {
   const { data: session, status } = useSession();
-  const { openLogin } = useLoginModal();
-  const { show } = useToast();
   const utils = trpc.useUtils();
-  const previewMode = !!onVote || !postId;
+  const { show } = useToast();
+  const { open: openLogin } = useLoginModal();
 
-  const voteInFlightRef = React.useRef(false);
+  const voteInFlightRef = React.useRef<boolean>(false);
   const attemptedPostIdsRef = React.useRef<Set<string>>(new Set());
-
-  const [prefersReducedMotion, setPrefersReducedMotion] = React.useState(false);
+  const lastSentPayloadRef = React.useRef<UserVoteShape | null>(null);
+  const [successOptionId, setSuccessOptionId] = React.useState<string | null>(null);
   const [selectedOptionId, setSelectedOptionId] = React.useState<string | null>(null);
   const [selectedRating, setSelectedRating] = React.useState<number | null>(null);
   const [selectedEmoji, setSelectedEmoji] = React.useState<string | null>(null);
   const [selectedPrice, setSelectedPrice] = React.useState<number | null>(null);
-  const [successOptionId, setSuccessOptionId] = React.useState<string | null>(null);
+  const [loginError, setLoginError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -116,6 +117,9 @@ export const VoteButtons: React.FC<VoteButtonsProps> = ({
         show("Vote recorded!", "success");
         setSuccessOptionId(selectedOptionId);
         setTimeout(() => setSuccessOptionId(null), 1500);
+        if (lastSentPayloadRef.current) {
+          onVotePayload?.(lastSentPayloadRef.current);
+        }
         if (postId) {
           void utils.voting.getResults.invalidate({ id: postId });
           void utils.posts.getById.invalidate({ id: postId });
@@ -204,6 +208,7 @@ export const VoteButtons: React.FC<VoteButtonsProps> = ({
 
     voteInFlightRef.current = true;
     attemptedPostIdsRef.current.add(postId);
+    lastSentPayloadRef.current = { ...payload };
 
     try {
       trackEvent("vote_started", {

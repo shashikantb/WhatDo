@@ -151,7 +151,7 @@ export const ReelsPostCard: React.FC<ReelsPostCardProps> = ({
     ? (post.media as PostMediaItem[])
     : [];
 
-  const userVote: UserVoteShape | null = post.userVote
+  const userVoteSSR: UserVoteShape | null = post.userVote
     ? ({
         optionId: post.userVote.optionId ?? undefined,
         ratingValue: post.userVote.ratingValue ?? undefined,
@@ -163,10 +163,41 @@ export const ReelsPostCard: React.FC<ReelsPostCardProps> = ({
   const userLiked: boolean = !!post.userLiked;
   const userSaved: boolean = !!post.userSaved;
 
+  const resultsQuery = trpc.voting.getResults.useQuery(
+    { id: postId },
+    {
+      enabled: !!postId,
+      staleTime: 5 * 60 * 1000,
+      refetchOnMount: true,
+      refetchOnReconnect: true,
+      refetchOnWindowFocus: false,
+    },
+  );
+
+  const [optimisticVoted, setOptimisticVoted] =
+    React.useState<boolean>(false);
+  const [optimisticVotePayload, setOptimisticVotePayload] =
+    React.useState<UserVoteShape | null>(null);
+  const [optimisticOptionCounts, setOptimisticOptionCounts] =
+    React.useState<Record<string, number> | null>(null);
+
+  const clientUserVoteRaw = (resultsQuery.data as any)?.userVote ?? null;
+  const clientUserVote: UserVoteShape | null = clientUserVoteRaw
+    ? ({
+        optionId: clientUserVoteRaw.optionId ?? undefined,
+        ratingValue: clientUserVoteRaw.ratingValue ?? undefined,
+        emojiValue: clientUserVoteRaw.emojiValue ?? undefined,
+        priceValue: clientUserVoteRaw.priceValue ?? undefined,
+      } as UserVoteShape)
+    : null;
+
+  const effectiveUserVote: UserVoteShape | null =
+    optimisticVotePayload ?? clientUserVote ?? userVoteSSR;
+
   const now = React.useMemo(() => new Date(), []);
   const postIsExpired = !!expiresAt && new Date(expiresAt) < now;
   const effectiveClosed = isClosed || postIsExpired;
-  const hasVoted = !!userVote;
+  const hasVoted = optimisticVoted || !!effectiveUserVote;
   const isGuest = status === "unauthenticated";
   const sessionUserId = (session?.user as any)?.id as string | undefined;
   const isCreator = !!sessionUserId && !!creator?.id && sessionUserId === creator.id;
@@ -200,12 +231,12 @@ export const ReelsPostCard: React.FC<ReelsPostCardProps> = ({
   const userPredictionCorrect =
     predictionStatus === "RESOLVED" &&
     prediction?.correctOptionId &&
-    userVote?.optionId === prediction.correctOptionId;
+    effectiveUserVote?.optionId === prediction.correctOptionId;
   const userPredictionIncorrect =
     predictionStatus === "RESOLVED" &&
     prediction?.correctOptionId &&
-    userVote?.optionId &&
-    userVote.optionId !== prediction.correctOptionId;
+    effectiveUserVote?.optionId &&
+    effectiveUserVote.optionId !== prediction.correctOptionId;
 
   const toggleLike = trpc.posts.toggleLike.useMutation({
     onMutate: () => {
@@ -355,21 +386,46 @@ export const ReelsPostCard: React.FC<ReelsPostCardProps> = ({
 
   const handleVoteSubmitted = (result: VoteResultData) => {
     setJustVoted(true);
+    setOptimisticVoted(true);
+    try {
+      const lastVotedPayload: Record<string, any> = {};
+      if (result?.options && Array.isArray(result.options)) {
+        const counts: Record<string, number> = {};
+        for (const o of result.options) counts[o.id] = o.voteCount ?? 0;
+        setOptimisticOptionCounts(counts);
+      }
+      void 0;
+    } catch {}
     onVoteSuccess?.(postId);
     setTimeout(() => setJustVoted(false), 3000);
   };
 
-  const optionShapes: OptionShape[] = options.map((o) => ({
-    id: o.id,
-    label: o.label ?? "",
-    value: o.value ?? undefined,
-    imageUrl: o.imageUrl ?? null,
-    color: o.color ?? null,
-    voteCount: o.voteCount ?? 0,
-    sortOrder: o.sortOrder ?? undefined,
-  }));
+  const optionShapes: OptionShape[] = options.map((o) => {
+    let vc = o.voteCount ?? 0;
+    const rOpts = (resultsQuery?.data as any)?.options as any[] | undefined;
+    if (rOpts) {
+      for (const ro of rOpts) {
+        if (ro.id === o.id && typeof ro.voteCount === "number") {
+          vc = ro.voteCount;
+          break;
+        }
+      }
+    }
+    if (optimisticOptionCounts && typeof optimisticOptionCounts[o.id] === "number") {
+      vc = optimisticOptionCounts[o.id] as number;
+    }
+    return {
+      id: o.id,
+      label: o.label ?? "",
+      value: o.value ?? undefined,
+      imageUrl: o.imageUrl ?? null,
+      color: o.color ?? null,
+      voteCount: vc,
+      sortOrder: o.sortOrder ?? undefined,
+    };
+  });
 
-  const resultOptions: VoteResultOption[] = options.map((o) => ({
+  const resultOptions: VoteResultOption[] = optionShapes.map((o) => ({
     id: o.id,
     label: o.label ?? "",
     voteCount: o.voteCount ?? 0,
@@ -553,9 +609,13 @@ export const ReelsPostCard: React.FC<ReelsPostCardProps> = ({
               postId={postId}
               postType={postType}
               options={optionShapes}
-              userVote={userVote}
+              userVote={effectiveUserVote}
               isClosed={effectiveClosed}
               expiresAt={expiresAt}
+              onVotePayload={(vp) => {
+                setOptimisticVoted(true);
+                setOptimisticVotePayload(vp);
+              }}
               onVoteSubmitted={handleVoteSubmitted}
               className="bg-black/25 backdrop-blur-md rounded-2xl p-2 border border-white/10"
             />
@@ -568,14 +628,14 @@ export const ReelsPostCard: React.FC<ReelsPostCardProps> = ({
                 options={resultOptions}
                 totalVotes={voteCount}
                 postType={postType as PostTypeForResults}
-                selectedOptionId={userVote?.optionId ?? null}
-                userRating={userVote?.ratingValue ?? null}
-                userEmoji={userVote?.emojiValue ?? null}
-                userPrice={userVote?.priceValue ?? null}
+                selectedOptionId={effectiveUserVote?.optionId ?? null}
+                userRating={effectiveUserVote?.ratingValue ?? null}
+                userEmoji={effectiveUserVote?.emojiValue ?? null}
+                userPrice={effectiveUserVote?.priceValue ?? null}
                 prediction={{
                   isResolved: predictionStatus === "RESOLVED",
                   correctOptionId: prediction?.correctOptionId,
-                  userVotedOptionId: userVote?.optionId,
+                  userVotedOptionId: effectiveUserVote?.optionId,
                   status: predictionStatus,
                 }}
                 allVotes={(post.votes as any[]) ?? []}
