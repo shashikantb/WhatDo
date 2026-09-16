@@ -59,6 +59,7 @@ export interface VoteButtonsProps {
   disabled?: boolean;
   isClosed?: boolean;
   expiresAt?: Date | string | null;
+  previewMode?: boolean;
   onVoteSubmitted?: (result: VoteResultData) => void;
   onVotePayload?: (vote: UserVoteShape) => void;
   onVote?: (vote: UserVoteShape) => void;
@@ -75,6 +76,7 @@ export const VoteButtons: React.FC<VoteButtonsProps> = ({
   disabled,
   isClosed,
   expiresAt,
+  previewMode,
   onVoteSubmitted,
   onVotePayload,
   onVote,
@@ -88,6 +90,7 @@ export const VoteButtons: React.FC<VoteButtonsProps> = ({
   const voteInFlightRef = React.useRef<boolean>(false);
   const attemptedPostIdsRef = React.useRef<Set<string>>(new Set());
   const lastSentPayloadRef = React.useRef<UserVoteShape | null>(null);
+  const [prefersReducedMotion, setPrefersReducedMotion] = React.useState<boolean>(false);
   const [successOptionId, setSuccessOptionId] = React.useState<string | null>(null);
   const [selectedOptionId, setSelectedOptionId] = React.useState<string | null>(null);
   const [selectedRating, setSelectedRating] = React.useState<number | null>(null);
@@ -118,13 +121,16 @@ export const VoteButtons: React.FC<VoteButtonsProps> = ({
         setSuccessOptionId(selectedOptionId);
         setTimeout(() => setSuccessOptionId(null), 1500);
         if (lastSentPayloadRef.current) {
-          onVotePayload?.(lastSentPayloadRef.current);
+          const vp = lastSentPayloadRef.current;
+          queueMicrotask(() => onVotePayload?.(vp));
         }
         if (postId) {
-          void utils.voting.getResults.invalidate({ id: postId });
-          void utils.posts.getById.invalidate({ id: postId });
+          queueMicrotask(() => {
+            void utils.voting.getResults.invalidate({ id: postId as string });
+            void utils.posts.getById.invalidate({ id: postId as string });
+          });
         }
-        onVoteSubmitted?.(data as VoteResultData);
+        queueMicrotask(() => onVoteSubmitted?.(data as VoteResultData));
       }
     },
     onError: (error) => {
@@ -135,15 +141,17 @@ export const VoteButtons: React.FC<VoteButtonsProps> = ({
       }
 
       if (code === "UNAUTHORIZED") {
-        triggerLogin({});
+        queueMicrotask(() => triggerLogin({}));
         return;
       }
 
       if (code === "CONFLICT") {
         show("You already voted on this", "info");
         if (postId) {
-          void utils.voting.getResults.invalidate({ id: postId });
-          void utils.posts.getById.invalidate({ id: postId });
+          queueMicrotask(() => {
+            void utils.voting.getResults.invalidate({ id: postId as string });
+            void utils.posts.getById.invalidate({ id: postId as string });
+          });
         }
         return;
       }
