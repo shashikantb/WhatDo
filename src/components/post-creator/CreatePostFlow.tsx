@@ -353,7 +353,7 @@ export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
     (items: PostMediaInput[]) => {
       setValue("media", items as any, {
         shouldDirty: true,
-        shouldValidate: true,
+        shouldValidate: false,
       });
     },
     [setValue]

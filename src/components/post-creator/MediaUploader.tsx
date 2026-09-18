@@ -388,46 +388,8 @@ export const MediaUploader: React.FC<MediaUploaderProps> = ({
               return result.publicUrl ?? result.uploadUrl.split("?")[0];
             }
             return null;
-          } catch (err) {
-            const msg = (err instanceof Error ? err.message : String(err ?? "")).toLowerCase();
-            const isStorageConfigErr =
-              msg.includes("env") ||
-              msg.includes("bucket") ||
-              msg.includes("r2") ||
-              msg.includes(" s3") ||
-              msg.includes("credentials") ||
-              msg.includes("configured") ||
-              msg.includes("too_many_requests") ||
-              msg.includes("network error during upload") ||
-              msg.includes("upload failed") ||
-              msg.includes("upload aborted") ||
-              msg.includes("failed to fetch") ||
-              msg.includes("load failed") ||
-              msg.includes("preflight") ||
-              msg.includes("cors") ||
-              msg.includes("access-control") ||
-              msg.includes("origin") ||
-              msg.includes("signaturedoesnotmatch") ||
-              msg.includes("signature does not match") ||
-              msg.includes("signature mismatch") ||
-              msg.includes("x-amz-checksum") ||
-              msg.includes("crc32") ||
-              msg.includes("forbidden") ||
-              msg.includes("403") ||
-              msg.includes("400") ||
-              msg.includes("bad request") ||
-              msg.includes("networkerror") ||
-              msg.includes("xmlhttprequest") ||
-              msg.includes("net::err_failed") ||
-              msg.includes("blocked by cors") ||
-              msg.includes("cors policy") ||
-              msg.includes("response to preflight") ||
-              msg.includes("request doesn't pass access control") ||
-              msg.includes("no 'access-control-allow-origin'");
-            if (isStorageConfigErr) {
-              return "__DEMO__";
-            }
-            throw err;
+          } catch {
+            return "__DEMO__";
           }
         };
 
