@@ -23,9 +23,52 @@ export const PostOptionSchema = z.object({
 
 export const PostMediaSchema = z.object({
   type: PostMediaTypeEnum,
-  url: z.string(),
-  thumbnailUrl: z.string().optional(),
-  posterUrl: z.string().optional(),
+  url: z.string().refine((v) => {
+    if (!v) return false;
+    if (v.startsWith("blob:")) return true;
+    try {
+      new URL(v);
+      return true;
+    } catch {
+      return false;
+    }
+  }, "Media URL must be a valid URL or local preview URL"),
+  thumbnailUrl: z
+    .string()
+    .optional()
+    .refine(
+      (v) =>
+        v === undefined ||
+        v === "" ||
+        v.startsWith("blob:") ||
+        (() => {
+          try {
+            new URL(v);
+            return true;
+          } catch {
+            return false;
+          }
+        })(),
+      "Thumbnail URL must be a valid URL or local preview URL",
+    ),
+  posterUrl: z
+    .string()
+    .optional()
+    .refine(
+      (v) =>
+        v === undefined ||
+        v === "" ||
+        v.startsWith("blob:") ||
+        (() => {
+          try {
+            new URL(v);
+            return true;
+          } catch {
+            return false;
+          }
+        })(),
+      "Poster URL must be a valid URL or local preview URL",
+    ),
   mimeType: z.string().optional(),
   width: z.number().int().optional(),
   height: z.number().int().optional(),

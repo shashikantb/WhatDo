@@ -5,6 +5,9 @@ import {
   DeleteObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { SignatureV4 } from "@smithy/signature-v4";
+import { HttpRequest } from "@smithy/protocol-http";
+import { Sha256 } from "@aws-crypto/sha256-js";
 
 const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID;
 const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID;
@@ -16,6 +19,7 @@ const hasR2Config =
   R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY && R2_BUCKET_NAME;
 
 let s3Client: S3Client | null = null;
+let r2Signer: SignatureV4 | null = null;
 
 function getS3Client(): S3Client | null {
   if (!hasR2Config) return null;
@@ -30,6 +34,94 @@ function getS3Client(): S3Client | null {
     });
   }
   return s3Client;
+}
+
+function getR2Signer(): SignatureV4 | null {
+  if (!hasR2Config) return null;
+  if (!r2Signer) {
+    r2Signer = new SignatureV4({
+      region: "auto",
+      service: "s3",
+      credentials: {
+        accessKeyId: R2_ACCESS_KEY_ID!,
+        secretAccessKey: R2_SECRET_ACCESS_KEY!,
+      },
+      sha256: Sha256,
+    });
+  }
+  return r2Signer;
+}
+
+function pad(n: number): string {
+  return n < 10 ? `0${n}` : `${n}`;
+}
+
+function amzDate(d: Date): string {
+  return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`;
+}
+
+function datestamp(d: Date): string {
+  return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`;
+}
+
+async function getR2PresignedPutUrl(params: {
+  bucket: string;
+  key: string;
+  contentType: string;
+  contentLength: number;
+  expiresIn: number;
+  accountId: string;
+}): Promise<string> {
+  const signer = getR2Signer();
+  if (!signer) throw new Error("Storage not configured");
+
+  const now = new Date();
+  const endpointHost = `${params.accountId}.r2.cloudflarestorage.com`;
+  const escapedKey = params.key
+    .split("/")
+    .map((seg) => encodeURIComponent(seg))
+    .join("/");
+  const expiresIn = params.expiresIn;
+
+  const request = new HttpRequest({
+    method: "PUT",
+    protocol: "https:",
+    hostname: endpointHost,
+    path: `/${params.bucket}/${escapedKey}`,
+    headers: {
+      host: endpointHost,
+    },
+    query: {
+      "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
+      "X-Amz-Content-Sha256": "UNSIGNED-PAYLOAD",
+      "X-Amz-Credential": `${R2_ACCESS_KEY_ID}/${datestamp(now)}/auto/s3/aws4_request`,
+      "X-Amz-Date": amzDate(now),
+      "X-Amz-Expires": `${expiresIn}`,
+      "X-Amz-SignedHeaders": "content-length;content-type;host",
+    },
+  });
+
+  (request as any).headers["content-length"] = `${params.contentLength}`;
+  (request as any).headers["content-type"] = params.contentType;
+
+  const presigned = await signer.presign(request, {
+    expiresIn,
+    signingDate: now,
+    unsignableHeaders: new Set([
+      "x-amz-checksum-crc32",
+      "x-amz-checksum-crc32c",
+      "x-amz-checksum-sha1",
+      "x-amz-checksum-sha256",
+      "x-amz-sdk-checksum-algorithm",
+      "authorization",
+      "x-amz-user-agent",
+      "x-amz-content-sha256",
+    ]),
+    signableHeaders: new Set(["content-length", "content-type", "host"]),
+  });
+
+  const url = `${presigned.protocol}//${presigned.hostname}${presigned.path}?${new URLSearchParams(presigned.query as any).toString()}`;
+  return url;
 }
 
 export type UploadMediaType = "image" | "video" | "gif";
@@ -47,8 +139,7 @@ export async function getSignedUploadUrl(params: {
   fileName: string;
   userId?: string;
 }): Promise<PresignedUploadResult> {
-  const s3 = getS3Client();
-  if (!s3 || !R2_BUCKET_NAME) {
+  if (!hasR2Config || !R2_BUCKET_NAME || !R2_ACCOUNT_ID) {
     throw new Error("Storage not configured");
   }
 
@@ -63,15 +154,13 @@ export async function getSignedUploadUrl(params: {
     : `uploads/${params.type}`;
   const fileKey = `${prefix}/${timestamp}_${randomSuffix}_${safeName}${ext ? `.${ext}` : ""}`;
 
-  const command = new PutObjectCommand({
-    Bucket: R2_BUCKET_NAME,
-    Key: fileKey,
-    ContentType: params.contentType,
-    ContentLength: params.fileSize,
-  });
-
-  const uploadUrl = await getSignedUrl(s3, command, {
+  const uploadUrl = await getR2PresignedPutUrl({
+    bucket: R2_BUCKET_NAME,
+    key: fileKey,
+    contentType: params.contentType,
+    contentLength: params.fileSize,
     expiresIn: 15 * 60,
+    accountId: R2_ACCOUNT_ID,
   });
 
   const publicUrl = R2_PUBLIC_BUCKET_URL
