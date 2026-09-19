@@ -95,7 +95,10 @@ export const createPostSchema = z.object({
     .min(2, "At least 2 options are required")
     .max(10, "Maximum 10 options allowed"),
   media: z.array(PostMediaSchema).max(10, "Maximum 10 media files allowed").default([]),
-  expiresAt: z.coerce.date().optional(),
+  expiresAt: z
+    .union([z.coerce.date(), z.string().length(0), z.null()])
+    .optional()
+    .transform((v) => (v === null || v === "" ? undefined : (v as Date | undefined))),
   anonymous: z.boolean().default(false),
 });
 

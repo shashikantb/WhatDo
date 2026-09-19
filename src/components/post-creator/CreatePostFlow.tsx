@@ -404,62 +404,102 @@ export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
     [setValue]
   );
 
-  const onSubmit = handleSubmit(async (data) => {
-    try {
-      const payload: CreatePostInput = {
-        ...data,
-        anonymous: data.isAnonymous || data.anonymous,
-      };
-      const result = await createPost.mutateAsync(payload);
-      clearDraft();
-      if (result.status === "PENDING_MODERATION") {
-        toast.show(
-          "Under review. You'll be notified when live.",
-          "info"
-        );
-      } else {
-        toast.show("Your question is live! 🎉", "success");
+  const onSubmitValid = React.useCallback(
+    async (data: CreatePostInput) => {
+      try {
+        const payload: CreatePostInput = {
+          ...data,
+          anonymous: data.isAnonymous || data.anonymous,
+        };
+        console.log("[CreatePostFlow] Publishing payload:", JSON.stringify(payload, null, 2));
+        const result = await createPost.mutateAsync(payload);
+        clearDraft();
+        if (result.status === "PENDING_MODERATION") {
+          toast.show(
+            "Under review. You'll be notified when live.",
+            "info"
+          );
+        } else {
+          toast.show("Your question is live! 🎉", "success");
+        }
+        utils.feed.getFeed.invalidate();
+        utils.posts.getById.invalidate({ id: result.id });
+        const target = result.id ? `/post/${result.id}` : "/feed";
+        onPublished?.(result.id, result.slug);
+        router.push(target);
+        reset();
+      } catch (err: any) {
+        console.error("[CreatePostFlow] Publish mutation failed:", err);
+        const issues: Array<{ path: (string | number)[]; message: string }> =
+          err?.data?.zodError?.fieldErrors
+            ? Object.entries(err.data.zodError.fieldErrors).flatMap(
+                ([k, vs]) =>
+                  (vs as string[]).map((m) => ({
+                    path: [k],
+                    message: m,
+                  }))
+              )
+            : err?.data?.issues ?? [];
+        if (issues.length) {
+          issues.forEach((issue) => {
+            const name = issue.path.join(".") as any;
+            if (name) {
+              setError(name, {
+                type: "server",
+                message: issue.message,
+              });
+            }
+          });
+          toast.show(
+            "Please fix the highlighted fields before publishing.",
+            "danger"
+          );
+        } else {
+          const message =
+            err?.data?.code === "TOO_MANY_REQUESTS"
+              ? "You're creating posts too fast. Please wait a moment."
+              : err?.message || "Failed to publish. Please try again.";
+          toast.show(message, "danger");
+        }
       }
-      utils.feed.getFeed.invalidate();
-      utils.posts.getById.invalidate({ id: result.id });
-      const target = result.id ? `/post/${result.id}` : "/feed";
-      onPublished?.(result.id, result.slug);
-      router.push(target);
-      reset();
-    } catch (err: any) {
-      const issues: Array<{ path: (string | number)[]; message: string }> =
-        err?.data?.zodError?.fieldErrors
-          ? Object.entries(err.data.zodError.fieldErrors).flatMap(
-              ([k, vs]) =>
-                (vs as string[]).map((m) => ({
-                  path: [k],
-                  message: m,
-                }))
-            )
-          : err?.data?.issues ?? [];
-      if (issues.length) {
-        issues.forEach((issue) => {
-          const name = issue.path.join(".") as any;
-          if (name) {
-            setError(name, {
-              type: "server",
-              message: issue.message,
-            });
+    },
+    [clearDraft, createPost, onPublished, reset, router, setError, toast, utils]
+  );
+
+  const onSubmitInvalid = React.useCallback(
+    (errors: any) => {
+      console.error(
+        "[CreatePostFlow] Form validation failed, cannot publish:",
+        JSON.stringify(errors, null, 2)
+      );
+      const errorSummary: string[] = [];
+      function walk(prefix: string, node: any) {
+        if (!node) return;
+        if (Array.isArray(node)) {
+          node.forEach((child, idx) => walk(`${prefix}[${idx}]`, child));
+          return;
+        }
+        if (typeof node === "object") {
+          if (typeof node.message === "string") {
+            errorSummary.push(`${prefix}: ${node.message}`);
+            return;
           }
-        });
-        toast.show(
-          "Please fix the highlighted fields before publishing.",
-          "danger"
-        );
-      } else {
-        const message =
-          err?.data?.code === "TOO_MANY_REQUESTS"
-            ? "You're creating posts too fast. Please wait a moment."
-            : err?.message || "Failed to publish. Please try again.";
-        toast.show(message, "danger");
+          Object.keys(node).forEach((key) =>
+            walk(prefix ? `${prefix}.${key}` : key, node[key])
+          );
+        }
       }
-    }
-  });
+      walk("", errors);
+      const topN = errorSummary.slice(0, 5);
+      toast.show(
+        `Form invalid (${errorSummary.length} ${errorSummary.length === 1 ? "issue" : "issues"}): ${topN.join(" | ")}`,
+        "danger"
+      );
+    },
+    [toast]
+  );
+
+  const onSubmit = handleSubmit(onSubmitValid, onSubmitInvalid);
 
   const sectionMediaValid = watchedMedia.length >= 0 && !errors.media;
   const sectionQuestionValid =
