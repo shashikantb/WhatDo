@@ -72,7 +72,10 @@ export const PostMediaSchema = z.object({
   mimeType: z.string().optional(),
   width: z.number().int().optional(),
   height: z.number().int().optional(),
-  duration: z.number().int().optional(),
+  duration: z
+    .union([z.number().finite(), z.number().int()])
+    .optional()
+    .transform((v) => (v === undefined ? v : Math.round(v))),
   fileSize: z.number().int().optional(),
   sortOrder: z.number().int().default(0),
 });

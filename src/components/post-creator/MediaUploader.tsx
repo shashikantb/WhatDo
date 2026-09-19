@@ -229,7 +229,9 @@ async function captureVideoPoster(
               dataUrl,
               width: w,
               height: h,
-              duration: video.duration,
+              duration: Number.isFinite(video.duration)
+                ? Math.round(video.duration)
+                : 0,
             });
           } else {
             reject(new Error("Failed to create poster blob"));
