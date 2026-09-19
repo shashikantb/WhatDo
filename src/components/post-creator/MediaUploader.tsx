@@ -248,6 +248,10 @@ export const MediaUploader: React.FC<MediaUploaderProps> = ({
 }) => {
   const toast = useToast();
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const inflightUploadIdsRef = React.useRef<Set<string>>(new Set());
+  const inflightBlobPresignsRef = React.useRef<WeakMap<Blob, Promise<string | null>>>(
+    new WeakMap()
+  );
   const [isDragging, setIsDragging] = React.useState(false);
   const [demoMode, setDemoMode] = React.useState(false);
   const requestPresignedUpload = trpc.media.requestPresignedUpload.useMutation();
@@ -345,6 +349,8 @@ export const MediaUploader: React.FC<MediaUploaderProps> = ({
   const uploadAndProcessItem = React.useCallback(
     async (item: InternalMediaItem) => {
       if (!item.file) return;
+      if (inflightUploadIdsRef.current.has(item.id)) return;
+      inflightUploadIdsRef.current.add(item.id);
 
       updateItem(item.id, { status: "uploading", progress: 0 });
 
@@ -367,30 +373,39 @@ export const MediaUploader: React.FC<MediaUploaderProps> = ({
           fs: number,
           fn: string
         ): Promise<string | null> => {
-          try {
-            const result = await requestPresignedUpload.mutateAsync({
-              type: mediaTypeForPresign === "gif" ? "image" : mediaTypeForPresign,
-              contentType: ct,
-              fileSize: fs,
-              fileName: fn,
-            });
-            if (result?.uploadUrl) {
-              await uploadFileWithProgress(
-                result.uploadUrl,
-                fileArg,
-                ct,
-                (p) => {
-                  if (fileArg === item.file) {
-                    updateItem(item.id, { progress: Math.max(1, Math.floor(p * 0.9)) });
+          const cacheKey: Blob = fileArg;
+          const existing = inflightBlobPresignsRef.current.get(cacheKey);
+          if (existing) return existing;
+          const work = (async (): Promise<string | null> => {
+            try {
+              const result = await requestPresignedUpload.mutateAsync({
+                type: mediaTypeForPresign === "gif" ? "image" : mediaTypeForPresign,
+                contentType: ct,
+                fileSize: fs,
+                fileName: fn,
+              });
+              if (result?.uploadUrl) {
+                await uploadFileWithProgress(
+                  result.uploadUrl,
+                  fileArg,
+                  ct,
+                  (p) => {
+                    if (fileArg === item.file) {
+                      updateItem(item.id, { progress: Math.max(1, Math.floor(p * 0.9)) });
+                    }
                   }
-                }
-              );
-              return result.publicUrl ?? result.uploadUrl.split("?")[0];
+                );
+                return result.publicUrl ?? result.uploadUrl.split("?")[0] ?? result.uploadUrl;
+              }
+              return null;
+            } catch {
+              return "__DEMO__";
+            } finally {
+              inflightBlobPresignsRef.current.delete(cacheKey);
             }
-            return null;
-          } catch {
-            return "__DEMO__";
-          }
+          })();
+          inflightBlobPresignsRef.current.set(cacheKey, work);
+          return work;
         };
 
         const objectUrl = (): string => {
@@ -491,6 +506,8 @@ export const MediaUploader: React.FC<MediaUploaderProps> = ({
           error: message,
         });
         toast.show(`Failed to upload ${item.name}: ${message}`, "danger");
+      } finally {
+        inflightUploadIdsRef.current.delete(item.id);
       }
     },
     [demoMode, requestPresignedUpload, toast, updateItem]
