@@ -880,12 +880,20 @@ export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
                     <div
                       className={cn(
                         "h-10 w-10 rounded-xl flex items-center justify-center",
-                        isValid
+                        sectionQuestionValid &&
+                          !!watchedType &&
+                          sectionOptionsValid &&
+                          sectionTagsValid &&
+                          watchedMedia.length <= 10
                           ? "bg-success/15 text-success"
                           : "bg-muted text-muted-foreground"
                       )}
                     >
-                      {isValid ? (
+                      {sectionQuestionValid &&
+                      !!watchedType &&
+                      sectionOptionsValid &&
+                      sectionTagsValid &&
+                      watchedMedia.length <= 10 ? (
                         <CheckCircle2 className="h-5 w-5" />
                       ) : (
                         <AlertCircle className="h-5 w-5" />
@@ -944,7 +952,15 @@ export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
                       loading={isSubmitting || createPost.isPending}
                       fullWidth
                       leftIcon={<Send className="h-4 w-4" />}
-                      disabled={!isValid}
+                      disabled={
+                        isSubmitting ||
+                        createPost.isPending ||
+                        !sectionQuestionValid ||
+                        !watchedType ||
+                        !sectionOptionsValid ||
+                        !sectionTagsValid ||
+                        watchedMedia.length > 10
+                      }
                     >
                       Publish
                     </Button>

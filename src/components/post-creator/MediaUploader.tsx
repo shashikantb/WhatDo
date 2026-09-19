@@ -385,19 +385,21 @@ export const MediaUploader: React.FC<MediaUploaderProps> = ({
                 fileName: fn,
               });
               if (result?.uploadUrl) {
-                await uploadFileWithProgress(
-                  result.uploadUrl,
-                  fileArg,
-                  ct,
-                  (p) => {
-                    if (fileArg === item.file) {
-                      updateItem(item.id, { progress: Math.max(1, Math.floor(p * 0.9)) });
-                    }
+              await uploadFileWithProgress(
+                result.uploadUrl,
+                fileArg,
+                ct,
+                (p) => {
+                  if (fileArg === item.file) {
+                    updateItem(item.id, { progress: Math.max(1, Math.floor(p * 0.9)) });
                   }
-                );
-                return result.publicUrl ?? result.uploadUrl.split("?")[0] ?? result.uploadUrl;
-              }
-              return null;
+                }
+              );
+              const finalPublic = result.publicUrl || null;
+              if (!finalPublic) return "__DEMO__";
+              return finalPublic;
+            }
+            return null;
             } catch {
               return "__DEMO__";
             } finally {

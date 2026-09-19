@@ -9,10 +9,43 @@ const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID;
 const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID;
 const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY;
 const R2_BUCKET_NAME = process.env.R2_BUCKET;
-const R2_PUBLIC_BUCKET_URL = process.env.R2_PUBLIC_URL;
+const R2_PUBLIC_BUCKET_URL_RAW = process.env.R2_PUBLIC_URL;
+const R2_PUBLIC_BUCKET_URL = R2_PUBLIC_BUCKET_URL_RAW
+  ? R2_PUBLIC_BUCKET_URL_RAW.replace(/\/+$/, "")
+  : undefined;
 
 const hasR2Config =
   R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY && R2_BUCKET_NAME;
+
+const MIME_TO_EXT: Record<string, string> = {
+  "image/jpeg": "jpeg",
+  "image/jpg": "jpg",
+  "image/png": "png",
+  "image/gif": "gif",
+  "image/webp": "webp",
+  "video/mp4": "mp4",
+  "video/quicktime": "mov",
+  "video/x-matroska": "mkv",
+  "video/webm": "webm",
+  "video/3gpp": "3gp",
+};
+
+function getExtension(fileName: string, contentType: string): string {
+  const nameDot = fileName.lastIndexOf(".");
+  const fromName =
+    nameDot >= 0 ? fileName.slice(nameDot + 1).toLowerCase() : "";
+  const ct = contentType.toLowerCase().split(";")[0]?.trim() ?? contentType;
+  const fromMime = MIME_TO_EXT[ct] ?? "";
+  if (fromMime && fromMime.length <= 5) return fromMime;
+  if (fromName && fromName.length <= 5) return fromName;
+  return fromMime || fromName;
+}
+
+function sanitizeBasename(fileName: string): string {
+  const nameDot = fileName.lastIndexOf(".");
+  const rawBase = nameDot >= 0 ? fileName.slice(0, nameDot) : fileName;
+  return rawBase.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 50);
+}
 
 let s3Client: S3Client | null = null;
 let presignS3Client: S3Client | null = null;
@@ -86,10 +119,8 @@ export async function getSignedUploadUrl(params: {
 
   const timestamp = Date.now();
   const randomSuffix = Math.random().toString(36).slice(2, 10);
-  const ext = params.fileName.split(".").pop()?.toLowerCase() ?? "";
-  const safeName = params.fileName
-    .replace(/[^a-zA-Z0-9_-]/g, "_")
-    .slice(0, 50);
+  const ext = getExtension(params.fileName, params.contentType);
+  const safeName = sanitizeBasename(params.fileName);
   const prefix = params.userId
     ? `uploads/user_${params.userId}/${params.type}`
     : `uploads/${params.type}`;
@@ -104,7 +135,7 @@ export async function getSignedUploadUrl(params: {
 
   const publicUrl = R2_PUBLIC_BUCKET_URL
     ? `${R2_PUBLIC_BUCKET_URL}/${fileKey}`
-    : uploadUrl.split("?").shift() ?? uploadUrl;
+    : "";
 
   return {
     uploadUrl,
