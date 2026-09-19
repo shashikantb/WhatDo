@@ -42,59 +42,9 @@ function getPresignS3Client(): S3Client | null {
         accessKeyId: R2_ACCESS_KEY_ID!,
         secretAccessKey: R2_SECRET_ACCESS_KEY!,
       },
-      requestChecksumCalculation: "WHEN_REQUIRED",
-      responseChecksumValidation: "WHEN_REQUIRED",
     });
-    presignS3Client.middlewareStack.add(
-      (next) => async (args: any) => {
-        if (args?.input && typeof args.input === "object") {
-          delete (args.input as any).ChecksumAlgorithm;
-          delete (args.input as any).ChecksumCRC32;
-          delete (args.input as any).ChecksumCRC32C;
-          delete (args.input as any).ChecksumSHA1;
-          delete (args.input as any).ChecksumSHA256;
-          delete (args.input as any).ContentLength;
-        }
-        return next(args);
-      },
-      {
-        step: "initialize",
-        priority: "high",
-        name: "StripChecksumAndContentLengthBeforeSigning",
-      }
-    );
   }
   return presignS3Client;
-}
-
-function scrubPresignedR2Url(urlStr: string): string {
-  try {
-    const u = new URL(urlStr);
-    const badKeys = Array.from(u.searchParams.keys()).filter(
-      (k) =>
-        k.toLowerCase().startsWith("x-amz-checksum-") ||
-        k.toLowerCase() === "x-amz-sdk-checksum-algorithm" ||
-        k.toLowerCase() === "x-id"
-    );
-    for (const k of badKeys) u.searchParams.delete(k);
-    const signedHdrs = u.searchParams.get("X-Amz-SignedHeaders");
-    if (signedHdrs) {
-      const filtered = signedHdrs
-        .split(";")
-        .filter(
-          (h) =>
-            h.toLowerCase() !== "content-length" &&
-            !h.toLowerCase().startsWith("x-amz-checksum-") &&
-            h.toLowerCase() !== "x-amz-sdk-checksum-algorithm"
-        );
-      if (filtered.length) {
-        u.searchParams.set("X-Amz-SignedHeaders", filtered.join(";"));
-      }
-    }
-    return u.toString();
-  } catch {
-    return urlStr;
-  }
 }
 
 async function getR2PresignedPutUrl(params: {
@@ -110,26 +60,9 @@ async function getR2PresignedPutUrl(params: {
     Key: params.key,
     ContentType: params.contentType,
   });
-  const raw = await getSignedUrl(client, command, {
+  return getSignedUrl(client, command, {
     expiresIn: params.expiresIn,
-    signableHeaders: new Set(["content-type", "host"]),
-    unhoistableHeaders: new Set([
-      "x-amz-checksum-crc32",
-      "x-amz-checksum-crc32c",
-      "x-amz-checksum-sha1",
-      "x-amz-checksum-sha256",
-      "x-amz-sdk-checksum-algorithm",
-      "authorization",
-      "x-amz-user-agent",
-      "x-amz-security-token",
-      "x-id",
-      "x-amz-sdk-invocation-id",
-      "x-amz-sdk-request",
-      "x-amz-request-payer",
-      "content-length",
-    ]),
   });
-  return scrubPresignedR2Url(raw);
 }
 
 export type UploadMediaType = "image" | "video" | "gif";
