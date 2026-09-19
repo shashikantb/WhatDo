@@ -223,18 +223,52 @@ export default function Home() {
     <main className="relative w-full h-[100dvh] overflow-hidden bg-black md:bg-background">
       {/* Top brand bar (over reels) */}
       <header className="fixed top-0 inset-x-0 z-50 pointer-events-none">
-        <div className="pointer-events-auto bg-gradient-to-b from-black/90 via-black/55 to-transparent pt-3 pb-7 px-4">
-          {/* ROW 1: Brand + Search + Profile (clean, no clutter, Trending button removed — already in bottom tab bar) */}
+        <div className="pointer-events-auto bg-gradient-to-b from-black/90 via-black/55 to-transparent pt-3 pb-6 px-4">
+          {/* Single clean row: LEFT = WHATDO logo + For You/Latest toggle; RIGHT = Search + Profile/Login */}
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-3 min-w-0 shrink-0">
-              <Link href="/" className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <Link href="/" className="flex items-center gap-1.5 shrink-0">
                 <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/30">
                   <span className="text-white font-black text-base">W</span>
                 </div>
-                <span className="font-black text-lg tracking-tight text-white drop-shadow-lg">
+                <span className="font-black text-[1.05rem] leading-none tracking-tight text-white drop-shadow-lg">
                   WHATDO
                 </span>
               </Link>
+
+              {/* Feed sort (For You / Latest) RIGHT AFTER the brand logo on the same TOP row — user requested it here */}
+              <div className="min-w-0 flex items-center pl-0.5">
+                <div className="inline-flex items-center rounded-full bg-white/12 backdrop-blur-md border border-white/18 p-0.5 shadow-lg shadow-black/20">
+                  <button
+                    type="button"
+                    onClick={() => handleSortChange("foryou")}
+                    className={cn(
+                      "inline-flex items-center gap-1 h-[1.55rem] px-2.5 rounded-full text-[10.5px] font-bold transition-all whitespace-nowrap",
+                      sortMode === "foryou"
+                        ? "bg-white text-black shadow"
+                        : "text-white/90 hover:text-white hover:bg-white/10"
+                    )}
+                    aria-pressed={sortMode === "foryou"}
+                  >
+                    <Sparkles className="h-2.5 w-2.5 shrink-0" />
+                    <span className="leading-none">For You</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSortChange("latest")}
+                    className={cn(
+                      "inline-flex items-center gap-1 h-[1.55rem] px-2.5 rounded-full text-[10.5px] font-bold transition-all whitespace-nowrap",
+                      sortMode === "latest"
+                        ? "bg-white text-black shadow"
+                        : "text-white/90 hover:text-white hover:bg-white/10"
+                    )}
+                    aria-pressed={sortMode === "latest"}
+                  >
+                    <Clock className="h-2.5 w-2.5 shrink-0" />
+                    <span className="leading-none">Latest</span>
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
@@ -330,40 +364,6 @@ export default function Home() {
                   )}
                 </div>
               )}
-            </div>
-          </div>
-
-          {/* ROW 2: Feed sort (For You / Latest) LEFT-ALIGNED — no overlap with question heading below; pt-[4.6rem] in ReelsPostCard covers it */}
-          <div className="mt-2 flex items-center gap-1.5">
-            <div className="inline-flex items-center rounded-full bg-white/12 backdrop-blur-md border border-white/18 p-0.5 shadow-lg shadow-black/20">
-              <button
-                type="button"
-                onClick={() => handleSortChange("foryou")}
-                className={cn(
-                  "inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-[11px] font-bold transition-all whitespace-nowrap",
-                  sortMode === "foryou"
-                    ? "bg-white text-black shadow"
-                    : "text-white/90 hover:text-white hover:bg-white/10"
-                )}
-                aria-pressed={sortMode === "foryou"}
-              >
-                <Sparkles className="h-3 w-3 shrink-0" />
-                <span className="leading-none">For You</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSortChange("latest")}
-                className={cn(
-                  "inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-[11px] font-bold transition-all whitespace-nowrap",
-                  sortMode === "latest"
-                    ? "bg-white text-black shadow"
-                    : "text-white/90 hover:text-white hover:bg-white/10"
-                )}
-                aria-pressed={sortMode === "latest"}
-              >
-                <Clock className="h-3 w-3 shrink-0" />
-                <span className="leading-none">Latest</span>
-              </button>
             </div>
           </div>
         </div>

@@ -518,7 +518,7 @@ export const ReelsPostCard: React.FC<ReelsPostCardProps> = ({
       />
 
       {/* Content layer (natural flow, no justify-between spacer — 9:16 mobile friendly) */}
-      <div className="relative z-10 flex-1 min-h-0 flex flex-col justify-start pt-[4.6rem] pb-[6.5rem] overflow-y-auto scrollbar-hide" style={{scrollbarWidth:'none'}}>
+      <div className="relative z-10 flex-1 min-h-0 flex flex-col justify-start pt-[3.5rem] pb-[6.5rem] overflow-y-auto scrollbar-hide" style={{scrollbarWidth:'none'}}>
         {/* HEADING at TOP: always visible, never pushed above the viewport clip */}
         <div className="px-4 pr-20 shrink-0 pb-2">
           <div className="backdrop-blur-md bg-black/35 rounded-2xl p-3 border border-white/10 shadow-2xl">
