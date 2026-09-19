@@ -493,34 +493,24 @@ export const ReelsPostCard: React.FC<ReelsPostCardProps> = ({
       )}
       data-post-id={postId}
     >
-      {/* Background layer */}
+      {/* Background layer (no more dimmed media) */}
       <div
         className={cn(
           "absolute inset-0 z-0",
-          media.length > 0
-            ? ""
-            : "bg-gradient-to-br from-card via-background to-muted"
+          "bg-gradient-to-br from-card via-background to-muted"
         )}
         style={
-          media.length === 0
-            ? ({
-                background: `linear-gradient(135deg, ${categoryColor}22 0%, hsl(var(--background)) 40%, hsl(var(--background)) 100%)`,
-              } as React.CSSProperties)
-            : undefined
+          {
+            background: `linear-gradient(135deg, ${categoryColor}22 0%, hsl(var(--background)) 40%, hsl(var(--background)) 100%)`,
+          } as React.CSSProperties
         }
-      >
-        {media.length > 0 && (
-          <div className="absolute inset-0 opacity-30 [&>*]:w-full [&>*]:h-full [&>*]:object-cover">
-            <PostMediaViewer media={media} className="w-full h-full" />
-          </div>
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
-      </div>
+      />
 
       {/* Content layer */}
       <div className="relative z-10 flex flex-col h-full pt-[3.25rem] pb-[6.5rem]">
         {/* HEADING at TOP: always visible, never pushed above the viewport clip */}
         <div className="px-4 pr-20 shrink-0 pb-2">
+          <div className="backdrop-blur-md bg-black/25 rounded-2xl p-3 border border-white/10">
           {/* Prediction badges */}
           {predictionStatus && (
             <div className="flex flex-wrap items-center gap-2 pb-1">
@@ -608,7 +598,17 @@ export const ReelsPostCard: React.FC<ReelsPostCardProps> = ({
               </button>
             )}
           </div>
+          </div>
         </div>
+
+        {/* Foreground Media - clearly visible inline (mirrors PostCard layout) */}
+        {media.length > 0 && (
+          <div className="px-4 pr-20 shrink-0 py-2 min-h-0 flex justify-center">
+            <div className="w-full max-h-[52vh] overflow-hidden rounded-2xl ring-1 ring-white/10 shadow-2xl bg-black/20">
+              <PostMediaViewer media={media} />
+            </div>
+          </div>
+        )}
 
         {/* Spacer pushes the vote+creator block to the bottom */}
         <div className="flex-1 min-h-0" />
