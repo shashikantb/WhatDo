@@ -504,24 +504,24 @@ export const ReelsPostCard: React.FC<ReelsPostCardProps> = ({
       )}
       data-post-id={postId}
     >
-      {/* Background layer (no more dimmed media) */}
+      {/* Background layer (Reels container ALWAYS dark — Instagram-style, no white theme inside reels) */}
       <div
         className={cn(
           "absolute inset-0 z-0",
-          "bg-gradient-to-br from-card via-background to-muted"
+          "bg-[#0a0a0f] dark:bg-[#0a0a0f]"
         )}
         style={
           {
-            background: `linear-gradient(135deg, ${categoryColor}22 0%, hsl(var(--background)) 40%, hsl(var(--background)) 100%)`,
+            background: `linear-gradient(135deg, ${categoryColor}33 0%, #0a0a0f 45%, #0a0a0f 100%)`,
           } as React.CSSProperties
         }
       />
 
       {/* Content layer (natural flow, no justify-between spacer — 9:16 mobile friendly) */}
-      <div className="relative z-10 flex-1 min-h-0 flex flex-col justify-start pt-[3.25rem] pb-[6.5rem] overflow-y-auto scrollbar-hide" style={{scrollbarWidth:'none'}}>
+      <div className="relative z-10 flex-1 min-h-0 flex flex-col justify-start pt-[4.6rem] pb-[6.5rem] overflow-y-auto scrollbar-hide" style={{scrollbarWidth:'none'}}>
         {/* HEADING at TOP: always visible, never pushed above the viewport clip */}
         <div className="px-4 pr-20 shrink-0 pb-2">
-          <div className="backdrop-blur-md bg-black/25 rounded-2xl p-3 border border-white/10">
+          <div className="backdrop-blur-md bg-black/35 rounded-2xl p-3 border border-white/10 shadow-2xl">
           {/* Prediction badges */}
           {predictionStatus && (
             <div className="flex flex-wrap items-center gap-2 pb-1">
@@ -640,13 +640,13 @@ export const ReelsPostCard: React.FC<ReelsPostCardProps> = ({
                 setOptimisticVotePayload(vp);
               }}
               onVoteSubmitted={handleVoteSubmitted}
-              className="bg-black/25 backdrop-blur-md rounded-2xl p-2 border border-white/10"
+              className="bg-black/35 backdrop-blur-md rounded-2xl p-2 border border-white/10 shadow-2xl"
             />
           </div>
 
           {/* Vote results */}
           {showResults && resultOptions.length > 0 && (
-            <div className="bg-black/20 backdrop-blur-md rounded-2xl p-2 border border-white/10">
+            <div className="bg-black/30 backdrop-blur-md rounded-2xl p-2 border border-white/10 shadow-2xl">
               <VoteResults
                 options={resultOptions}
                 totalVotes={voteCount}
