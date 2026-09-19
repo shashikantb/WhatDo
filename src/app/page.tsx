@@ -224,17 +224,53 @@ export default function Home() {
       {/* Top brand bar (over reels) */}
       <header className="fixed top-0 inset-x-0 z-50 pointer-events-none">
         <div className="pointer-events-auto bg-gradient-to-b from-black/80 via-black/40 to-transparent pt-3 pb-6 px-4">
-          <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/30">
-                <span className="text-white font-black text-base">W</span>
-              </div>
-              <span className="font-black text-xl tracking-tight text-white drop-shadow-lg">
-                WHATDO
-              </span>
-            </Link>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-3 min-w-0">
+              <Link href="/" className="flex items-center gap-2 shrink-0">
+                <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/30">
+                  <span className="text-white font-black text-base">W</span>
+                </div>
+                <span className="font-black text-lg tracking-tight text-white drop-shadow-lg">
+                  WHATDO
+                </span>
+              </Link>
 
-            <div className="flex items-center gap-1.5">
+              {/* Sort toggle (For You / Latest) SAME ROW left after logo — no overlap */}
+              <div className="min-w-0 flex items-center">
+                <div className="inline-flex items-center rounded-full bg-white/10 backdrop-blur-md border border-white/15 p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => handleSortChange("foryou")}
+                    className={cn(
+                      "inline-flex items-center gap-1 h-[1.35rem] px-2 rounded-full text-[9.5px] font-bold transition-all whitespace-nowrap",
+                      sortMode === "foryou"
+                        ? "bg-white text-black shadow"
+                        : "text-white/85 hover:text-white"
+                    )}
+                    aria-pressed={sortMode === "foryou"}
+                  >
+                    <Sparkles className="h-2.5 w-2.5 shrink-0" />
+                    <span className="leading-none">For You</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSortChange("latest")}
+                    className={cn(
+                      "inline-flex items-center gap-1 h-[1.35rem] px-2 rounded-full text-[9.5px] font-bold transition-all whitespace-nowrap",
+                      sortMode === "latest"
+                        ? "bg-white text-black shadow"
+                        : "text-white/85 hover:text-white"
+                    )}
+                    aria-pressed={sortMode === "latest"}
+                  >
+                    <Clock className="h-2.5 w-2.5 shrink-0" />
+                    <span className="leading-none">Latest</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
               <button
                 type="button"
                 onClick={() => router.push("/trending")}
@@ -336,39 +372,6 @@ export default function Home() {
                   )}
                 </div>
               )}
-            </div>
-          </div>
-          {/* Sort toggle (For You / Latest) under brand bar */}
-          <div className="mt-3 flex items-center justify-center gap-1.5">
-            <div className="inline-flex items-center rounded-full bg-white/10 backdrop-blur-md border border-white/15 p-1">
-              <button
-                type="button"
-                onClick={() => handleSortChange("foryou")}
-                className={cn(
-                  "inline-flex items-center gap-1.5 h-7 px-3.5 rounded-full text-[11px] font-bold transition-all",
-                  sortMode === "foryou"
-                    ? "bg-white text-black shadow"
-                    : "text-white/85 hover:text-white"
-                )}
-                aria-pressed={sortMode === "foryou"}
-              >
-                <Sparkles className="h-3 w-3" />
-                <span>For You</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSortChange("latest")}
-                className={cn(
-                  "inline-flex items-center gap-1.5 h-7 px-3.5 rounded-full text-[11px] font-bold transition-all",
-                  sortMode === "latest"
-                    ? "bg-white text-black shadow"
-                    : "text-white/85 hover:text-white"
-                )}
-                aria-pressed={sortMode === "latest"}
-              >
-                <Clock className="h-3 w-3" />
-                <span>Latest</span>
-              </button>
             </div>
           </div>
         </div>
