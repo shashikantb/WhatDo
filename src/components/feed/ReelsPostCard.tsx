@@ -498,7 +498,7 @@ export const ReelsPostCard: React.FC<ReelsPostCardProps> = ({
       onClick={handleCardClick}
       className={cn(
         "relative snap-start snap-always w-full h-[100dvh] overflow-hidden",
-        "flex flex-col justify-between",
+        "flex flex-col justify-start items-stretch",
         onClick ? "cursor-pointer" : "",
         className
       )}
@@ -517,8 +517,8 @@ export const ReelsPostCard: React.FC<ReelsPostCardProps> = ({
         }
       />
 
-      {/* Content layer */}
-      <div className="relative z-10 flex flex-col h-full pt-[3.25rem] pb-[6.5rem]">
+      {/* Content layer (natural flow, no justify-between spacer — 9:16 mobile friendly) */}
+      <div className="relative z-10 flex-1 min-h-0 flex flex-col justify-start pt-[3.25rem] pb-[6.5rem] overflow-y-auto scrollbar-hide" style={{scrollbarWidth:'none'}}>
         {/* HEADING at TOP: always visible, never pushed above the viewport clip */}
         <div className="px-4 pr-20 shrink-0 pb-2">
           <div className="backdrop-blur-md bg-black/25 rounded-2xl p-3 border border-white/10">
@@ -612,19 +612,19 @@ export const ReelsPostCard: React.FC<ReelsPostCardProps> = ({
           </div>
         </div>
 
-        {/* Foreground Media - clearly visible inline (mirrors PostCard layout) */}
+        {/* Foreground Media - clearly visible inline (mirrors PostCard layout) - bigger for 9:16 mobile */}
         {media.length > 0 && (
           <div className="px-4 pr-20 shrink-0 py-2 min-h-0 flex justify-center">
-            <div className="w-full max-h-[52vh] overflow-hidden rounded-2xl ring-1 ring-white/10 shadow-2xl bg-black/20">
-              <PostMediaViewer media={media} />
+            <div className="w-full min-h-[34vh] max-h-[62vh] md:max-h-[52vh] overflow-hidden rounded-2xl ring-1 ring-white/10 shadow-2xl bg-black/30 flex items-center justify-center">
+              <PostMediaViewer media={media} className="w-full h-full object-contain" />
             </div>
           </div>
         )}
 
-        {/* Spacer pushes the vote+creator block to the bottom */}
-        <div className="flex-1 min-h-0" />
+        {/* Spacer only for posts WITHOUT media so content doesn't bunch at top */}
+        {media.length === 0 && <div className="flex-1 min-h-[2rem]" />}
 
-        {/* BOTTOM BLOCK: vote UI + tags + creator info (anchored to bottom) */}
+        {/* BOTTOM BLOCK: vote UI + tags + creator info */}
         <div className="px-4 pr-20 shrink-0 min-h-0 flex flex-col justify-end space-y-2">
           {/* Vote buttons */}
           <div className="space-y-1.5">
