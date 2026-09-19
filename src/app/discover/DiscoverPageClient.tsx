@@ -141,9 +141,9 @@ export function DiscoverPageClient() {
 
   const handleCatClick = (slug: string) => {
     if (slug === "all") {
-      router.push("/trending");
+      router.push("/discover");
     } else {
-      router.push(`/trending?cat=${encodeURIComponent(slug)}`);
+      router.push(`/discover?cat=${encodeURIComponent(slug)}`);
     }
   };
 
@@ -168,7 +168,7 @@ export function DiscoverPageClient() {
                 </h2>
               </div>
               <Link
-                href="/trending"
+                href="/discover"
                 className="text-xs font-medium text-primary hover:underline flex items-center gap-0.5"
               >
                 View all <ChevronRight className="h-3 w-3" />

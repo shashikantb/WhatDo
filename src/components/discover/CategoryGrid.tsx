@@ -39,7 +39,7 @@ export const CategoryGrid: React.FC<CategoryGridProps> = ({
     if (onCategoryClick) {
       onCategoryClick(slug);
     } else {
-      router.push(`/trending?cat=${encodeURIComponent(slug)}`);
+      router.push(`/discover?cat=${encodeURIComponent(slug)}`);
     }
   };
 

@@ -20,7 +20,6 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: "Home", href: "/", icon: Home },
-  { label: "Trending", href: "/trending", icon: Flame },
   { label: "Ask", href: "/ask", icon: Plus, isCenterButton: true },
   { label: "Discover", href: "/discover", icon: Search },
   { label: "Profile", href: "/profile/me", icon: User },

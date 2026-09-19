@@ -126,7 +126,7 @@ export const RightRail: React.FC<RightRailProps> = ({ className }) => {
                     ))}
               </div>
               <Link
-                href="/trending"
+                href="/discover"
                 className="flex items-center justify-center gap-1 px-4 py-3 text-sm text-primary hover:bg-muted/50 transition-colors border-t border-border font-medium"
               >
                 View all trending

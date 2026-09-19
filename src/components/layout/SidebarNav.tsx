@@ -63,7 +63,6 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
 
   const navItems: NavItemConfig[] = [
     { label: "Home", href: "/feed", icon: Home },
-    { label: "Trending", href: "/trending", icon: Flame },
     { label: "Discover", href: "/discover", icon: Search },
     { label: "Ask People", href: "/ask", icon: MessageCircleQuestion },
     {

@@ -423,7 +423,7 @@ export default function Home() {
                 <Button
                   size="lg"
                   variant="outline"
-                  onClick={() => router.push("/trending")}
+                  onClick={() => router.push("/discover")}
                 >
                   Browse trending
                 </Button>
