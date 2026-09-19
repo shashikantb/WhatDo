@@ -483,12 +483,23 @@ export const ReelsPostCard: React.FC<ReelsPostCardProps> = ({
     return null;
   }
 
+  const handleCardClick = (e: React.MouseEvent<HTMLElement>) => {
+    if (!onClick) return;
+    const target = e.target as HTMLElement;
+    if (target.closest("button, a, [role='button'], textarea, input, label")) {
+      return;
+    }
+    onClick(post, index);
+  };
+
   return (
     <article
       suppressHydrationWarning
+      onClick={handleCardClick}
       className={cn(
         "relative snap-start snap-always w-full h-[100dvh] overflow-hidden",
         "flex flex-col justify-between",
+        onClick ? "cursor-pointer" : "",
         className
       )}
       data-post-id={postId}

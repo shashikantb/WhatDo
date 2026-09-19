@@ -10,8 +10,7 @@ import { SkeletonCard } from "@/components/design-system/Skeleton";
 import { ReelsPostCard } from "@/components/feed/ReelsPostCard";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { trpc } from "@/lib/trpc/client";
-import {
-  Sparkles,
+import { Sparkles,
   LogIn,
   ChevronRight,
   Flame,
@@ -22,10 +21,13 @@ import {
   Settings as SettingsIcon,
   Bookmark,
   ChevronDown,
+  Clock,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { UserAvatar } from "@/components/shared/UserAvatar";
 import { cn } from "@/lib/utils";
+import { PullToRefresh } from "@/components/feed/PullToRefresh";
+import { ReelsViewerModal } from "@/components/feed/ReelsViewerModal";
 
 function ReelsSkeleton() {
   return (
@@ -48,6 +50,9 @@ export default function Home() {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
   const [isHydrated, setIsHydrated] = React.useState(false);
+  const [sortMode, setSortMode] = React.useState<"foryou" | "latest">("foryou");
+  const [viewerOpen, setViewerOpen] = React.useState(false);
+  const [viewerInitialIndex, setViewerInitialIndex] = React.useState(0);
   const user = session?.user as any;
 
   React.useEffect(() => {
@@ -83,7 +88,16 @@ export default function Home() {
   const forYouQuery = trpc.feed.getForYou.useInfiniteQuery(
     { limit: 20 },
     {
-      enabled: isAuthenticated,
+      enabled: isAuthenticated && sortMode === "foryou",
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+      staleTime: 10_000,
+    },
+  );
+
+  const latestQuery = trpc.feed.getNew.useInfiniteQuery(
+    { limit: 20 },
+    {
+      enabled: sortMode === "latest",
       getNextPageParam: (lastPage) => lastPage.nextCursor,
       staleTime: 10_000,
     },
@@ -91,7 +105,11 @@ export default function Home() {
 
   const items: any[] = React.useMemo(() => {
     const rawItems: any[] = [];
-    if (isAuthenticated) {
+    if (sortMode === "latest") {
+      const pages = (latestQuery.data as any)?.pages ?? [];
+      const flat = pages.flatMap((p: any) => p.items ?? []);
+      rawItems.push(...flat);
+    } else if (isAuthenticated) {
       const pages = (forYouQuery.data as any)?.pages ?? [];
       const flat = pages.flatMap((p: any) => p.items ?? []);
       rawItems.push(...flat);
@@ -105,29 +123,61 @@ export default function Home() {
     const isCuid = (id: unknown) =>
       typeof id === "string" && /^c[a-z0-9]{24}$/.test(id);
     return rawItems.filter((p) => isCuid(p?.id));
-  }, [isAuthenticated, forYouQuery.data, trendingQuery.data]);
+  }, [sortMode, isAuthenticated, forYouQuery.data, latestQuery.data, trendingQuery.data]);
+
+  const activeQuery = sortMode === "latest" ? latestQuery : forYouQuery;
 
   const isLoading =
-    (isAuthenticated && forYouQuery.isLoading) ||
-    (!isAuthenticated && trendingQuery.isLoading);
+    (sortMode === "latest" && latestQuery.isLoading) ||
+    (sortMode === "foryou" && isAuthenticated && forYouQuery.isLoading) ||
+    (!isAuthenticated && sortMode === "foryou" && trendingQuery.isLoading);
   const showSkeleton = isLoading || !isHydrated;
 
   const handlePostClick = (post: any, index: number) => {
-    router.push(`/post/${post.id}`);
+    setViewerInitialIndex(index);
+    setViewerOpen(true);
   };
 
   const handleVoteSuccess = (postId: string) => {
     void utils.feed.getTrending.invalidate();
   };
 
-  const hasNextPage = (forYouQuery as any).hasNextPage ?? false;
-  const isFetchingNextPage = (forYouQuery as any).isFetchingNextPage ?? false;
-  const rawFetchNextPage = (forYouQuery as any).fetchNextPage;
+  const isRefreshing =
+    trendingQuery.isFetching ||
+    (sortMode === "latest" ? latestQuery.isRefetching : forYouQuery.isRefetching);
+
+  const handleRefresh = React.useCallback(async () => {
+    void utils.feed.getTrending.invalidate();
+    const promises: Promise<unknown>[] = [];
+    if (sortMode === "latest") {
+      if (typeof (latestQuery as any).refetch === "function") {
+        promises.push((latestQuery as any).refetch() as Promise<unknown>);
+      }
+    } else {
+      if (typeof (forYouQuery as any).refetch === "function") {
+        promises.push((forYouQuery as any).refetch() as Promise<unknown>);
+      }
+    }
+    await Promise.all(promises);
+  }, [sortMode, latestQuery, forYouQuery, utils]);
+
+  const hasNextPage = (activeQuery as any).hasNextPage ?? false;
+  const isFetchingNextPage = (activeQuery as any).isFetchingNextPage ?? false;
+  const rawFetchNextPage = (activeQuery as any).fetchNextPage;
   const fetchNextPage = React.useCallback(async () => {
     if (typeof rawFetchNextPage === "function") {
       await rawFetchNextPage();
     }
   }, [rawFetchNextPage]);
+
+  const handleSortChange = (next: "foryou" | "latest") => {
+    if (next === sortMode) return;
+    setSortMode(next);
+    const el = reelsRef.current;
+    if (el) {
+      el.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
 
   React.useEffect(() => {
     const el = reelsRef.current;
@@ -288,10 +338,49 @@ export default function Home() {
               )}
             </div>
           </div>
+          {/* Sort toggle (For You / Latest) under brand bar */}
+          <div className="mt-3 flex items-center justify-center gap-1.5">
+            <div className="inline-flex items-center rounded-full bg-white/10 backdrop-blur-md border border-white/15 p-1">
+              <button
+                type="button"
+                onClick={() => handleSortChange("foryou")}
+                className={cn(
+                  "inline-flex items-center gap-1.5 h-7 px-3.5 rounded-full text-[11px] font-bold transition-all",
+                  sortMode === "foryou"
+                    ? "bg-white text-black shadow"
+                    : "text-white/85 hover:text-white"
+                )}
+                aria-pressed={sortMode === "foryou"}
+              >
+                <Sparkles className="h-3 w-3" />
+                <span>For You</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSortChange("latest")}
+                className={cn(
+                  "inline-flex items-center gap-1.5 h-7 px-3.5 rounded-full text-[11px] font-bold transition-all",
+                  sortMode === "latest"
+                    ? "bg-white text-black shadow"
+                    : "text-white/85 hover:text-white"
+                )}
+                aria-pressed={sortMode === "latest"}
+              >
+                <Clock className="h-3 w-3" />
+                <span>Latest</span>
+              </button>
+            </div>
+          </div>
         </div>
       </header>
 
-      {/* Reels snap-scroll container */}
+      {/* Reels snap-scroll container (wrapped with PullToRefresh) */}
+      <PullToRefresh
+        onRefresh={handleRefresh}
+        isRefreshing={isRefreshing}
+        scrollRef={reelsRef as unknown as React.RefObject<HTMLElement>}
+        className="w-full h-[100dvh] relative"
+      >
       <div
         ref={reelsRef}
         className={cn(
@@ -418,6 +507,19 @@ export default function Home() {
           </div>
         )}
       </div>
+      </PullToRefresh>
+
+      {/* Full-screen reels viewer modal: opens on post click, swipe up/down between posts */}
+      <ReelsViewerModal
+        open={viewerOpen}
+        onClose={() => setViewerOpen(false)}
+        items={items}
+        initialIndex={viewerInitialIndex}
+        hasNextPage={hasNextPage}
+        isFetchingNextPage={isFetchingNextPage}
+        fetchNextPage={fetchNextPage}
+        onVoteSuccess={handleVoteSuccess}
+      />
 
       {/* Bottom navigation (Instagram style) */}
       <BottomNav />
