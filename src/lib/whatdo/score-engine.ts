@@ -207,6 +207,7 @@ export function calculateScoreEngine(
   let signalContributions = 0;
   let sufficientDataCount = 0;
   let citySufficientDataCount = 0;
+  const MIN_SIGNAL_CONTRIBUTIONS_TO_CLASSIFY = 6;
   for (const answer of input.answers) {
     const aggregate = input.aggregates[answer.questionId];
     if (!aggregate) continue;
@@ -216,12 +217,13 @@ export function calculateScoreEngine(
       thresholds,
       input.userCity,
     );
-    if (
+    const sampleOk =
       aggregate.totalResponses >= thresholds.minGlobalSampleSize &&
-      built.agreementPct !== null
-    ) {
+      built.agreementPct !== null;
+    if (sampleOk) {
       sufficientDataCount += 1;
-      sumAgreement += built.agreementPct;
+      const agree = built.agreementPct!;
+      sumAgreement += agree;
       agreementN += 1;
       if (built.isRare) rareCount += 1;
       if (built.isVeryRare) veryRareCount += 1;
@@ -229,25 +231,22 @@ export function calculateScoreEngine(
       contrarianEligible += 1;
       if (built.isMajority) majorityMatches += 1;
       if (built.isContrarian) contrarianCount += 1;
-      if (
-        built.agreementPct !== null &&
-        (rarest === null || built.agreementPct < rarest.rarityPct)
-      ) {
+      if (rarest === null || agree < rarest.rarityPct) {
         rarest = {
           questionId: answer.questionId,
           optionId: answer.optionId,
-          rarityPct: built.agreementPct,
+          rarityPct: agree,
         };
       }
-      signalAccumulator = accumulateSignalContribution(
-        signalAccumulator,
-        answer.taxonomy,
-        answer.optionIndex,
-        answer.totalOptions,
-        built.isMajority,
-      );
-      signalContributions += 1;
     }
+    signalAccumulator = accumulateSignalContribution(
+      signalAccumulator,
+      answer.taxonomy,
+      answer.optionIndex,
+      answer.totalOptions,
+      sampleOk && built.isMajority,
+    );
+    signalContributions += 1;
     if (built.cityAgreementPct !== null) {
       citySufficientDataCount += 1;
       sumCity += built.cityAgreementPct;
@@ -274,13 +273,13 @@ export function calculateScoreEngine(
   let strongestTrait: WhatDoSignal | null = null;
   let archetype: WhatDoArchetype | null = null;
   let archetypeScores: Partial<Record<WhatDoArchetype, number>> | null = null;
-  if (signalContributions > 0 && sufficientDataCount >= 1) {
+  if (signalContributions >= MIN_SIGNAL_CONTRIBUTIONS_TO_CLASSIFY) {
     signalScores = normalizeSignalScores(signalAccumulator, signalContributions);
     strongestTrait = getStrongestSignal(signalScores);
     const classified = classifyArchetype({
       signals: signalScores,
       contrarianAnswerCount: contrarianCount,
-      totalQuestions: majorityEligible,
+      totalQuestions: Math.max(majorityEligible, signalContributions),
       rareAnswerCount: rareCount,
     });
     archetype = classified.archetype;
@@ -412,7 +411,7 @@ export async function calculateWhatDoResult(
       questionId: p.questionId,
       optionId: p.optionId ?? null,
       agreementPct: p.agreementPct ?? null,
-      rarityPct: p.agreementPct ?? null,
+      rarityPct: p.rarityPct ?? null,
       isMajority: p.isMajority,
       isContrarian: p.isContrarian,
       isRare: p.isRare,
@@ -435,6 +434,135 @@ export async function calculateWhatDoResult(
       veryRareAnswersCount: engine.veryRareAnswerCount,
     },
     reason: null,
+  };
+}
+
+function buildAggregatesFromRows(
+  globalRows: Array<{ assessmentQuestionId: string; selectedOptionId: string; count: bigint | number | string }>,
+  cityRows: Array<{ assessmentQuestionId: string; selectedOptionId: string; count: bigint | number | string }>,
+  optionRecords: Record<string, Record<string, { optionId: string; sortOrder: number }>>,
+): Record<string, QuestionAggregate> {
+  const bn = (v: any): number => {
+    if (typeof v === "bigint") return Number(v);
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+  const globalMap = new Map<string, Map<string, number>>();
+  const cityMap = new Map<string, Map<string, number>>();
+  const qTotals = new Map<string, number>();
+  const qCityTotals = new Map<string, number>();
+  for (const r of globalRows) {
+    const q = r.assessmentQuestionId;
+    const cnt = bn(r.count);
+    let byOpt = globalMap.get(q);
+    if (!byOpt) { byOpt = new Map(); globalMap.set(q, byOpt); }
+    byOpt.set(r.selectedOptionId, cnt);
+    qTotals.set(q, (qTotals.get(q) ?? 0) + cnt);
+  }
+  for (const r of cityRows) {
+    const q = r.assessmentQuestionId;
+    const cnt = bn(r.count);
+    let byOpt = cityMap.get(q);
+    if (!byOpt) { byOpt = new Map(); cityMap.set(q, byOpt); }
+    byOpt.set(r.selectedOptionId, cnt);
+    qCityTotals.set(q, (qCityTotals.get(q) ?? 0) + cnt);
+  }
+  const out: Record<string, QuestionAggregate> = {};
+  const allQids = new Set<string>([...globalMap.keys(), ...cityMap.keys(), ...Object.keys(optionRecords)]);
+  for (const qid of allQids) {
+    const optMap = optionRecords[qid] ?? {};
+    const optIds = Object.values(optMap)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((o) => o.optionId);
+    const global = globalMap.get(qid) ?? new Map<string, number>();
+    const city = cityMap.get(qid) ?? new Map<string, number>();
+    const totalGlobal = qTotals.get(qid) ?? 0;
+    const totalCity = qCityTotals.get(qid) ?? 0;
+    const safePct = (n: number, d: number): number | null => d > 0 ? Math.round((n / d) * 100) : null;
+    out[qid] = {
+      questionId: qid,
+      totalResponses: totalGlobal,
+      optionAggregates: optIds.map((oid) => ({
+        optionId: oid,
+        responseCount: global.get(oid) ?? 0,
+        responsePct: safePct(global.get(oid) ?? 0, totalGlobal),
+      })),
+      cityTotalResponses: totalCity,
+      cityOptionAggregates: optIds.map((oid) => ({
+        optionId: oid,
+        responseCount: city.get(oid) ?? 0,
+        responsePct: safePct(city.get(oid) ?? 0, totalCity),
+      })),
+    };
+  }
+  return out;
+}
+
+export function createPrismaAggregationSource(prisma: any): AggregationSource {
+  return {
+    async getQuestionAggregate(questionId, city) {
+      const batch = await this.getQuestionAggregatesBatch([questionId], city);
+      return (
+        batch[questionId] ?? {
+          questionId,
+          totalResponses: 0,
+          optionAggregates: [],
+          cityTotalResponses: 0,
+          cityOptionAggregates: [],
+        }
+      );
+    },
+    async getQuestionAggregatesBatch(questionIds, city) {
+      if (questionIds.length === 0) return {};
+      const ids = Array.from(new Set(questionIds));
+      const placeholders = ids.map((i) => `'${String(i).replace(/'/g, "''")}'`).join(",");
+      const [globalRawRaw, cityRawRaw, optionsRawRaw] = await Promise.all([
+        prisma.$queryRawUnsafe(
+          `SELECT "assessmentQuestionId", "selectedOptionId", COUNT(*)::bigint count
+           FROM "QuestionResponse"
+           WHERE "assessmentQuestionId" IN (${placeholders})
+           GROUP BY "assessmentQuestionId", "selectedOptionId";`
+        ),
+        city
+          ? prisma.$queryRawUnsafe(
+              `SELECT "assessmentQuestionId", "selectedOptionId", COUNT(*)::bigint count
+               FROM "QuestionResponse"
+               WHERE "assessmentQuestionId" IN (${placeholders})
+                 AND "citySnapshot" = '${String(city).replace(/'/g, "''")}'
+               GROUP BY "assessmentQuestionId", "selectedOptionId";`
+            )
+          : Promise.resolve([]),
+        prisma.$queryRawUnsafe(
+          `SELECT "assessmentQuestionId", id, "sortOrder"
+           FROM "AssessmentQuestionOption"
+           WHERE "assessmentQuestionId" IN (${placeholders})
+           ORDER BY "assessmentQuestionId", "sortOrder" ASC;`
+        ),
+      ]);
+      const globalRaw = globalRawRaw as Array<{
+        assessmentQuestionId: string;
+        selectedOptionId: string;
+        count: bigint;
+      }>;
+      const cityRaw = cityRawRaw as Array<{
+        assessmentQuestionId: string;
+        selectedOptionId: string;
+        count: bigint;
+      }>;
+      const optionsRaw = optionsRawRaw as Array<{
+        assessmentQuestionId: string;
+        id: string;
+        sortOrder: number;
+      }>;
+      const optionRecords: Record<string, Record<string, { optionId: string; sortOrder: number }>> = {};
+      for (const o of optionsRaw) {
+        const q = o.assessmentQuestionId;
+        const obj = optionRecords[q] ?? {};
+        obj[o.id] = { optionId: o.id, sortOrder: Number(o.sortOrder) };
+        optionRecords[q] = obj;
+      }
+      return buildAggregatesFromRows(globalRaw, cityRaw, optionRecords);
+    },
   };
 }
 

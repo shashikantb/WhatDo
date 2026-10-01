@@ -12,7 +12,6 @@ import {
   DEFAULT_CATEGORY_MIX,
 } from "@/lib/whatdo/question-selector";
 import type {
-  AggregationSource,
   QuestionAggregate,
   UserAnswer,
 } from "@/lib/whatdo/score-engine";
@@ -20,7 +19,7 @@ import {
   DEFAULT_THRESHOLDS,
   INSUFFICIENT_DATA,
   calculateWhatDoResult,
-  calculateScoreEngine,
+  createPrismaAggregationSource,
 } from "@/lib/whatdo/score-engine";
 import {
   buildAIPromptIdentityInput,
@@ -56,59 +55,6 @@ async function emitFunnel(
     });
   } catch {
   }
-}
-
-function createPrismaAggregationSource(prisma: any): AggregationSource {
-  return {
-    async getQuestionAggregate(questionId, city) {
-      const rows = await prisma.questionResponse.groupBy({
-        by: ["selectedOptionId"],
-        where: { assessmentQuestionId: questionId },
-        _count: true,
-      });
-      const totalAll = rows.reduce((s: number, r: any) => s + r._count, 0);
-      const optionAggregates = rows.map((r: any) => ({
-        optionId: r.selectedOptionId,
-        responseCount: r._count,
-        responsePct: totalAll > 0 ? (r._count / totalAll) * 100 : null,
-      }));
-      let cityTotalResponses: number | undefined;
-      let cityOptionAggregates: QuestionAggregate["cityOptionAggregates"];
-      if (city) {
-        const cityRows = await prisma.questionResponse.groupBy({
-          by: ["selectedOptionId"],
-          where: { assessmentQuestionId: questionId, citySnapshot: city },
-          _count: true,
-        });
-        const cityAgg = cityRows.reduce(
-          (s: number, r: any) => s + (r._count as number),
-          0,
-        );
-        const cityTotal: number = cityAgg;
-        cityOptionAggregates = cityRows.map((r: any) => ({
-          optionId: r.selectedOptionId,
-          responseCount: r._count,
-          responsePct:
-            cityTotal > 0 ? ((r._count as number) / cityTotal) * 100 : null,
-        }));
-        cityTotalResponses = cityTotal;
-      }
-      return {
-        questionId,
-        totalResponses: totalAll,
-        optionAggregates,
-        cityTotalResponses,
-        cityOptionAggregates,
-      };
-    },
-    async getQuestionAggregatesBatch(questionIds, city) {
-      const out: Record<string, QuestionAggregate> = {};
-      for (const qid of questionIds) {
-        out[qid] = await this.getQuestionAggregate(qid, city);
-      }
-      return out;
-    },
-  };
 }
 
 export const whatdoRouter = createTRPCRouter({
