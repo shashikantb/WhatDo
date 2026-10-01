@@ -232,7 +232,11 @@ export default function WhatDoQuizPage() {
                 <Button
                   size="lg"
                   onClick={onPrimaryClick}
-                  disabled={!selectedOptionId || submitBusy}
+                  disabled={
+                    allAnswered
+                      ? submitBusy || calcBusy
+                      : !selectedOptionId || submitBusy
+                  }
                   rightIcon={submitBusy ? undefined : <ArrowRight className="h-5 w-5" />}
                   className="rounded-full px-6 py-3.5 text-base shadow-xl shadow-black/30 bg-white text-black hover:bg-white/95 border-0"
                 >

@@ -75,6 +75,8 @@ export default function WhatDoResultPage() {
     },
     { staleTime: 30_000, enabled: !!(persisted.identityId || persisted.sessionId || isLoggedIn) }
   );
+  const calc = trpc.whatdo.calculateResult.useMutation();
+  const utils = trpc.useUtils();
   const genToken = trpc.whatdo.generateShareToken.useMutation();
   const genPrompt = trpc.whatdo.generateAIPrompt.useQuery(
     { template: (CARD_TEMPLATES[templateIdx] as WhatDoCardTemplate), identityId: identity.data?.id ?? undefined },
@@ -86,6 +88,54 @@ export default function WhatDoResultPage() {
   const user = session?.user as any;
   const rawIdentity = identity.data as any;
   const id: any = rawIdentity;
+
+  React.useEffect(() => {
+    if (!persisted.sessionId || id || identity.isFetching || identity.isLoading) return;
+    if (calc.isPending || calc.isSuccess) return;
+    const computeSafe = async () => {
+      try {
+        const r = await calc.mutateAsync({ sessionId: persisted.sessionId!, minQuestions: 10 });
+        if (r.computed && r.identityId) {
+          try { window.sessionStorage.setItem("whatdo_last_identity", r.identityId); } catch {}
+          await utils.whatdo.getIdentity.invalidate({
+            identityId: r.identityId,
+            sessionId: persisted.sessionId,
+          });
+          const dest = new URLSearchParams({ id: r.identityId });
+          window.history.replaceState(null, "", `${location.pathname}?${dest.toString()}`);
+        }
+      } catch {
+      }
+    };
+    void computeSafe();
+  }, [persisted.sessionId, id, identity.isFetching, identity.isLoading, calc.isPending, calc.isSuccess, utils.whatdo.getIdentity]);
+
+  const manualCompute = async () => {
+    if (!persisted.sessionId || !isLoggedIn) {
+      if (isLoggedIn) return;
+    }
+    const sid = persisted.sessionId;
+    if (!sid) {
+      router.push("/whatdo/quiz");
+      return;
+    }
+    try {
+      const r = await calc.mutateAsync({ sessionId: sid, minQuestions: 10 });
+      if (r.computed && r.identityId) {
+        try { window.sessionStorage.setItem("whatdo_last_identity", r.identityId); } catch {}
+        await utils.whatdo.getIdentity.invalidate({
+          identityId: r.identityId,
+          sessionId: persisted.sessionId,
+        });
+        const dest = new URLSearchParams({ id: r.identityId });
+        router.replace(`/whatdo/result?${dest.toString()}`);
+      } else if (r.reason) {
+        router.push("/whatdo/quiz");
+      }
+    } catch {
+      router.push("/whatdo/quiz");
+    }
+  };
   const snapshot: ShareCardResultSnapshot | null = id
     ? {
         displayName: user?.displayName ?? user?.name ?? null,
@@ -151,15 +201,48 @@ export default function WhatDoResultPage() {
     return (
       <main className="min-h-[100dvh] bg-slate-950 text-white">
         <div className="mx-auto max-w-md px-5 py-12 text-center space-y-5">
-        <Trophy className="h-10 w-10 text-amber-300 mx-auto" />
-        <h1 className="text-2xl font-black tracking-tight">No WhatDo Type yet</h1>
+        <Trophy className={cn("h-10 w-10 text-amber-300 mx-auto", calc.isPending && "animate-pulse opacity-70")} />
+        <h1 className="text-2xl font-black tracking-tight">
+          {calc.isPending ? "Computing your WhatDo Type…" : "No WhatDo Type yet"}
+        </h1>
         <p className="text-sm text-white/70">
-          Answer 10+ questions to unlock your result and generate your share cards.
+          {calc.isPending
+            ? "Running the archetype classifier against your 12 answers. This takes ~5 seconds."
+            : persisted.sessionId
+              ? "We couldn't find a computed result for your session. If you've already answered 10+ questions, press Retry compute below."
+              : "Answer 10+ questions to unlock your result and generate your share cards."}
         </p>
+        <div className="w-full max-w-[240px] mx-auto">
+          <ProgressBar
+            value={calc.isPending ? 65 : 0}
+            className={cn("h-1.5 bg-white/10", !calc.isPending && "opacity-30")}
+          />
+        </div>
         <div className="flex flex-col items-center gap-2 pt-2">
-          <Button size="lg" onClick={() => router.push("/whatdo/quiz")}>
-            Go to Quiz
-          </Button>
+          {persisted.sessionId ? (
+            <>
+              <Button
+                size="lg"
+                onClick={manualCompute}
+                disabled={calc.isPending}
+              >
+                {calc.isPending ? (
+                  <><Eye className="h-4 w-4 mr-1.5 animate-pulse" /> Computing…</>
+                ) : (
+                  <>Retry compute my result</>
+                )}
+              </Button>
+              <Button size="md" variant="outline" onClick={() => router.push("/whatdo/quiz")}>
+                Go back to Quiz
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button size="lg" onClick={() => router.push("/whatdo/quiz")}>
+                Go to Quiz
+              </Button>
+            </>
+          )}
           <Button size="md" variant="ghost" onClick={() => router.push("/")}>
             <ArrowLeft className="h-4 w-4 mr-1.5" /> Back to home
           </Button>
