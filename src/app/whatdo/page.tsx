@@ -28,10 +28,20 @@ export default function WhatDoLandingPage() {
   const summary = trpc.adminQuestions.summaryStats.useQuery(undefined, {
     staleTime: 120_000,
   });
-  const existingIdentity = trpc.whatdo.getIdentity.useQuery({ identityId: undefined }, {
-    enabled: !!session?.user,
-    staleTime: 180_000,
-  });
+  const [localSessionId, setLocalSessionId] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    try {
+      const sid = window.localStorage.getItem("whatdo_sess");
+      if (sid) setLocalSessionId(sid);
+    } catch {}
+  }, []);
+  const existingIdentity = trpc.whatdo.getIdentity.useQuery(
+    { identityId: undefined, sessionId: localSessionId ?? undefined },
+    {
+      enabled: !!session?.user || !!localSessionId,
+      staleTime: 180_000,
+    }
+  );
   const isLoggedIn = status === "authenticated";
   const [city, setCity] = React.useState("");
   const [ageGroup, setAgeGroup] = React.useState<string>("");

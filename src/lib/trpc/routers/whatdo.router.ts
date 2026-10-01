@@ -510,7 +510,7 @@ export const whatdoRouter = createTRPCRouter({
     }),
 
   getIdentity: publicProcedure
-    .input(z.object({ identityId: z.string().optional() }))
+    .input(z.object({ identityId: z.string().optional(), sessionId: z.string().optional() }))
     .query(async ({ ctx, input }) => {
       const userId = ctx.session?.user?.id ?? null;
       let id: any = null;
@@ -521,6 +521,11 @@ export const whatdoRouter = createTRPCRouter({
       } else if (userId) {
         id = await ctx.prisma.whatDoIdentityResult.findUnique({
           where: { userId },
+        });
+      } else if (input.sessionId) {
+        id = await ctx.prisma.whatDoIdentityResult.findFirst({
+          where: { sessionId: input.sessionId, userId: null },
+          orderBy: { createdAt: "desc" },
         });
       }
       if (!id) return null;

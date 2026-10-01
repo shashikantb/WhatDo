@@ -40,10 +40,17 @@ export function DailyWhatDoHero() {
     staleTime: 120_000,
     refetchOnMount: true,
   });
+  const [localSessionId, setLocalSessionId] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    try {
+      const sid = window.localStorage.getItem("whatdo_sess");
+      if (sid) setLocalSessionId(sid);
+    } catch {}
+  }, []);
   const existingIdentity = trpc.whatdo.getIdentity.useQuery(
-    { identityId: undefined },
+    { identityId: undefined, sessionId: localSessionId ?? undefined },
     {
-      enabled: !!session?.user,
+      enabled: !!session?.user || !!localSessionId,
       staleTime: 180_000,
     },
   );

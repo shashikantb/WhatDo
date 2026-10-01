@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
   drawShareCard,
@@ -34,6 +34,29 @@ import { cn } from "@/lib/utils";
 import { useLoginModal } from "@/components/auth/LoginModal";
 import { ProgressBar } from "@/components/design-system/ProgressBar";
 
+function usePersistedWhatdoArgs() {
+  const params = useSearchParams();
+  const fromQuery = params?.get("id");
+  const [state, setState] = React.useState<{ identityId?: string; sessionId?: string }>({});
+  React.useEffect(() => {
+    let identityId: string | undefined = fromQuery ?? undefined;
+    let sessionId: string | undefined;
+    try {
+      sessionId = window.localStorage.getItem("whatdo_sess") ?? undefined;
+    } catch {
+      sessionId = undefined;
+    }
+    if (!identityId) {
+      try {
+        const cached = window.sessionStorage.getItem("whatdo_last_identity");
+        if (cached) identityId = cached;
+      } catch {}
+    }
+    setState({ identityId, sessionId });
+  }, [fromQuery]);
+  return state;
+}
+
 export default function WhatDoResultPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
@@ -43,10 +66,15 @@ export default function WhatDoResultPage() {
   const [templateIdx, setTemplateIdx] = React.useState(1);
   const [copied, setCopied] = React.useState<"link" | "prompt" | null>(null);
   const [shareToken, setShareToken] = React.useState<string | null>(null);
+  const persisted = usePersistedWhatdoArgs();
 
-  const identity = trpc.whatdo.getIdentity.useQuery({ identityId: undefined }, {
-    staleTime: 30_000,
-  });
+  const identity = trpc.whatdo.getIdentity.useQuery(
+    {
+      identityId: persisted.identityId,
+      sessionId: persisted.sessionId,
+    },
+    { staleTime: 30_000, enabled: !!(persisted.identityId || persisted.sessionId || isLoggedIn) }
+  );
   const genToken = trpc.whatdo.generateShareToken.useMutation();
   const genPrompt = trpc.whatdo.generateAIPrompt.useQuery(
     { template: (CARD_TEMPLATES[templateIdx] as WhatDoCardTemplate), identityId: identity.data?.id ?? undefined },

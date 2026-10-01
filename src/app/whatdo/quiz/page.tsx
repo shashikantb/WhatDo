@@ -110,7 +110,12 @@ export default function WhatDoQuizPage() {
       if (status === "authenticated" && sessionId) {
         await revealAfter.mutateAsync({ sessionId }).catch(() => {});
       }
-      router.push("/whatdo/result");
+      if (r.computed && r.identityId) {
+        try { window.sessionStorage.setItem("whatdo_last_identity", r.identityId); } catch {}
+      }
+      const dest = new URLSearchParams();
+      if (r.computed && r.identityId) dest.set("id", r.identityId);
+      router.push(dest.toString() ? `/whatdo/result?${dest.toString()}` : "/whatdo/result");
     } finally {
       setCalcBusy(false);
     }
