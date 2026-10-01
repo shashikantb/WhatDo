@@ -35,6 +35,34 @@ enum PostStatus {
   REMOVED
 }
 
+enum QuestionStatus {
+  DRAFT
+  AI_REVIEW
+  PENDING_APPROVAL
+  APPROVED
+  SCHEDULED
+  PUBLISHED
+  CLOSED
+  REJECTED
+  ARCHIVED
+}
+
+enum QuestionTaxonomy {
+  OPINION
+  LIFESTYLE
+  PERSONALITY
+  MONEY
+  CAREER
+  RELATIONSHIP
+  TECHNOLOGY
+  SOCIAL_MEDIA
+  ENTERTAINMENT
+  FOOD
+  TRAVEL
+  LOCAL_CITY
+  INTERNET_TREND
+}
+
 enum ReportType {
   POST
   COMMENT
@@ -116,6 +144,11 @@ model User {
   suspensionExpiresAt     DateTime?
   banReason               String?
   lastActiveAt            DateTime?
+  city                    String?
+  region                  String?
+  country                 String?
+  ageGroup                String?
+  lastAssessmentSessionId String?
   createdAt               DateTime          @default(now())
   updatedAt               DateTime          @updatedAt
 
@@ -146,6 +179,12 @@ model User {
   analyticsEvents         AnalyticsEvent[]
   preferences             UserPreferences?
   categoryInterests       UserCategoryInterest[]
+  createdQuestions        AssessmentQuestion[] @relation("AssessmentQuestionCreator")
+  approvedQuestions       AssessmentQuestion[] @relation("AssessmentQuestionApprover")
+  questionResponses       QuestionResponse[]
+  whatdoIdentities        WhatDoIdentityResult[]
+  referralShares          ReferralShareEvent[]
+  funnelEvents            AnalyticsFunnelEvent[]
 }
 
 model Account {
@@ -628,4 +667,149 @@ model SystemSetting {
   key       String   @id
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+model AssessmentQuestion {
+  id                  String              @id @default(cuid())
+  questionText        String
+  category            QuestionTaxonomy
+  subcategory         String?
+  answerType          PostType
+  targetAgeGroup      String?
+  targetCity          String?
+  targetRegion        String?
+  targetCountry       String?
+  sourceType          String?
+  sourceReference     String?
+  trendContext        String?
+  aiGenerated         Boolean             @default(false)
+  aiQualityScore      Decimal?
+  shareabilityScore   Int?
+  sensitivityLevel    String?
+  duplicateGroupId    String?
+  status              QuestionStatus      @default(DRAFT)
+  createdById         String?
+  approvedById        String?
+  approvedAt          DateTime?
+  scheduledAt         DateTime?
+  publishedAt         DateTime?
+  expiresAt           DateTime?
+  engagementScore     Decimal?
+  timesSelected       Int                 @default(0)
+  voteCount           Int                 @default(0)
+  minSampleSize       Int                 @default(50)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  options             AssessmentQuestionOption[]
+  responses           QuestionResponse[]
+  rarestAnswerResults WhatDoIdentityResult[]
+  createdBy           User?               @relation("AssessmentQuestionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  approvedBy          User?               @relation("AssessmentQuestionApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@index([status, publishedAt])
+  @@index([category])
+  @@index([targetCity])
+  @@index([targetCountry, status])
+}
+
+model AssessmentQuestionOption {
+  id                  String              @id @default(cuid())
+  assessmentQuestionId String
+  sortOrder           Int
+  label               String
+  imageUrl            String?
+  signalHints         Json?
+  createdAt           DateTime            @default(now())
+
+  question            AssessmentQuestion  @relation(fields: [assessmentQuestionId], references: [id], onDelete: Cascade)
+  responses           QuestionResponse[]
+
+  @@index([assessmentQuestionId])
+}
+
+model QuestionResponse {
+  id                      String              @id @default(cuid())
+  userId                  String?
+  sessionId               String?
+  assessmentQuestionId    String
+  selectedOptionId        String
+  citySnapshot            String?
+  anonAggId               String?
+  createdAt               DateTime            @default(now())
+
+  question                AssessmentQuestion  @relation(fields: [assessmentQuestionId], references: [id], onDelete: Cascade)
+  selectedOption          AssessmentQuestionOption @relation(fields: [selectedOptionId], references: [id], onDelete: Cascade)
+  user                    User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, assessmentQuestionId])
+  @@unique([sessionId, assessmentQuestionId])
+  @@index([assessmentQuestionId, selectedOptionId])
+  @@index([citySnapshot, assessmentQuestionId])
+  @@index([userId, createdAt])
+}
+
+model WhatDoIdentityResult {
+  id                     String   @id @default(cuid())
+  userId                 String?
+  sessionId              String?
+  whatdoType             String
+  agreementScorePct      Int
+  rarityScorePct         Int
+  majorityMatches        Int
+  contrarianAnswers      Int
+  totalQuestions         Int
+  cityAlignmentPct       Int?
+  citySnapshot           String?
+  strongestTrait         String
+  rarestAnswerQuestionId String?
+  rarestAnswerPct        Int?
+  signalCuriosity        Int
+  signalRiskTaking       Int
+  signalCreativity       Int
+  signalSocial           Int
+  signalIndependence     Int
+  referrerId             String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  user                   User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rarestAnswerQuestion   AssessmentQuestion? @relation(fields: [rarestAnswerQuestionId], references: [id], onDelete: SetNull)
+
+  @@unique([userId])
+  @@index([sessionId])
+  @@index([whatdoType])
+}
+
+model ReferralShareEvent {
+  id             String   @id @default(cuid())
+  userId         String
+  shareToken     String   @unique
+  shareType      String
+  shareChannel   String?
+  clickedCount   Int      @default(0)
+  signups        Int      @default(0)
+  completions    Int      @default(0)
+  reveals        Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+}
+
+model AnalyticsFunnelEvent {
+  id         String   @id @default(cuid())
+  event      String
+  sessionId  String?
+  userId     String?
+  extraData  Json?
+  createdAt  DateTime @default(now())
+
+  user       User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([event, createdAt])
+  @@index([userId, event])
 }

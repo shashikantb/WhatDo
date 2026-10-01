@@ -111,6 +111,8 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [registerState, registerAction] = useFormState(registerUser, {
     success: false,
+    message: "",
+    issues: {},
   });
 
   const {
@@ -135,7 +137,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
     formData.append("email", data.email);
     formData.append("password", data.password);
     formData.append("confirmPassword", data.confirmPassword);
-    registerAction(formData);
+    (registerAction as any)(formData);
   };
 
   if (registerState.success && onSuccess) {

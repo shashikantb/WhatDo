@@ -208,10 +208,10 @@ export const VoteButtons: React.FC<VoteButtonsProps> = ({
     if (isDisabled || !postId || !isAuthenticated) return;
     if (voteInFlightRef.current) return;
 
-    if (payload.optionId && userVote?.optionId) return;
-    if (payload.ratingValue !== undefined && userVote?.ratingValue !== undefined) return;
-    if (payload.emojiValue && userVote?.emojiValue) return;
-    if (payload.priceValue !== undefined && userVote?.priceValue !== undefined) return;
+    if (payload.optionId && (userVote as any)?.optionId) return;
+    if (payload.ratingValue !== undefined && (userVote as any)?.ratingValue !== undefined) return;
+    if (payload.emojiValue && (userVote as any)?.emojiValue) return;
+    if (payload.priceValue !== undefined && (userVote as any)?.priceValue !== undefined) return;
 
     voteInFlightRef.current = true;
     lastSentPayloadRef.current = { ...payload };

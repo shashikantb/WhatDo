@@ -6,6 +6,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import prisma from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { cookies } from "next/headers";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -196,6 +197,76 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         });
       }
     },
+    async signIn({ user }) {
+      if (!user?.id) return;
+      const userId = user.id;
+      let sessionId: string | null = null;
+      try {
+        const jar = await cookies();
+        sessionId = jar.get("whatdo_sess")?.value ?? null;
+      } catch {
+      }
+      if (!sessionId) return;
+      try {
+        await prisma.$transaction(async (tx: any) => {
+          const moved = await tx.questionResponse.updateMany({
+            where: { sessionId, userId: null },
+            data: { userId, sessionId: null },
+          });
+          const sessIdentity = await tx.whatDoIdentityResult.findUnique({
+            where: { sessionId },
+          });
+          if (sessIdentity) {
+            await tx.whatDoIdentityResult.delete({ where: { id: sessIdentity.id } });
+            await tx.whatDoIdentityResult.upsert({
+              where: { userId },
+              update: {
+                sessionId: null,
+                whatdoType: sessIdentity.whatdoType,
+                agreementPct: sessIdentity.agreementPct,
+                rarityPct: sessIdentity.rarityPct,
+                majorityMatches: sessIdentity.majorityMatches,
+                contrarianAnswers: sessIdentity.contrarianAnswers,
+                totalQuestions: sessIdentity.totalQuestions,
+                cityAlignmentPct: sessIdentity.cityAlignmentPct,
+                citySnapshot: sessIdentity.citySnapshot,
+                strongestTrait: sessIdentity.strongestTrait,
+                rarestAnswerQuestionId: sessIdentity.rarestAnswerQuestionId,
+                rarestAnswerPct: sessIdentity.rarestAnswerPct,
+                signalCuriosity: sessIdentity.signalCuriosity,
+                signalRiskTaking: sessIdentity.signalRiskTaking,
+                signalCreativity: sessIdentity.signalCreativity,
+                signalSocial: sessIdentity.signalSocial,
+                signalIndependence: sessIdentity.signalIndependence,
+                referrerId: sessIdentity.referrerId,
+              },
+              create: {
+                userId,
+                whatdoType: sessIdentity.whatdoType,
+                agreementPct: sessIdentity.agreementPct,
+                rarityPct: sessIdentity.rarityPct,
+                majorityMatches: sessIdentity.majorityMatches,
+                contrarianAnswers: sessIdentity.contrarianAnswers,
+                totalQuestions: sessIdentity.totalQuestions,
+                cityAlignmentPct: sessIdentity.cityAlignmentPct,
+                citySnapshot: sessIdentity.citySnapshot,
+                strongestTrait: sessIdentity.strongestTrait,
+                rarestAnswerQuestionId: sessIdentity.rarestAnswerQuestionId,
+                rarestAnswerPct: sessIdentity.rarestAnswerPct,
+                signalCuriosity: sessIdentity.signalCuriosity,
+                signalRiskTaking: sessIdentity.signalRiskTaking,
+                signalCreativity: sessIdentity.signalCreativity,
+                signalSocial: sessIdentity.signalSocial,
+                signalIndependence: sessIdentity.signalIndependence,
+                referrerId: sessIdentity.referrerId ?? undefined,
+              },
+            });
+          }
+          return moved;
+        });
+      } catch {
+      }
+    },
   },
 });
 
@@ -203,11 +274,12 @@ declare module "next-auth" {
   interface Session {
     user: {
       id: string;
-      username: string;
+      username?: string;
       displayName?: string;
-      role: "USER" | "MODERATOR" | "ADMIN";
-      email?: string;
-      image?: string;
+      name?: string | null;
+      email?: string | null;
+      image?: string | null;
+      role: "USER" | "MODERATOR" | "ADMIN" | (string & {});
     };
   }
   interface JWT {

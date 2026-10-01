@@ -54,6 +54,7 @@ const AVSBOptionDropzone: React.FC<AVSBOptionDropzoneProps> = ({
   const handleFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
     const file = files[0];
+    if (!file) return;
     if (!file.type.startsWith("image/")) return;
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -134,14 +135,26 @@ export const OptionsEditor: React.FC<OptionsEditorProps> = ({
 }) => {
   const updateOption = (index: number, field: keyof PostOptionInput, value: string) => {
     const updated = [...options];
-    updated[index] = { ...updated[index], [field]: value, sortOrder: updated[index].sortOrder ?? index };
+    const existing = updated[index];
+    if (!existing) return;
+    updated[index] = {
+      ...existing,
+      [field]: value,
+      label: existing.label ?? `Option ${index + 1}`,
+      value: existing.value ?? `opt_${index}`,
+      sortOrder: existing.sortOrder ?? index,
+    };
     onChange(updated);
   };
 
   const reorder = (from: number, to: number) => {
     if (to < 0 || to >= options.length) return;
     const next = [...options];
-    [next[from], next[to]] = [next[to], next[from]];
+    const fromItem = next[from];
+    const toItem = next[to];
+    if (!fromItem || !toItem) return;
+    next[from] = toItem;
+    next[to] = fromItem;
     onChange(next.map((o, i) => ({ ...o, sortOrder: i })));
   };
 
@@ -552,10 +565,13 @@ export const OptionsEditor: React.FC<OptionsEditorProps> = ({
                       onChange={(e) => {
                         const v = e.target.value;
                         const updated = [...options];
+                        const existing = updated[idx];
+                        if (!existing) return;
                         updated[idx] = {
-                          ...updated[idx],
+                          ...existing,
                           label: v,
                           value: v.replace(/[^0-9+]/g, "") || String(idx),
+                          sortOrder: existing.sortOrder ?? idx,
                         };
                         onChange(updated);
                       }}

@@ -296,7 +296,7 @@ export const ProfilePageClient: React.FC<ProfilePageClientProps> = ({
 
   const topCategoryId = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
   const bannerGradient =
-    BANNER_COLORS[topCategoryId.id] ??
+    BANNER_COLORS[topCategoryId?.id ?? ""] ??
     "from-primary via-primary/80 to-accent";
 
   const displayName = user.displayName ?? user.username ?? "User";
@@ -585,7 +585,7 @@ export const ProfilePageClient: React.FC<ProfilePageClientProps> = ({
                           </p>
                           <div className="flex items-center gap-2 flex-wrap">
                             {vote.option?.label && (
-                              <Badge variant="primary" size="sm">
+                              <Badge variant="default" size="sm">
                                 {vote.option.label}
                               </Badge>
                             )}
@@ -767,7 +767,7 @@ function FollowListModal({
   onClose: () => void;
 }) {
   const router = useRouter();
-  const queryFn =
+  const queryFn: any =
     type === "followers"
       ? trpc.social.followers.useInfiniteQuery
       : trpc.social.following.useInfiniteQuery;

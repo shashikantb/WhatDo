@@ -52,6 +52,22 @@ export default function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL("/feed", req.nextUrl));
   }
 
+  const ref = req.nextUrl.searchParams.get("ref");
+  if (ref && typeof ref === "string" && ref.length > 0) {
+    const cleanUrl = new URL(req.nextUrl);
+    cleanUrl.searchParams.delete("ref");
+    const redirectTo = cleanUrl.toString();
+    const res = NextResponse.redirect(redirectTo);
+    res.cookies.set("whatdo_ref", ref, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 30 * 24 * 60 * 60,
+      path: "/",
+    });
+    return res;
+  }
+
   return NextResponse.next();
 }
 
@@ -60,3 +76,4 @@ export const config = {
     "/((?!api|_next/static|_next/image|favicon.ico|manifest|sitemap|robots|opengraph|public|p).*)",
   ],
 };
+

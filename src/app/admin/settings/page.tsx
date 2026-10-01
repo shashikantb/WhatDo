@@ -14,6 +14,9 @@ import {
   AlertTriangle,
   Info,
   Sparkles,
+  Puzzle,
+  Users,
+  Star,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 import { useToast } from "@/components/design-system/Toaster";
@@ -68,6 +71,20 @@ const DEFAULT_SETTINGS = {
     smtpHost: "smtp.example.com",
     smtpPort: "587",
     sender: "no-reply@whatdo.example",
+  },
+  whatdo: {
+    enabled: true,
+    heroPinned: true,
+    minQuestionsToCompute: 10,
+    targetQuestionCount: 12,
+    minGlobalSampleSize: 30,
+    minCitySampleSize: 50,
+    rareAnswerThresholdPct: 20,
+    veryRareAnswerThresholdPct: 10,
+    allowAnonymous: true,
+    dailyQuestionsPerUser: 1,
+    loginGate: "before_share",
+    aiPromptTemplate: "MINIMAL",
   },
 };
 
@@ -184,6 +201,9 @@ export default function AdminSettingsPage() {
           </TabsTrigger>
           <TabsTrigger value="content" className="inline-flex items-center gap-1.5">
             <ShieldCheck className="h-3.5 w-3.5" /> Content policies
+          </TabsTrigger>
+          <TabsTrigger value="whatdo" id="content" className="inline-flex items-center gap-1.5">
+            <Puzzle className="h-3.5 w-3.5" /> WhatDo content
           </TabsTrigger>
           <TabsTrigger value="email" className="inline-flex items-center gap-1.5">
             <Mail className="h-3.5 w-3.5" /> Email
@@ -374,6 +394,186 @@ export default function AdminSettingsPage() {
               />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="whatdo">
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Puzzle className="h-4 w-4 text-fuchsia-600" />
+                  My WhatDo content & sampling controls
+                </CardTitle>
+                <CardDescription>
+                  Launch toggles, privacy/sample-size gating, and result
+                  thresholds.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <label className="flex items-center justify-between rounded-2xl bg-muted/40 border border-border px-4 py-3.5 cursor-pointer select-none">
+                  <div className="min-w-0">
+                    <p className="text-sm font-black text-foreground">
+                      WhatDo module enabled
+                    </p>
+                    <p className="text-[11.5px] text-muted-foreground">
+                      Turn off to hide hero, quiz, and result routes from nav.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="h-5 w-5 accent-fuchsia-500"
+                    checked={settings.whatdo.enabled}
+                    onChange={(e) => update("whatdo", "enabled", e.target.checked)}
+                  />
+                </label>
+                <label className="flex items-center justify-between rounded-2xl bg-muted/40 border border-border px-4 py-3.5 cursor-pointer select-none">
+                  <div className="min-w-0">
+                    <p className="text-sm font-black text-foreground">
+                      Pin DailyWhatDoHero on home
+                    </p>
+                    <p className="text-[11.5px] text-muted-foreground">
+                      First card in the reels. Disable to promote other content.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="h-5 w-5 accent-fuchsia-500"
+                    checked={settings.whatdo.heroPinned}
+                    onChange={(e) => update("whatdo", "heroPinned", e.target.checked)}
+                  />
+                </label>
+                <label className="flex items-center justify-between rounded-2xl bg-muted/40 border border-border px-4 py-3.5 cursor-pointer select-none">
+                  <div className="min-w-0">
+                    <p className="text-sm font-black text-foreground">
+                      Allow anonymous quiz
+                    </p>
+                    <p className="text-[11.5px] text-muted-foreground">
+                      Users can answer 10 questions before login.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="h-5 w-5 accent-fuchsia-500"
+                    checked={settings.whatdo.allowAnonymous}
+                    onChange={(e) => update("whatdo", "allowAnonymous", e.target.checked)}
+                  />
+                </label>
+                <NumField
+                  label="Target questions per session"
+                  value={settings.whatdo.targetQuestionCount}
+                  onChange={(v) => update("whatdo", "targetQuestionCount", v)}
+                  min={10}
+                  max={15}
+                  step={1}
+                  hint="10–15 as per spec §30"
+                />
+                <NumField
+                  label="Min questions to compute result"
+                  value={settings.whatdo.minQuestionsToCompute}
+                  onChange={(v) => update("whatdo", "minQuestionsToCompute", v)}
+                  min={5}
+                  max={15}
+                  step={1}
+                  hint="Guardrail before engine runs"
+                />
+                <NumField
+                  label="Min global sample size"
+                  value={settings.whatdo.minGlobalSampleSize}
+                  onChange={(v) => update("whatdo", "minGlobalSampleSize", v)}
+                  step={1}
+                  min={10}
+                  hint="Percentages hidden until N global answers (spec §24)"
+                />
+                <NumField
+                  label="Min city sample size"
+                  value={settings.whatdo.minCitySampleSize}
+                  onChange={(v) => update("whatdo", "minCitySampleSize", v)}
+                  step={1}
+                  min={10}
+                  hint="City comparison privacy gate"
+                />
+                <NumField
+                  label="Rare answer threshold %"
+                  value={settings.whatdo.rareAnswerThresholdPct}
+                  onChange={(v) => update("whatdo", "rareAnswerThresholdPct", v)}
+                  step={1}
+                  min={1}
+                  max={49}
+                  hint="Badge shown when your pick is ≤ N% of answers"
+                />
+                <NumField
+                  label="Very rare answer threshold %"
+                  value={settings.whatdo.veryRareAnswerThresholdPct}
+                  onChange={(v) => update("whatdo", "veryRareAnswerThresholdPct", v)}
+                  step={1}
+                  min={1}
+                  max={49}
+                  hint="🏆 Very rare badge tier"
+                />
+                <NumField
+                  label="Daily question pool refresh cap"
+                  value={settings.whatdo.dailyQuestionsPerUser}
+                  onChange={(v) => update("whatdo", "dailyQuestionsPerUser", v)}
+                  step={1}
+                  min={1}
+                  max={5}
+                  hint="Placeholder for future daily cadence"
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Users className="h-4 w-4 text-primary" />
+                  Share, login gate & default card style
+                </CardTitle>
+                <CardDescription>
+                  Referral copywriting defaults live here.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
+                    Login gate
+                  </p>
+                  <select
+                    className="w-full h-10 rounded-xl bg-background border border-border px-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-ring"
+                    value={settings.whatdo.loginGate}
+                    onChange={(e) => update("whatdo", "loginGate", e.target.value)}
+                  >
+                    <option value="before_start">Before quiz starts</option>
+                    <option value="before_share">Before share (default)</option>
+                    <option value="before_result">Before result reveal</option>
+                    <option value="never">Never (anonymous allowed always)</option>
+                  </select>
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
+                    Default AI share-card template
+                  </p>
+                  <select
+                    className="w-full h-10 rounded-xl bg-background border border-border px-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-ring"
+                    value={settings.whatdo.aiPromptTemplate}
+                    onChange={(e) => update("whatdo", "aiPromptTemplate", e.target.value)}
+                  >
+                    {[
+                      "MINIMAL",
+                      "NEON_GENZ",
+                      "PREMIUM_DARK",
+                      "COLORFUL",
+                      "FUTURISTIC_AI",
+                      "LOCAL_CITY",
+                    ].map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="email">

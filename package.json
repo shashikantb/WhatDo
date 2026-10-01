@@ -23,6 +23,7 @@
     "db:studio:direct": "node scripts/prisma-env.mjs --use-direct prisma studio",
     "db:seed": "node scripts/prisma-env.mjs prisma db seed",
     "db:seed:examples": "npx tsx prisma/seed-curated-posts.ts",
+    "db:seed:questions": "npx tsx prisma/seed-assessment-questions.ts",
     "vercel:pull": "vercel pull",
     "vercel:link": "vercel link",
     "vercel:dev": "vercel dev",

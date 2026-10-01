@@ -212,7 +212,7 @@ export default function SettingsPage() {
   const updateProfile = trpc.auth.updateProfile.useMutation({
     onSuccess: (user) => {
       utils.auth.me.invalidate();
-      show({ variant: "success", title: "Profile updated", description: "Your changes have been saved." });
+      show("Profile updated: Your changes have been saved.", "success");
       setProfileChanged(false);
       if (user.username && user.username !== session?.user?.username) {
         window.setTimeout(() => {
@@ -221,7 +221,7 @@ export default function SettingsPage() {
       }
     },
     onError: (err) => {
-      show({ variant: "error", title: "Could not save", description: err.message });
+      show("Could not save: " + (err.message ?? ""), "danger");
     },
   });
 
@@ -230,18 +230,18 @@ export default function SettingsPage() {
       utils.auth.getUserPreferences.invalidate();
     },
     onError: (err) => {
-      show({ variant: "error", title: "Could not save preferences", description: err.message });
+      show("Could not save preferences: " + (err.message ?? ""), "danger");
     },
   });
 
   const deleteAccount = trpc.auth.deleteAccount.useMutation({
     onSuccess: () => {
-      show({ variant: "success", title: "Account deleted" });
+      show("Account deleted", "success");
       setDeleteOpen(false);
       signOut({ callbackUrl: "/" });
     },
     onError: (err) => {
-      show({ variant: "error", title: "Could not delete account", description: err.message });
+      show("Could not delete account: " + (err.message ?? ""), "danger");
     },
   });
 
@@ -265,7 +265,7 @@ export default function SettingsPage() {
 
   const onSaveProfile = () => {
     if (!username || !/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
-      show({ variant: "error", title: "Invalid username", description: "Username must be 3-20 chars of letters, numbers, or _." });
+      show("Invalid username: Username must be 3-20 chars of letters, numbers, or _.");
       return;
     }
     updateProfile.mutate({
@@ -334,7 +334,7 @@ export default function SettingsPage() {
 
   const onConfirmDelete = () => {
     if (deleteText !== "DELETE") {
-      show({ variant: "error", title: "Type DELETE to confirm" });
+      show("Type DELETE to confirm", "danger");
       return;
     }
     deleteAccount.mutate({ confirmation: "DELETE" });
@@ -375,8 +375,8 @@ export default function SettingsPage() {
                         user={{
                           id: me?.id,
                           avatarUrl: avatarUrl ?? me?.avatarUrl ?? null,
-                          displayName: displayName || me?.displayName ?? null,
-                          username: username || me?.username ?? null,
+                          displayName: (displayName || me?.displayName) ?? null,
+                          username: (username || me?.username) ?? null,
                           role: me?.role as any,
                           isVerified: me?.isVerified,
                         }}
@@ -393,7 +393,7 @@ export default function SettingsPage() {
                   label="Email address"
                   description={session?.user?.email ?? "Not connected"}
                   action={
-                    <Badge variant="outline" className="font-normal">
+                    <Badge variant="default" className="font-normal">
                       <Mail className="h-3.5 w-3.5 mr-1 text-muted-foreground" />
                       Verified
                     </Badge>
@@ -604,7 +604,7 @@ export default function SettingsPage() {
                 <SettingRow
                   label="App version"
                   description="0.1.0"
-                  action={<Badge variant="outline">v0.1.0</Badge>}
+                  action={<Badge variant="default">v0.1.0</Badge>}
                 />
                 <SettingRow
                   label="Terms of Service"

@@ -137,7 +137,7 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
   ];
 
   const handleNativeShare = async () => {
-    if (navigator.share) {
+    if ("share" in navigator) {
       try {
         await navigator.share({
           title,
@@ -150,7 +150,7 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
   };
 
   const handleToggle = () => {
-    if (navigator.share && !isOpen) {
+    if ("share" in navigator && !isOpen) {
       handleNativeShare();
     } else {
       setIsOpen((prev) => !prev);

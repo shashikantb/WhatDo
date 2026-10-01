@@ -116,7 +116,7 @@ export default function PostPageClient({ params }: PostPageClientProps) {
 
           {isLoading && (
             <div className="space-y-6">
-              <SkeletonCard className="p-5">
+              <div className="rounded-card border border-border p-5">
                 <div className="space-y-5">
                   <div className="flex items-center gap-3">
                     <Skeleton variant="circle" className="h-11 w-11" />
@@ -132,7 +132,7 @@ export default function PostPageClient({ params }: PostPageClientProps) {
                   />
                   <div className="h-16 w-full rounded-xl bg-muted" />
                 </div>
-              </SkeletonCard>
+              </div>
               <CommentsSkeleton />
             </div>
           )}
@@ -153,11 +153,11 @@ export default function PostPageClient({ params }: PostPageClientProps) {
             <>
               <PostCard
                 post={{
-                  ...post,
-                  voteCount: post._count?.votes ?? post.voteCount ?? 0,
-                  commentCount: post._count?.comments ?? post.commentCount ?? 0,
-                  likeCount: post._count?.likes ?? post.likeCount ?? 0,
-                  saveCount: post._count?.savedPosts ?? post.saveCount ?? 0,
+                  ...(post as any),
+                  voteCount: (post as any)._count?.votes ?? post.voteCount ?? 0,
+                  commentCount: (post as any)._count?.comments ?? post.commentCount ?? 0,
+                  likeCount: (post as any)._count?.likes ?? post.likeCount ?? 0,
+                  saveCount: (post as any)._count?.savedPosts ?? post.saveCount ?? 0,
                 }}
                 index={0}
                 className="!p-5 md:!p-6"
@@ -170,7 +170,7 @@ export default function PostPageClient({ params }: PostPageClientProps) {
                 <div className="space-y-4 pt-4">
                   <div className="flex items-center gap-2">
                     <Badge variant="category" size="sm">
-                      {post.category?.name}
+                      {(post as any).category?.name ?? "Related"}
                     </Badge>
                     <h3 className="font-semibold text-base">
                       Related questions you might like

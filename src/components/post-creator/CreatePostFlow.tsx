@@ -422,7 +422,7 @@ export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
         } else {
           toast.show("Your question is live! 🎉", "success");
         }
-        utils.feed.getFeed.invalidate();
+        utils.feed.getForYou.invalidate();
         utils.posts.getById.invalidate({ id: result.id });
         const target = result.id ? `/post/${result.id}` : "/feed";
         onPublished?.(result.id, result.slug);
@@ -597,7 +597,6 @@ export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
                     <Textarea
                       {...field}
                       rows={4}
-                      size="lg"
                       placeholder="What do you want to ask people?"
                       variant={errors.question ? "error" : "default"}
                       helperText={

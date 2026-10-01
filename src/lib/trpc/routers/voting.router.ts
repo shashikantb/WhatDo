@@ -27,6 +27,9 @@ export const votingRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      if (!ctx.session?.user?.id) {
+        throw new TRPCError({ code: "UNAUTHORIZED" });
+      }
       const userId = ctx.session.user.id;
 
       const post = await ctx.prisma.post.findUnique({
@@ -86,7 +89,7 @@ export const votingRouter = createTRPCRouter({
             where: { id: userId },
             select: { opinionScore: true, totalVotes: true },
           }),
-        ])) as any;
+        ] as any[])) as any;
 
         const tx1mid: Promise<any>[] = [];
         if (input.optionId) {
@@ -126,7 +129,7 @@ export const votingRouter = createTRPCRouter({
             createdAt: true,
           },
         }));
-        const postAfterVote: any = (await ctx.prisma.$transaction(tx1mid))[tx1mid.length - 1];
+        const postAfterVote: any = (await ctx.prisma.$transaction(tx1mid as any[]))[tx1mid.length - 1];
 
         try {
           await ctx.prisma.analyticsEvent.create({
@@ -146,7 +149,7 @@ export const votingRouter = createTRPCRouter({
         const nextVoterData = voter
           ? {
               totalVotes: { increment: 1 },
-              opinionScore: isSelfVote ? (voter.opinionScore ?? 0) : computeOpinionScoreForVote(voter.opinionScore, voter.totalVotes),
+              opinionScore: isSelfVote ? (voter.opinionScore ?? 0) : computeOpinionScoreForVote(voter.opinionScore ?? 0, voter.totalVotes ?? 0),
             }
           : { totalVotes: { increment: 1 } };
 
@@ -203,7 +206,7 @@ export const votingRouter = createTRPCRouter({
 
           const tx2: Promise<any>[] = [...scoringUpdates];
           if (notificationPromise) tx2.push(notificationPromise);
-          await ctx.prisma.$transaction(tx2);
+          await ctx.prisma.$transaction(tx2 as any[]);
 
           const returnResult = {
             id: updatedPost.id,

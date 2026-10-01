@@ -46,7 +46,7 @@ function rand(min: number, max: number): number {
 }
 
 function pick<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)] ?? arr[0];
+  return (arr[Math.floor(Math.random() * arr.length)] ?? arr[0]) as T;
 }
 
 function pickMany<T>(arr: T[], n: number): T[] {
@@ -752,7 +752,7 @@ async function main() {
     const def = POSTS[i];
     if (!def) continue;
 
-    const category = catBySlug[def.category] ?? allCategories[0];
+    const category = (catBySlug[def.category] ?? allCategories[0])!;
     const creator = pick(userCreators);
     const daysAgoMin = def.daysAgoMin ?? 1;
     const daysAgoMax = def.daysAgoMax ?? 25;

@@ -45,7 +45,6 @@ export async function AppProviders({
       session={session ?? undefined}
       refetchOnWindowFocus={false}
       refetchInterval={0}
-      staleTime={5 * 60 * 1000}
     >
       <TRPCProvider ssrBaseUrl={ssrBaseUrl}>
         <ThemeProvider>

@@ -16,9 +16,14 @@ import { cn, formatRelativeTime } from "@/lib/utils";
 import { Card } from "@/components/design-system/Card";
 import { Badge } from "@/components/design-system/Badge";
 import { Avatar } from "@/components/design-system/Avatar";
-import type { MediaFile } from "./MediaUploader";
 import type { PostOptionInput } from "./OptionsEditor";
 import type { OpinionTypeValue } from "./OpinionTypePicker";
+
+interface MediaFile {
+  url?: string;
+  previewUrl?: string;
+  type?: string;
+}
 
 export interface PreviewDraftPost {
   question: string;
@@ -75,13 +80,9 @@ export const PostPreviewCard: React.FC<PostPreviewCardProps> = ({
             </div>
           ) : (
             <Avatar
-              src={post.authorAvatar}
-              alt={post.authorName || "User"}
-              fallback={
-                <div className="h-full w-full rounded-full bg-muted flex items-center justify-center text-muted-foreground">
-                  <User className="h-5 w-5" />
-                </div>
-              }
+              avatarUrl={post.authorAvatar}
+              displayName={post.authorName}
+              username={post.authorName}
               size="md"
             />
           )}

@@ -37,7 +37,7 @@ function useOnScreen<T extends HTMLElement>(
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        setIntersecting(entry.isIntersecting);
+        setIntersecting(entry!.isIntersecting);
       },
       { rootMargin }
     );

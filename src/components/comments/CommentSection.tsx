@@ -195,7 +195,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
                       avatarUrl: session.user.image ?? null,
                       displayName: session.user.displayName,
                       username: session.user.username,
-                      role: session.user.role,
+                      role: session.user.role as any,
                     }
                   : undefined
               }

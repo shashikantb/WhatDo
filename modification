@@ -1,0 +1,1205 @@
+# WHATDO — VIRAL IDENTITY, LOCATION-BASED VOTING & AI SHARE CARD
+
+You are modifying the existing WhatDo application. Do NOT rebuild the application from scratch. First inspect the existing codebase, architecture, database schema, authentication, voting/post system, location handling, UI components, and existing APIs.
+
+The objective is to add a viral social-media growth loop around WhatDo.
+
+The core user journey should become:
+
+**Discover → Register → Answer/Vote → Compare → Get WhatDo Identity → Generate Share Card → Share on Instagram/WhatsApp → Friend clicks → Friend tries WhatDo**
+
+---
+
+# 1. CORE PRODUCT CONCEPT
+
+Create a feature called:
+
+## "MY WHATDO"
+
+A registered user answers approximately 10–15 curated questions.
+
+Questions should be selected based on:
+
+* User's approximate location/city
+* Age group where available
+* Current popular/trending topics
+* Interesting social questions
+* Lifestyle
+* Opinions
+* Entertainment
+* Technology
+* Money
+* Relationships
+* Food
+* Travel
+* Work/career
+* Local/city topics
+* Fun/controversial-but-safe questions
+* Internet/social-media trends
+
+After the user completes enough questions, WhatDo calculates:
+
+1. How closely the user's answers align with other WhatDo users.
+2. How rare/common the user's answers are.
+3. Their strongest response patterns.
+4. Their "WhatDo Type".
+5. Interesting answer statistics.
+6. City-level comparison where sufficient data exists.
+7. A shareable WhatDo identity/card.
+
+Example:
+
+WHATDO TYPE
+
+🔥 THE BOLD DECISION MAKER
+
+You think differently from 78% of WhatDo users.
+
+Strongest trait:
+🔥 Risk Taker
+
+Your rarest opinion:
+You selected YES while 71% selected NO.
+
+Only 18% of WhatDo users answered like you.
+
+[CREATE MY WHATDO CARD]
+
+[SHARE]
+
+---
+
+# 2. LOCATION-BASED EXPERIENCE
+
+Use the user's selected/available location at an appropriate privacy level.
+
+Do NOT expose exact user location publicly.
+
+Use levels such as:
+
+* City
+* Region
+* Country
+
+Example:
+
+"Pune users"
+
+"Mumbai users"
+
+"People in Maharashtra"
+
+"India"
+
+Do not display exact GPS coordinates, home address, building, street, or precise location.
+
+Questions may be personalized based on city.
+
+Example:
+
+For Pune:
+
+"What matters more when choosing a weekend plan?"
+
+A. Cafe hopping
+B. Trekking
+C. Movies
+D. Staying home
+
+The result could show:
+
+"63% of Pune users chose the same answer."
+
+Only show city-level statistics when there is sufficient sample size. Establish a configurable minimum sample threshold to avoid exposing statistics about very small groups.
+
+---
+
+# 3. QUESTION ENGINE
+
+Create a proper Question Engine.
+
+Questions must NOT be randomly generated directly into the production database.
+
+The system must have the following lifecycle:
+
+DRAFT
+↓
+AI GENERATED / INTERNET INSPIRED
+↓
+ADMIN REVIEW
+↓
+APPROVED
+↓
+SCHEDULED
+↓
+PUBLISHED
+↓
+VOTING
+↓
+CLOSED/ARCHIVED
+
+Only APPROVED questions can become live posts/voting questions.
+
+---
+
+# 4. QUESTION TYPES
+
+Create a structured question taxonomy.
+
+## A. Opinion
+
+Examples:
+
+"Is working from home better than working from office?"
+
+"Should people reply immediately to messages?"
+
+"Is it better to save money or enjoy life while young?"
+
+## B. Lifestyle
+
+"What's your ideal Sunday?"
+
+A. Going out
+B. Gaming
+C. Family time
+D. Sleeping/resting
+
+## C. Personality
+
+"When making a major decision, what influences you most?"
+
+A. Logic
+B. Emotion
+C. Advice from others
+D. Instinct
+
+## D. Money
+
+"Would you take ₹50,000 today or ₹75,000 one year later?"
+
+## E. Career
+
+"Would you prefer?"
+
+A. High salary + stressful job
+B. Moderate salary + relaxed job
+
+## F. Relationships
+
+"What matters most in a relationship?"
+
+A. Trust
+B. Communication
+C. Compatibility
+D. Fun
+
+Keep relationship questions non-sensitive and non-invasive.
+
+## G. Technology
+
+"Would you let AI plan your entire vacation?"
+
+## H. Social Media
+
+"Would you rather have 100K followers or 10 close friends?"
+
+## I. Entertainment
+
+"Movie night or gaming night?"
+
+## J. Food
+
+"What's your ultimate comfort food?"
+
+## K. Travel
+
+"Beach vacation or mountain vacation?"
+
+## L. Local / City
+
+Questions relevant to a specific city.
+
+Example:
+
+"Pune weekend?"
+
+A. Lonavala
+B. Cafe
+C. Movie
+D. Home
+
+## M. Current Internet Trends
+
+Questions derived from currently popular public discussions, memes, trends, debates and social conversations.
+
+However:
+
+DO NOT blindly copy content from websites or social media.
+
+Use trends as inspiration and generate original questions.
+
+---
+
+# 5. INTERNET DATA / TREND QUESTION GENERATION
+
+Create an admin feature:
+
+## "Generate Trending Questions"
+
+The system should be able to use current internet/public trend information to suggest new questions.
+
+Potential sources may include:
+
+* Google Trends or equivalent trend data
+* Public news headlines
+* Public social-media trends
+* Popular entertainment discussions
+* Technology trends
+* Sports discussions
+* Lifestyle trends
+* Reddit/public discussion trends where legally and technically appropriate
+* Search trend APIs where available
+
+The AI should transform these trends into ORIGINAL WhatDo questions.
+
+Example:
+
+Internet trend:
+
+"People are discussing whether AI will replace certain jobs."
+
+Generated question:
+
+"Would you trust AI to make your career recommendation?"
+
+A. Yes
+B. No
+C. Only with human review
+D. Not sure
+
+The source/trend used to inspire the question must be stored internally for admin review.
+
+---
+
+# 6. QUESTION APPROVAL SCREEN
+
+This is extremely important.
+
+Create an Admin Question Review Dashboard.
+
+Every generated question should appear as:
+
+---
+
+QUESTION PREVIEW
+
+Question:
+"Would you trust AI to plan your entire vacation?"
+
+Category:
+Technology / Lifestyle
+
+Target:
+18–30
+
+Location:
+India
+
+Source/Trend:
+AI travel planning discussions
+
+Suggested options:
+
+A. Absolutely
+B. Maybe
+C. Only with human review
+D. Never
+
+Why this question may perform:
+High curiosity / easy to answer / socially shareable
+
+Potential controversy:
+Low
+
+Sensitivity:
+Low
+
+Source:
+[Source information]
+
+AI Quality Score:
+...
+
+Status:
+DRAFT
+
+[EDIT]
+
+[APPROVE]
+
+[REJECT]
+
+[GENERATE SIMILAR]
+
+---
+
+IMPORTANT:
+
+Nothing should enter the live voting system until an administrator explicitly approves it.
+
+---
+
+# 7. QUESTION QUALITY RULES
+
+Before suggesting a question, AI should evaluate:
+
+* Is it understandable within 3–5 seconds?
+* Is it interesting?
+* Is there a clear choice?
+* Can people answer without extensive knowledge?
+* Is it likely to generate discussion?
+* Is it shareable?
+* Is it relevant to the selected audience?
+* Is it duplicate/similar to an existing question?
+* Is it too sensitive?
+* Does it contain political persuasion?
+* Does it contain misinformation?
+* Does it target protected/sensitive characteristics?
+* Does it expose personal information?
+* Does it involve medical/legal/financial claims that require expert context?
+* Is it safe for the intended age group?
+* Is it copyright-safe/original?
+
+Reject or flag questions that are:
+
+* Hate-based
+* Harassing
+* Explicitly sexual
+* Dangerous
+* Illegal
+* Defamatory
+* Personally identifying
+* Designed to manipulate vulnerable users
+* Political persuasion/targeting
+* Medical diagnosis questions
+* Questions that require sensitive personal information
+
+---
+
+# 8. QUESTION DATABASE SCHEMA
+
+Create/update the database schema with fields similar to:
+
+Question
+
+* id
+* question_text
+* category
+* subcategory
+* answer_type
+* options
+* target_age_group
+* target_gender (only if genuinely necessary; preferably avoid)
+* target_city
+* target_region
+* target_country
+* source_type
+* source_reference
+* trend_context
+* ai_generated
+* ai_quality_score
+* shareability_score
+* sensitivity_level
+* duplicate_group_id
+* status
+* created_by
+* approved_by
+* approved_at
+* scheduled_at
+* published_at
+* expires_at
+* created_at
+* updated_at
+
+Do not store unnecessary sensitive personal data.
+
+---
+
+# 9. USER RESPONSE DATABASE
+
+Track:
+
+* user_id
+* question_id
+* selected_answer
+* answered_at
+* city/region snapshot if required for aggregation
+* anonymous aggregation identifiers where appropriate
+
+Do NOT expose individual users' answers publicly unless the user explicitly chooses to share them.
+
+---
+
+# 10. WHATDO SCORE ENGINE
+
+After 10–15 responses calculate a profile.
+
+Do NOT claim that this is a scientifically validated personality assessment.
+
+Call it something like:
+
+"Your WhatDo Type"
+
+or
+
+"WhatDo Personality Snapshot"
+
+The result is entertainment/social-comparison based on the user's WhatDo responses.
+
+Calculate:
+
+### Agreement Score
+
+Example:
+
+You matched:
+72%
+
+with other users in your selected comparison group.
+
+### Rarity Score
+
+Example:
+
+Your most uncommon answer:
+Only 14% chose the same answer.
+
+### Majority Alignment
+
+Example:
+
+You matched the majority on 7/10 questions.
+
+### Contrarian Answers
+
+Example:
+
+3 of your answers were minority choices.
+
+### City Alignment
+
+Example:
+
+You matched:
+68%
+
+of WhatDo users in Pune.
+
+Only display this if enough data exists.
+
+---
+
+# 11. WHATDO TYPE GENERATION
+
+Create several predefined identity archetypes.
+
+Examples:
+
+THE BOLD DECISION MAKER
+THE DEEP THINKER
+THE UNPREDICTABLE ONE
+THE REALIST
+THE OPTIMIST
+THE EXPLORER
+THE CREATIVE MIND
+THE SOCIAL CONNECTOR
+THE FUTURE BUILDER
+THE BALANCED ONE
+THE CONTRARIAN
+THE CURIOUS MIND
+
+The type should be calculated from response patterns.
+
+Do NOT generate arbitrary psychological diagnoses.
+
+The result should clearly be entertainment/social identity based on WhatDo responses.
+
+Example:
+
+"Based on your WhatDo answers, your current WhatDo Type is:
+
+THE UNPREDICTABLE ONE"
+
+---
+
+# 12. FOMO / RARITY MECHANIC
+
+Create shareable statistics such as:
+
+"Only 12% of WhatDo users answered like you."
+
+"You are in the 18% club."
+
+"You're different from 73% of people around you."
+
+"You matched the majority on 8/12 questions."
+
+"3 of your answers were among the rarest choices."
+
+Avoid misleading statistics.
+
+Every percentage must be calculated from real database data.
+
+Never fabricate percentages.
+
+---
+
+# 13. REGISTRATION FLOW
+
+The ideal flow:
+
+User lands on WhatDo.
+
+They see:
+
+"Find out what kind of thinker you are."
+
+[START]
+
+Allow the user to answer a limited number of questions before registration.
+
+Example:
+
+Question 1
+Question 2
+...
+Question 10
+
+Then show:
+
+🔐 YOUR WHATDO IDENTITY IS READY
+
+We've analysed your answers.
+
+Your WhatDo Type is ready.
+
+[REVEAL MY WHATDO]
+
+Registration/login is required before revealing the complete result.
+
+IMPORTANT:
+
+Do not falsely claim that an analysis has been completed if the system has not actually calculated it.
+
+---
+
+# 14. DAILY WHATDO
+
+Create a repeat engagement mechanism.
+
+Homepage should include:
+
+## WHATDO TODAY
+
+Example:
+
+🔥 Today's question
+
+"Would you quit your job if you had 12 months of savings?"
+
+[YES]
+[NO]
+
+After answering:
+
+You chose YES.
+
+42% agree with you.
+
+58% chose NO.
+
+Then:
+
+"See what your city thinks."
+
+This should encourage users to return every day.
+
+---
+
+# 15. "YOUR ANSWER IS RARE"
+
+Create a special UI when an answer is statistically uncommon.
+
+Example:
+
+⚡ YOUR ANSWER IS RARE
+
+You selected:
+YES
+
+Only 14% of WhatDo users agree.
+
+You're part of the 14%.
+
+[SHARE MY RESULT]
+
+Do not force this message if the answer is not actually rare.
+
+Define configurable thresholds, for example:
+
+Rare = below 20%
+Very rare = below 10%
+
+These should be configurable from admin.
+
+---
+
+# 16. SHAREABLE WHATDO CARD
+
+Create a beautiful social-media-ready result card.
+
+Recommended format:
+
+1080 × 1920
+
+Instagram Story compatible.
+
+Example:
+
+---
+
+WHATDO
+
+🔥 MY WHATDO TYPE
+
+THE BOLD DECISION MAKER
+
+I think differently from
+78% of WhatDo users.
+
+🔥 Strongest trait:
+Risk Taker
+
+⚡ My rarest opinion:
+Only 14% agree with me.
+
+📍 Pune
+
+WhatDo you get?
+
+[WHATDO LOGO]
+
+whatdo.app
+
+---
+
+Create multiple visual templates.
+
+Templates could include:
+
+1. Minimal
+2. Neon/social
+3. Premium dark
+4. Colorful Gen-Z
+5. Futuristic AI
+6. Local City Edition
+
+---
+
+# 17. AI IMAGE GENERATION PROMPT
+
+Add a feature:
+
+## "CREATE MY AI WHATDO"
+
+The user can upload/select a photo.
+
+Generate a personalized visual based on:
+
+* User photo
+* WhatDo Type
+* Dominant response traits
+* Rare answer
+* User's city
+* Visual theme
+* User's selected interests
+
+Example:
+
+User result:
+
+WHATDO TYPE:
+THE FUTURE BUILDER
+
+Traits:
+Technology
+Risk-taking
+Curiosity
+Independent thinking
+
+AI image concept:
+
+A cinematic futuristic version of the user standing in a modern city, wearing futuristic smart-casual clothing, surrounded by technology and innovation elements, representing ambition, curiosity and future-oriented thinking.
+
+The system should NOT claim:
+
+"You will become a CEO."
+
+"You will earn ₹X."
+
+"You have 95% leadership ability."
+
+Instead use visual storytelling based on their WhatDo responses.
+
+---
+
+# 18. USER-FACING AI PROMPT
+
+Allow users to copy a generated prompt and use it with:
+
+ChatGPT
+Gemini
+Claude
+Other image-generation tools
+
+Example generated prompt:
+
+"Using the uploaded photo as the identity reference, create a cinematic visual representation of this person's WhatDo identity: THE FUTURE BUILDER.
+
+Their WhatDo responses show strong preferences toward technology, independence, curiosity and taking calculated risks.
+
+Create a futuristic urban environment representing innovation and ambition.
+
+Keep the person's facial identity recognizable and realistic.
+
+Dress them in modern futuristic smart-casual clothing.
+
+Include subtle visual elements representing technology, creativity and future thinking.
+
+Do not change their age, gender, facial structure or identity.
+
+Create a premium cinematic Instagram Story composition, 9:16.
+
+Include elegant typography:
+
+WHATDO TYPE
+THE FUTURE BUILDER
+
+Do not add unsupported claims about their actual career, wealth, intelligence or future."
+
+Generate this prompt dynamically based on the user's actual WhatDo results.
+
+---
+
+# 19. AI IMAGE SHOULD SHOW "SKILL SIGNALS"
+
+Instead of claiming scientifically measured skills, use:
+
+"WhatDo Signals"
+
+Example:
+
+🔥 Risk Taking
+★★★★☆
+🧠 Curiosity
+★★★★★
+💡 Creativity
+★★★★☆
+🤝 Social Thinking
+★★★☆☆
+
+These should be described as:
+
+"Based on your WhatDo responses"
+
+not:
+
+"You objectively possess 95% creativity."
+
+The visual can display:
+
+WHATDO SIGNALS
+
+Curiosity █████████░ 86
+Risk Taking ████████░░ 78
+Creativity █████████░ 84
+
+These numbers must be derived from the user's response model and clearly labelled as WhatDo-generated scores.
+
+---
+
+# 20. SOCIAL SHARE LOOP
+
+After creating the card:
+
+[DOWNLOAD]
+
+[SHARE]
+
+[CHALLENGE A FRIEND]
+
+The share text should be generated automatically.
+
+Example:
+
+"I got THE UNPREDICTABLE ONE on WhatDo 😂
+
+Only 12% of people answered like me.
+
+What's your WhatDo Type?
+
+👇 Find yours"
+
+Another:
+
+"I matched 78% of people in Pune...
+
+but 3 of my answers were completely different 👀
+
+What's your WhatDo?"
+
+The shared link should contain a referral/deep-link identifier.
+
+Example:
+
+/whatdo?ref=USER_ID_OR_SHARE_TOKEN
+
+Track:
+
+* Share generated
+* Share clicked
+* New visitor
+* Registration
+* Question completion
+* Result reveal
+
+---
+
+# 21. REFERRAL / VIRAL ANALYTICS
+
+Create analytics events:
+
+WHATDO_VIEW
+QUESTION_STARTED
+QUESTION_ANSWERED
+QUESTION_COMPLETED
+REGISTRATION_STARTED
+REGISTRATION_COMPLETED
+RESULT_GENERATED
+RESULT_REVEALED
+CARD_GENERATED
+CARD_SHARED
+SHARE_LINK_CLICKED
+REFERRAL_SIGNUP
+FRIEND_COMPLETED_WHATDO
+
+Admin dashboard should show:
+
+Visitors
+Started
+Completed
+Registrations
+Result reveals
+Cards generated
+Shares
+Share clicks
+Referral registrations
+Conversion rate
+
+This is important for determining whether the viral loop actually works.
+
+---
+
+# 22. ADMIN DASHBOARD
+
+Add sections:
+
+### Question Management
+
+* Draft
+* Pending Approval
+* Approved
+* Scheduled
+* Live
+* Expired
+
+### Trend Generator
+
+* Generate trends
+* Generate questions
+* Review
+* Approve
+
+### WhatDo Analytics
+
+* Daily users
+* Questions answered
+* Completion rate
+* Registration conversion
+* Result reveal conversion
+* Share rate
+* Referral conversion
+* Most viral questions
+* Most shared WhatDo Types
+* City statistics
+
+### Content Controls
+
+Admin should be able to configure:
+
+* Number of questions per assessment
+* Rare-answer threshold
+* Minimum sample size
+* Question expiry
+* Categories
+* Age groups
+* City targeting
+* Share-card templates
+
+---
+
+# 23. QUESTION SELECTION ALGORITHM
+
+Do not show completely random questions.
+
+Build a scoring/selection system.
+
+Question score can consider:
+
+30% engagement potential
+20% relevance
+15% freshness
+15% diversity
+10% locality
+10% historical performance
+
+Also avoid:
+
+* Duplicate questions
+* Too many questions from the same category
+* Repeated questions recently answered by the same user
+
+For a 12-question WhatDo assessment, for example:
+
+2 Personality
+2 Lifestyle
+1 Money
+1 Career
+1 Technology
+1 Relationship
+1 Entertainment
+1 Food/Travel
+1 Current trend
+1 Local
+
+The mix should be configurable.
+
+---
+
+# 24. PRIVACY
+
+Location and response information must be handled carefully.
+
+Do not expose:
+
+* Exact location
+* Individual voting history
+* Private profile information
+* Personal contact details
+
+Use aggregated statistics.
+
+Example:
+
+GOOD:
+"68% of Pune users chose YES."
+
+BAD:
+"Shashikant from XYZ building chose YES."
+
+Use minimum cohort sizes before displaying location-based statistics.
+
+---
+
+# 25. PERFORMANCE
+
+The WhatDo voting experience must be extremely fast.
+
+Optimize for mobile.
+
+Target:
+
+* Fast initial load
+* Optimistic vote interaction
+* Minimal API calls
+* Cached question data
+* Efficient aggregation
+* Indexed database queries
+* No unnecessary page reloads
+
+The result page should load quickly even when calculating statistics.
+
+Where possible, precompute aggregate statistics rather than calculating everything from raw votes on every page load.
+
+---
+
+# 26. MOBILE-FIRST UI
+
+The primary audience is approximately 18–30.
+
+Design should feel:
+
+* Modern
+* Fast
+* Social
+* Visual
+* Gen-Z friendly
+* Minimal text
+* Large buttons
+* Swipe/tap friendly
+* Instagram/TikTok-style visual hierarchy
+
+Avoid making it look like a traditional survey application.
+
+Questions should occupy most of the screen.
+
+---
+
+# 27. IMPORTANT DATA INTEGRITY RULES
+
+Never fabricate:
+
+* Vote counts
+* Percentages
+* City statistics
+* User traits
+* Skill scores
+* Trends
+* Internet popularity
+
+If there is insufficient data, display:
+
+"Not enough WhatDo data yet."
+
+Instead of inventing a percentage.
+
+Every displayed percentage must be reproducible from database data.
+
+---
+
+# 28. IMPLEMENTATION APPROACH
+
+Before modifying code:
+
+1. Inspect current WhatDo architecture.
+2. Identify existing authentication.
+3. Identify existing post/question system.
+4. Identify existing voting APIs.
+5. Identify existing location implementation.
+6. Identify existing database schema.
+7. Identify existing admin functionality.
+8. Reuse existing components wherever possible.
+
+Then provide an implementation plan.
+
+After approval/implementation:
+
+* Add database migrations.
+* Add APIs.
+* Add admin UI.
+* Add user UI.
+* Add WhatDo scoring engine.
+* Add share-card generation.
+* Add referral tracking.
+* Add analytics.
+* Add tests.
+* Verify existing voting functionality is not broken.
+
+---
+
+# 29. MOST IMPORTANT PRODUCT PRINCIPLE
+
+WhatDo should not simply become another polling website.
+
+The product loop should be:
+
+QUESTION
+↓
+VOTE
+↓
+INSTANT SOCIAL COMPARISON
+↓
+CURIOSITY
+↓
+MORE QUESTIONS
+↓
+WHATDO TYPE
+↓
+RARE/UNIQUE RESULT
+↓
+AI VISUAL
+↓
+SHARE
+↓
+FRIEND SEES IT
+↓
+"WHAT'S MY TYPE?"
+↓
+NEW USER
+↓
+REPEAT
+
+This is the core viral growth loop.
+
+---
+
+# 30. FIRST VERSION / MVP
+
+For the first implementation, prioritize:
+
+1. WhatDo assessment
+2. 10–15 questions
+3. Location/city comparison
+4. Real percentage calculations
+5. WhatDo Type
+6. Rare answer
+7. Shareable result card
+8. AI image prompt generation
+9. Admin question approval
+10. Trend-based question generation
+11. Referral/share tracking
+
+Do not overbuild the AI image-generation infrastructure initially.
+
+First make the QUESTION → RESULT → SHARE → REFERRAL loop excellent.
+
+After that, add native AI image generation.
+
+---
+
+# FINAL REQUIREMENT
+
+Before making database changes, show me:
+
+A. Proposed database schema changes
+
+B. Proposed APIs
+
+C. Proposed user flow
+
+D. Proposed admin flow
+
+E. Example questions
+
+F. Example WhatDo result
+
+G. Example share card
+
+H. Example AI image prompt
+
+I. Security/privacy considerations
+
+J. Exact files/components that will be modified
+
+Then implement the feature while preserving all existing WhatDo functionality.

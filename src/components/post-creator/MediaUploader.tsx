@@ -339,7 +339,11 @@ export const MediaUploader: React.FC<MediaUploaderProps> = ({
         const newIdx = idx + direction;
         if (newIdx < 0 || newIdx >= prev.length) return prev;
         const next = [...prev];
-        [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
+        const itemA = next[idx];
+        const itemB = next[newIdx];
+        if (!itemA || !itemB) return prev;
+        next[idx] = itemB;
+        next[newIdx] = itemA;
         const reordered = next.map((n, i) => ({ ...n, sortOrder: i }));
         syncToParent(reordered);
         return reordered;

@@ -102,10 +102,10 @@ export const PostMedia: React.FC<PostMediaProps> = ({
 
   const onTouchStart = (e: React.TouchEvent) => {
     setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
+    setTouchStart(e.targetTouches?.[0]?.clientX ?? null);
   };
   const onTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0].clientX);
+    setTouchEnd(e.targetTouches?.[0]?.clientX ?? null);
   };
   const onTouchEnd = () => {
     if (!touchStart || touchEnd == null) return;

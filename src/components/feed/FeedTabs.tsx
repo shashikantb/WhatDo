@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Trending2, Sparkles, Clock, Users } from "lucide-react";
+import { TrendingUp, Sparkles, Clock, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type FeedTabId = "foryou" | "following" | "trending" | "new";
@@ -15,7 +15,7 @@ export interface FeedTab {
 export const FEED_TABS: FeedTab[] = [
   { id: "foryou", label: "For You", icon: Sparkles },
   { id: "following", label: "Following", icon: Users },
-  { id: "trending", label: "Trending", icon: Trending2 },
+  { id: "trending", label: "Trending", icon: TrendingUp },
   { id: "new", label: "New", icon: Clock },
 ];
 

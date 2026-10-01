@@ -16,7 +16,7 @@ export function useCreatePost() {
 
   const createPostMutation = trpc.posts.create.useMutation({
     onSuccess: (data) => {
-      utils.feed.getFeed.invalidate();
+      utils.feed.getForYou.invalidate();
       utils.posts.getById.invalidate({ id: data.id });
       toast.show("Post published successfully!", "success");
       router.push(`/post/${data.slug ?? data.id}`);

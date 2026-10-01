@@ -126,7 +126,6 @@ export default function TRPCProvider({
           maxURLLength: 2083,
         }),
       ],
-      transformer: superjson,
     }),
   );
 

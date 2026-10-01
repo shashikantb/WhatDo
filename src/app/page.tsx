@@ -9,6 +9,7 @@ import { Button } from "@/components/design-system/Button";
 import { SkeletonCard } from "@/components/design-system/Skeleton";
 import { ReelsPostCard } from "@/components/feed/ReelsPostCard";
 import { BottomNav } from "@/components/layout/BottomNav";
+import { DailyWhatDoHero } from "@/components/whatdo/DailyWhatDoHero";
 import { trpc } from "@/lib/trpc/client";
 import { Sparkles,
   LogIn,
@@ -390,6 +391,8 @@ export default function Home() {
           } as React.CSSProperties
         }
       >
+        <DailyWhatDoHero />
+
         {showSkeleton && (
           <>
             <ReelsSkeleton />

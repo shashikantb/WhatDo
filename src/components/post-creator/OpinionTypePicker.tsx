@@ -134,7 +134,7 @@ export const OpinionTypePicker: React.FC<OpinionTypePickerProps> = ({
                       : "bg-muted text-muted-foreground"
                   )}
                 >
-                  <Icon className="h-6 w-6" strokeWidth={2} />
+                  <Icon className="h-6 w-6" />
                 </div>
                 <div className="flex-1">
                   <h3

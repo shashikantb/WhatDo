@@ -50,9 +50,8 @@ export class OpenAIProvider implements AIProvider {
     }
     if (this._client) return this._client as any;
     try {
-      // @ts-expect-error openai package is optional at install time
       const { default: OpenAI } = await import("openai");
-      this._client = new OpenAI({ apiKey: this.apiKey });
+      this._client = new OpenAI({ apiKey: this.apiKey }) as any;
     } catch {
       this._client = null;
     }

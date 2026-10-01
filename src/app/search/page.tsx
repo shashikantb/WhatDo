@@ -153,7 +153,13 @@ export default function SearchPage() {
     setActiveTab(typeParam);
   }, [typeParam]);
 
-  const searchType = activeTab === "all" ? "all" : activeTab;
+  const typeMap: Record<SearchTab, "all" | "user" | "post" | "tag"> = {
+    all: "all",
+    users: "user",
+    posts: "post",
+    tags: "tag",
+  };
+  const searchType = typeMap[activeTab];
 
   const resultQuery = trpc.search.query.useQuery(
     {

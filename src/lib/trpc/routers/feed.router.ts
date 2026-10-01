@@ -80,13 +80,13 @@ async function enrichPostsWithViewerState<T extends PostWithBasic>(
           where: { followerId: viewerId, followingId: { in: creatorIds } },
           select: { followingId: true },
         })
-      : Promise.resolve([] as { followingId: string }[]),
-  ]);
+      : ctx.prisma.$queryRawUnsafe<{ followingId: string }[]>(`SELECT 1 as "followingId" WHERE 1=0`),
+  ] as any[]);
 
-  const voteByPost = new Map(votes.map((v) => [v.postId, v]));
-  const likedSet = new Set(likes.map((l) => l.postId));
-  const savedSet = new Set(saved.map((s) => s.postId));
-  const followSet = new Set(follows.map((f) => f.followingId));
+  const voteByPost = new Map((votes as any[]).map((v: any) => [v.postId, v]));
+  const likedSet = new Set((likes as any[]).map((l: any) => l.postId));
+  const savedSet = new Set((saved as any[]).map((s: any) => s.postId));
+  const followSet = new Set((follows as any[]).map((f: any) => f.followingId));
 
   return safePosts.map((p) => ({
     ...p,
@@ -175,12 +175,12 @@ export const feedRouter = createTRPCRouter({
                 likeCount: p._count.likes,
                 shareCount: p.shareCount,
                 createdAt: p.createdAt,
-                controversyScore: p.controversyScore,
+                controversyScore: p.controversyScore != null ? Number(p.controversyScore) : null,
               });
         const feedScore = feedScoreWeighted({
           trendingScore: tScore,
           viralityScore: vScore,
-          controversyScore: p.controversyScore,
+          controversyScore: p.controversyScore != null ? Number(p.controversyScore) : null,
           createdAt: p.createdAt,
           categoryInterestWeight: p.categoryId
             ? categoryWeights[p.categoryId] ?? 1

@@ -56,10 +56,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         return {
           id: user.id,
-          name: user.name,
+          name: user.displayName,
           email: user.email,
-          image: user.image,
-          role: user.role,
+          image: user.avatarUrl,
+          role: user.role as any,
         };
       },
     }),
@@ -67,15 +67,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.id = user.id;
-        token.role = (user as { role?: string }).role ?? "USER";
+        token.id = (user as { id: string }).id;
+        const anyUser = user as any;
+        token.role = anyUser?.role ?? anyUser?.role_name ?? "USER";
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = token.id as string;
-        session.user.role = (token.role as string) ?? "USER";
+        (session.user as any).id = token.id as string;
+        (session.user as any).role = (token.role as string) ?? "USER";
       }
       return session;
     },
@@ -84,7 +85,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async linkAccount({ user }) {
       await prisma.user.update({
         where: { id: user.id },
-        data: { emailVerified: new Date() },
+        data: { isVerified: true },
       });
     },
   },
@@ -94,10 +95,12 @@ declare module "next-auth" {
   interface Session {
     user: {
       id: string;
+      username?: string;
+      displayName?: string;
       name?: string | null;
       email?: string | null;
       image?: string | null;
-      role: string;
+      role: "USER" | "MODERATOR" | "ADMIN" | (string & {});
     };
   }
 }
@@ -105,6 +108,6 @@ declare module "next-auth" {
 declare module "@auth/core/jwt" {
   interface JWT {
     id: string;
-    role: string;
+    role: any;
   }
 }
