@@ -195,20 +195,21 @@ export const whatdoRouter = createTRPCRouter({
         categoryMix: DEFAULT_CATEGORY_MIX,
       });
       let fullQuestion: any = null;
-      if (pick.question) {
+      const reachedTarget = input.answeredQuestionIds.length >= input.targetQuestionCount;
+      const pickQuestionForFull = reachedTarget ? null : pick.question;
+      if (pickQuestionForFull) {
         fullQuestion = await ctx.prisma.assessmentQuestion.findUnique({
-          where: { id: pick.question.id },
+          where: { id: pickQuestionForFull.id },
           include: { options: { orderBy: { sortOrder: "asc" } } },
         });
         await emitFunnel(ctx.prisma, "QUESTION_SHOWN", {
           sessionId: input.sessionId,
           userId: ctx.session?.user?.id ?? undefined,
-          extraData: { questionId: pick.question.id },
+          extraData: { questionId: pickQuestionForFull.id },
         });
       }
       const done =
-        pick.question == null ||
-        input.answeredQuestionIds.length >= input.targetQuestionCount;
+        pickQuestionForFull == null || reachedTarget;
       return {
         question: fullQuestion,
         progress: {

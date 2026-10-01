@@ -66,8 +66,13 @@ export default function WhatDoQuizPage() {
   const progressDone = answered.length;
   const progressTotal = nextQ.data?.progress.total ?? TARGET_COUNT;
 
+  const allAnswered = progressDone >= progressTotal;
+  const needTwoMore = progressDone < progressTotal - 2;
+  const questionNumberForHeader = Math.min(progressDone + (q ? 1 : 0), progressTotal);
+
   const handleNext = async () => {
     if (!selectedOptionId || !q || !sessionId) return;
+    if (allAnswered) return;
     setSubmitBusy(true);
     try {
       await submit.mutateAsync({
@@ -111,8 +116,17 @@ export default function WhatDoQuizPage() {
     }
   };
 
-  const progressPct = Math.min(100, (progressDone / progressTotal) * 100);
+  const progressPct = Math.min(100, (Math.min(progressDone, progressTotal) / progressTotal) * 100);
   const canFinish = progressDone >= MIN_TO_COMPUTE;
+  const canFinishWithLogin = canFinish && status !== "authenticated";
+
+  const onPrimaryClick = () => {
+    if (allAnswered) {
+      handleCompute(false);
+    } else {
+      handleNext();
+    }
+  };
 
   return (
     <main className="min-h-[100dvh] w-full bg-gradient-to-b from-slate-950 via-indigo-950 to-fuchsia-950 text-white">
@@ -125,7 +139,7 @@ export default function WhatDoQuizPage() {
             <ArrowLeft className="h-4 w-4" /> Back
           </Link>
           <div className="inline-flex items-center gap-1.5 text-[11px] font-bold text-white/80">
-            <span>Question {progressDone + (q ? 1 : 0)} / {progressTotal}</span>
+            <span>Question {questionNumberForHeader} / {progressTotal}</span>
           </div>
           <button
             type="button"
@@ -149,7 +163,7 @@ export default function WhatDoQuizPage() {
                   "h-2 w-2 rounded-full transition-all",
                   i < progressDone
                     ? "bg-gradient-to-br from-emerald-400 to-teal-400 scale-100"
-                    : i === progressDone
+                    : i === progressDone && !allAnswered
                       ? "bg-fuchsia-400 scale-125 shadow-[0_0_10px_theme(colors.fuchsia.400)]"
                       : "bg-white/15",
                 )}
@@ -174,7 +188,7 @@ export default function WhatDoQuizPage() {
             </div>
           )}
 
-          {sessionId && nextQ.isFetching && !q && (
+          {sessionId && nextQ.isFetching && !q && !allAnswered && (
             <div className="mx-auto w-full max-w-lg rounded-3xl border border-white/10 bg-white/5 p-6 text-center">
               <Loader2 className="h-5 w-5 animate-spin text-fuchsia-300 mx-auto mb-2" />
               <p className="text-xs text-white/70 font-semibold">
@@ -183,7 +197,7 @@ export default function WhatDoQuizPage() {
             </div>
           )}
 
-          {sessionId && q && (
+          {sessionId && q && !allAnswered && (
             <div className="space-y-4 transition-opacity">
               <AssessmentQuestionCard
                 key={q.id}
@@ -204,16 +218,16 @@ export default function WhatDoQuizPage() {
 
               <div className="flex items-center justify-between gap-2">
                 <div className="text-[11.5px] text-white/70 font-semibold">
-                  {progressDone >= progressTotal - 2 && (
+                  {!needTwoMore && !allAnswered && (
                     <span className="inline-flex items-center gap-1.5 text-emerald-300">
-                      🎉 Almost done — answer 2 more to skip the gate.
+                      🎉 Almost done — answer {progressTotal - progressDone} more to unlock your result.
                     </span>
                   )}
                 </div>
                 <Button
                   size="lg"
-                  onClick={handleNext}
-                  disabled={!selectedOptionId || submitBusy || nextQ.data?.progress.done}
+                  onClick={onPrimaryClick}
+                  disabled={!selectedOptionId || submitBusy}
                   rightIcon={submitBusy ? undefined : <ArrowRight className="h-5 w-5" />}
                   className="rounded-full px-6 py-3.5 text-base shadow-xl shadow-black/30 bg-white text-black hover:bg-white/95 border-0"
                 >
@@ -231,9 +245,9 @@ export default function WhatDoQuizPage() {
             </div>
           )}
 
-          {sessionId && !nextQ.isFetching && !q && (
+          {(allAnswered || (sessionId && !nextQ.isFetching && !q)) && (
             <div className="mx-auto w-full max-w-lg rounded-3xl border border-white/10 bg-white/5 p-6 space-y-4 text-center">
-              <p className="text-lg font-black">All 12 questions complete!</p>
+              <p className="text-lg font-black">All {progressTotal} questions complete!</p>
               <p className="text-sm text-white/75">
                 You answered <b className="text-white">{progressDone}</b>{" "}
                 {progressDone === 1 ? "question" : "questions"}. You need at
@@ -249,7 +263,7 @@ export default function WhatDoQuizPage() {
                 >
                   {calcBusy ? "Computing…" : "See result"}
                 </Button>
-                {status !== "authenticated" && (
+                {canFinishWithLogin && (
                   <Button
                     size="lg"
                     variant="outline"
