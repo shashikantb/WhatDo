@@ -25,6 +25,7 @@ import {
   buildAIPromptIdentityInput,
   generateAIPrompts,
   validateAIPrompt,
+  type AnsweredQuestionWithStats,
 } from "@/lib/whatdo/ai-prompt";
 import type { WhatDoCardTemplate } from "@/lib/whatdo/ai-prompt";
 import { WhatDoArchetype } from "@/lib/whatdo/archetypes";
@@ -550,11 +551,34 @@ export const whatdoRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       let identity: any = input.identityOverride ?? null;
+      let identityOwner: { userId: string | null; sessionId: string | null; userCity: string | null } | null = null;
       if (!identity && input.identityId) {
         const row = await ctx.prisma.whatDoIdentityResult.findUnique({
           where: { id: input.identityId },
+          select: {
+            id: true,
+            userId: true,
+            sessionId: true,
+            whatdoType: true,
+            signalCuriosity: true,
+            signalRiskTaking: true,
+            signalCreativity: true,
+            signalSocial: true,
+            signalIndependence: true,
+            agreementScorePct: true,
+            rarityScorePct: true,
+            cityAlignmentPct: true,
+            rarestAnswerPct: true,
+            citySnapshot: true,
+            rarestAnswerQuestionId: true,
+          },
         });
         if (row) {
+          identityOwner = {
+            userId: row.userId,
+            sessionId: row.sessionId,
+            userCity: row.citySnapshot ?? null,
+          };
           identity = {
             whatDoArchetype: row.whatdoType as WhatDoArchetype,
             signalScores: {
@@ -567,7 +591,7 @@ export const whatdoRouter = createTRPCRouter({
             agreementScorePct: row.agreementScorePct,
             rarityScorePct: row.rarityScorePct,
             cityAlignmentPct: row.cityAlignmentPct,
-            rarestAnswer: row.rarestAnswerPct ? { rarityPct: row.rarestAnswerPct } : null,
+            rarestAnswer: row.rarestAnswerPct ? { rarityPct: row.rarestAnswerPct, questionId: row.rarestAnswerQuestionId } : null,
             citySnapshot: row.citySnapshot,
           };
         }
@@ -589,10 +613,147 @@ export const whatdoRouter = createTRPCRouter({
         cityAlignmentPct: identity.cityAlignmentPct ?? null,
         rarestAnswer: identity.rarestAnswerPct ? { rarityPct: identity.rarestAnswerPct } : identity.rarestAnswer ?? null,
       };
-      const userCity = identity.citySnapshot ?? null;
+      const userCity = (identityOwner?.userCity ?? identity.citySnapshot ?? identity.city ?? null) as string | null;
+
+      // Step 2 — pull user (displayName/username/avatarUrl) + personal referral share token for branded URL CTA
+      let userMeta: { displayName: string | null; username: string | null; shareToken: string | null } = {
+        displayName: null,
+        username: null,
+        shareToken: null,
+      };
+      if (identityOwner?.userId) {
+        const u = await ctx.prisma.user.findUnique({
+          where: { id: identityOwner.userId },
+          select: { displayName: true, username: true },
+        }).catch(() => null);
+        if (u) {
+          userMeta.displayName = u.displayName ?? null;
+          userMeta.username = u.username ?? null;
+        }
+        const share = await ctx.prisma.referralShareEvent.findFirst({
+          where: { userId: identityOwner.userId, shareType: "WHATDO_IDENTITY" },
+          orderBy: { createdAt: "desc" },
+          select: { shareToken: true },
+        }).catch(() => null);
+        if (share?.shareToken) userMeta.shareToken = share.shareToken;
+      } else if (identityOwner?.sessionId) {
+        const shares = await ctx.prisma.referralShareEvent.findMany({
+          where: { shareType: { in: ["WHATDO_IDENTITY_SESSION", "WHATDO_IDENTITY", "WHATDO_RESULT"] as any }, shareChannel: identityOwner.sessionId },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { shareToken: true },
+        }).catch(() => []) as any[];
+        if (shares && shares[0]?.shareToken) {
+          userMeta.shareToken = shares[0].shareToken;
+        }
+      }
+      const personalShareUrl = userMeta.shareToken
+        ? `https://whatdo.co.in/?ref=${userMeta.shareToken}`
+        : null;
+
+      // Step 3 — resolve all 12 answers with question + option text
+      let userAnswers: AnsweredQuestionWithStats[] = [];
+      if (identityOwner && (identityOwner.userId || identityOwner.sessionId)) {
+        try {
+          const where: any = {};
+          if (identityOwner.userId) where.userId = identityOwner.userId;
+          else where.sessionId = identityOwner.sessionId;
+          const responses = await ctx.prisma.questionResponse.findMany({
+            where,
+            orderBy: { createdAt: "asc" },
+            include: {
+              question: {
+                select: {
+                  id: true,
+                  questionText: true,
+                },
+              },
+              selectedOption: {
+                select: {
+                  id: true,
+                  label: true,
+                  sortOrder: true,
+                },
+              },
+            },
+          });
+          if (responses && responses.length > 0) {
+            const qIdList = Array.from(new Set(responses.map((r: any) => r.assessmentQuestionId)));
+            // Fetch ALL option labels (sorted) for each answered question so the prompt shows distribution of every option
+            const allOpts = await ctx.prisma.assessmentQuestionOption.findMany({
+              where: { assessmentQuestionId: { in: qIdList } },
+              orderBy: [{ assessmentQuestionId: "asc" }, { sortOrder: "asc" }],
+              select: { assessmentQuestionId: true, id: true, label: true, sortOrder: true },
+            });
+            const optsByQ: Record<string, Array<{ id: string; label: string; sortOrder: number }>> = {};
+            for (const o of allOpts) {
+              (optsByQ[o.assessmentQuestionId] = optsByQ[o.assessmentQuestionId] ?? []).push(o);
+            }
+            // Batch aggregates: global + city (city = userCity from identity)
+            const aggSource = createPrismaAggregationSource(ctx.prisma);
+            const aggregates = await aggSource.getQuestionAggregatesBatch(qIdList, userCity ?? undefined);
+
+            responses.forEach((r: any, idx: number) => {
+              const qid = r.assessmentQuestionId;
+              const agg: any = aggregates[qid] ?? null;
+              const globalTotal = Number(agg?.totalResponses ?? 0);
+              const cityTotal = Number(agg?.cityTotalResponses ?? 0);
+              const globalOpts = new Map<string, { optionId: string; responseCount: number; responsePct: number | null }>((agg?.optionAggregates ?? []).map((o: any) => [String(o.optionId), o]));
+              const cityOpts = new Map<string, { optionId: string; responseCount: number; responsePct: number | null }>((agg?.cityOptionAggregates ?? []).map((o: any) => [String(o.optionId), o]));
+              const optionListAll = (optsByQ[qid] ?? []).sort((a, b) => a.sortOrder - b.sortOrder);
+              const selectedIndex = optionListAll.findIndex((o) => o.id === r.selectedOptionId);
+              const selectedGlobal = globalOpts.get(r.selectedOptionId) ?? null;
+              const selectedCity = cityOpts.get(r.selectedOptionId) ?? null;
+              const selGPct = selectedGlobal?.responsePct ?? (globalTotal > 0 ? (Number(selectedGlobal?.responseCount ?? 0) / globalTotal) * 100 : null);
+              const selCPct = selectedCity?.responsePct ?? (cityTotal > 0 ? (Number(selectedCity?.responseCount ?? 0) / cityTotal) * 100 : null);
+              const allOptsOut = optionListAll.map((o) => {
+                const g = globalOpts.get(o.id) ?? null;
+                const c = cityOpts.get(o.id) ?? null;
+                const gp = g?.responsePct ?? (globalTotal > 0 ? (Number(g?.responseCount ?? 0) / globalTotal) * 100 : null);
+                const cp = c?.responsePct ?? (cityTotal > 0 ? (Number(c?.responseCount ?? 0) / cityTotal) * 100 : null);
+                return {
+                  label: o.label,
+                  isSelected: o.id === r.selectedOptionId,
+                  globalResponsePct: gp,
+                  cityResponsePct: cp,
+                };
+              });
+              const isMajor = selGPct !== null && optionListAll.every((o) => {
+                if (o.id === r.selectedOptionId) return true;
+                const og = globalOpts.get(o.id);
+                return selGPct >= (og?.responsePct ?? 0);
+              });
+              const isContra = selGPct !== null && selGPct <= 25;
+              const isRare = selGPct !== null && selGPct <= DEFAULT_THRESHOLDS.rareAnswerThresholdPct;
+              const isVRare = selGPct !== null && selGPct <= DEFAULT_THRESHOLDS.veryRareAnswerThresholdPct;
+              userAnswers.push({
+                questionText: r.question?.questionText ?? `Question #${idx + 1}`,
+                questionNumber: idx + 1,
+                selectedOptionLabel: r.selectedOption?.label ?? "",
+                selectedOptionIndex: selectedIndex >= 0 ? selectedIndex : 0,
+                allOptions: allOptsOut,
+                selectedGlobalPct: selGPct,
+                selectedCityPct: selCPct,
+                globalTotalResponses: globalTotal,
+                cityTotalResponses: cityTotal > 0 ? cityTotal : null,
+                selectedIsMajority: isMajor,
+                selectedIsContrarian: isContra,
+                selectedIsRare: isRare,
+                selectedIsVeryRare: isVRare,
+              });
+            });
+          }
+        } catch (e) {
+          // leave userAnswers empty — prompt falls back gracefully
+        }
+      }
       const aiInput = buildAIPromptIdentityInput(engineResult, {
         userCity,
+        displayName: userMeta.displayName,
+        username: userMeta.username,
         cardTemplate: input.template as WhatDoCardTemplate,
+        userAnswers,
+        personalShareUrl,
       });
       if (!aiInput) {
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Could not build AI prompt input." });
