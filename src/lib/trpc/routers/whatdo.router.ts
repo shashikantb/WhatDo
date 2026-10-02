@@ -768,6 +768,7 @@ export const whatdoRouter = createTRPCRouter({
       }
       return {
         prompt: generated.imagePrompt,
+        shortPrompt: generated.shortImagePrompt,
         shareCaption: generated.shareCaption,
         signalSummary: generated.signalSummary,
         template: generated.template,

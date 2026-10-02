@@ -384,7 +384,7 @@ export default function WhatDoResultPage() {
       toast.show("AI prompt failed to build — refresh the page and try again", "danger");
       return;
     }
-    if (!genPrompt.data?.prompt) {
+    if (!genPrompt.data?.shortPrompt && !genPrompt.data?.prompt) {
       toast.show(
         genPrompt.isFetching || genPrompt.isLoading
           ? "AI prompt still building — try again in 2 seconds"
@@ -393,17 +393,31 @@ export default function WhatDoResultPage() {
       );
       return;
     }
+    const text = genPrompt.data?.shortPrompt || genPrompt.data?.prompt || "";
     safeTrackClick("PROMPT_COPY");
     setShareLoading("prompt");
     try {
-      await navigator.clipboard.writeText(genPrompt.data.prompt);
+      await navigator.clipboard.writeText(text);
       setCopied("prompt");
       setTimeout(() => setCopied(null), 1600);
-      toast.show("AI prompt copied to clipboard ✓", "success");
+      toast.show("AI IMAGE prompt copied ✓ Paste into ChatGPT / Gemini, then upload your selfie", "success");
     } catch {
       toast.show("Clipboard blocked — copy the prompt text manually from the card below", "danger");
     } finally {
       setShareLoading(null);
+    }
+  };
+
+  const copyAIPromptLong = async () => {
+    if (!genPrompt.data?.prompt) {
+      toast.show("Full prompt still building", "info");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(genPrompt.data.prompt);
+      toast.show("Full analysis prompt copied (answers + caption + breakdown) ✓", "success");
+    } catch {
+      toast.show("Clipboard blocked", "danger");
     }
   };
 
@@ -544,9 +558,9 @@ export default function WhatDoResultPage() {
         <Button
           size="md"
           onClick={copyAIPrompt}
-          disabled={!genPrompt.data?.prompt || shareLoading === "prompt"}
+          disabled={!genPrompt.data?.shortPrompt && !genPrompt.data?.prompt || shareLoading === "prompt"}
           loading={shareLoading === "prompt"}
-          className="rounded-full border border-white/30 bg-white/10 text-white hover:bg-white/20 shadow-lg shadow-black/30 disabled:opacity-60 disabled:cursor-not-allowed"
+          className="rounded-full border border-white/30 bg-gradient-to-r from-fuchsia-500/70 via-violet-500/70 to-indigo-500/70 hover:from-fuchsia-500/90 hover:via-violet-500/90 hover:to-indigo-500/90 text-white shadow-lg shadow-black/40 disabled:opacity-60 disabled:cursor-not-allowed font-bold"
         >
           {copied === "prompt" ? (
             <>
@@ -554,7 +568,7 @@ export default function WhatDoResultPage() {
             </>
           ) : (
             <>
-              <Copy className="h-4 w-4" /> Copy AI prompt
+              <Copy className="h-4 w-4" /> Copy AI IMAGE PROMPT
             </>
           )}
         </Button>
@@ -567,6 +581,16 @@ export default function WhatDoResultPage() {
           <MessageCircle className="h-4 w-4" /> Challenge a friend
         </Button>
       </section>
+
+      <div className="flex items-center justify-center -mt-3">
+        <button
+          type="button"
+          onClick={copyAIPromptLong}
+          className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/55 hover:text-white underline-offset-4 hover:underline decoration-white/30"
+        >
+          Or copy the FULL prompt with all 12 answers + caption →
+        </button>
+      </div>
 
       {!isLoggedIn && (
         <section className="rounded-3xl border border-fuchsia-400/20 bg-fuchsia-500/10 p-5 space-y-3">

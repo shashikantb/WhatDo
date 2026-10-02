@@ -59,6 +59,7 @@ export interface AIPromptIdentityInput {
 
 export interface GeneratedAIPrompt {
   imagePrompt: string;
+  shortImagePrompt: string;
   shareCaption: string;
   signalSummary: string;
   warnings: string[];
@@ -606,8 +607,47 @@ Find yours → ${input.personalShareUrl ?? ""}`.trimEnd();
     .filter(Boolean)
     .join(" · ");
 
+  // SHORT image-gen mode prompt (<=1300 chars, read by DALL-E / Midjourney / Ideogram)
+  // Critically: places SELFIE CENTER-LEFT (55% canvas) + overlays BURNED IN TEXT in the 45% NEGATIVE SPACE, NOT "composited on scene"
+  const top3 = tops3.map((t) => `${t.meta.icon}${t.meta.label.replace(/\s+/g, "")}${t.score}`).join(" ");
+  const shortPropsLine = viz.signatureObjects.slice(0, 3).join(" + ");
+  const shortAccessLine = viz.accessories.slice(0, 2).join(", ");
+  const rareAnswerChip = (input.userAnswers ?? [])
+    .filter((a) => a.selectedIsRare || a.selectedIsContrarian)
+    .slice(0, 2)
+    .map((a) => {
+      const sPct = a.selectedGlobalPct;
+      const short = sanitizePromptText(a.selectedOptionLabel)
+        .replace(/^.{0,2}$/, "")
+        .slice(0, 44);
+      return sPct !== null ? `"${short}" ${sPct.toFixed(0)}%` : `"${short}"`;
+    })
+    .join("   ");
+  const share = input.personalShareUrl ?? "https://whatdo.co.in";
+  const rarityBadge =
+    input.rarityScorePct !== null && input.rarityScorePct <= 15
+      ? `★ TOP ${input.rarityScorePct.toFixed(0)}% UNIQUE ★`
+      : input.rarityScorePct !== null
+      ? `${input.rarityScorePct.toFixed(0)}% DIFFERENT`
+      : "BALANCED WHATDO";
+  const whoStr = whoLine ? `${whoLine}.` : "";
+  const shortImagePrompt =
+`[MANDATORY: Generate ONE image. DO NOT reply with text. DO NOT analyze the prompt. DO NOT merely swap background. INSTRUCTION: "PAINT A COMPLETE 1080×1920 VERTICAL INSTAGRAM STORY CARD WITH THE USER'S UPLOADED SELFIE AS THE CENTRAL SUBJECT AND BURN EVERY REQUIRED TYPOGRAPHY LAYER, SIGNAL BARS, LOGO, AND REFERRAL URL CTA INTO THE CANVAS AROUND THEM IN DESIGNATED NEGATIVE SPACE ZONES — NOT AS A SEPARATE OVERLAY FILE."]
+
+1080×1920, 9:16 vertical. Canvas is split: LEFT 55% = SELFIE ZONE (paint uploaded photo face+upper body here, unchanged identity), RIGHT 38% = TEXT ZONE (burn overlays here), TOP 10% + BOTTOM 20% = HEADER/FOOTER ZONES. Selfie is surrounded by archetype props and palette: ${viz.colorPalette}. Mood=${style.mood}. Scene="${viz.scene}". Lighting="${viz.lighting}". Pose="${viz.poseEnergy}". Props visible: ${shortPropsLine}. Accessories: ${shortAccessLine}.
+
+BURNED-IN, FULL-OPACITY TYPOGRAPHY — render as pixels on canvas, never behind face:
+① TOP-LEFT LOGO ZONE (top 6%): Bold wordmark "WhatDo" + "See it. Vote it. Know who you are."
+② TOP-LEFT HEADER ZONE (top 8-18%): Pill label "MY WHATDO TYPE", HUGE title "${def.emoji} ${def.label}", italic tagline "${sanitizePromptText(def.tagline)}", Badge "${rarityBadge}", Sub ${agreementLine || rarityLine} ${cityLine ? "· 📍" + sanitizePromptText(input.userCity ?? "") : ""}
+③ LEFT/RIGHT-STRIP SIGNAL BARS: 5 stacked chips WhatDo Signals — ${tops5.map((t) => `${t.meta.icon}${t.meta.label} ${t.score}/100 ████████░░`).join("  ")}. (entertainment only)
+④ MID-ANSWER CHIPS (rare picks): ${rareAnswerChip || sanitizePromptText(input.signatureTraits?.slice(0, 2).join(" · ") ?? strongTraitsText)}
+⑤ BOTTOM 10-18% CTA GLASS CARD: BIG BOLD pill → "WHAT'S YOUR WHATDO TYPE?". Big arrow. Monospace URL → ${share}. Disclaimer under URL: "Answer 12 questions → see your share card · WhatDo is entertainment only."
+
+${whoStr} Reference photo face/hair/identity unchanged. ${signatureTraitsBlock} Typography uses: ${viz.typographyKeyword}. Proportion: text+URL overlays = visible 40% of canvas, selfie 55%.`;
+
   return {
     imagePrompt,
+    shortImagePrompt,
     shareCaption,
     signalSummary,
     warnings,
@@ -660,6 +700,11 @@ export function validateAIPrompt(prompt: GeneratedAIPrompt): {
         `Prompt contains forbidden pattern: ${re.toString().slice(1, -3)}`,
       );
     }
+    if (re.test(prompt.shortImagePrompt)) {
+      issues.push(
+        `Short prompt contains forbidden pattern: ${re.toString().slice(1, -3)}`,
+      );
+    }
   }
   if (!prompt.imagePrompt.includes("WhatDo Signals")) {
     issues.push('Prompt missing explicit "WhatDo Signals" label.');
@@ -672,6 +717,15 @@ export function validateAIPrompt(prompt: GeneratedAIPrompt): {
   }
   if (!prompt.imagePrompt.includes("whatdo.co.in") && !prompt.imagePrompt.includes("whatdo.app")) {
     issues.push("Prompt missing WhatDo share URL for footer promotion.");
+  }
+  if (!prompt.shortImagePrompt.includes("1080×1920") && !prompt.shortImagePrompt.includes("9:16")) {
+    issues.push("Short prompt missing 1080×1920 / 9:16 size.");
+  }
+  if (!prompt.shortImagePrompt.includes("whatdo.co.in") && !prompt.shortImagePrompt.includes("whatdo.app")) {
+    issues.push("Short prompt missing WhatDo promotion URL.");
+  }
+  if (!prompt.shortImagePrompt.includes("WHAT'S YOUR WHATDO TYPE?") && !prompt.shortImagePrompt.includes("What's YOUR WhatDo Type?")) {
+    issues.push("Short prompt missing WHAT'S YOUR WHATDO TYPE? CTA");
   }
   return { valid: issues.length === 0, issues };
 }
