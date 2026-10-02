@@ -127,35 +127,38 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async jwt({ token, user, account }) {
       if (user) {
         token.userId = user.id as string;
-        token.userRole = (user as any).role;
-        token.username = (user as any).username;
+        token.r = (user as any).role as string | undefined;
+        token.u = (user as any).username as string | undefined;
       }
-      if (account?.provider === "credentials" && !token.sub)
-        token.sub = user?.id;
+      if (account?.provider === "credentials" && !token.sub && user?.id)
+        token.sub = user.id;
       return token;
     },
     async session({ session, token }) {
       if (token.userId && session.user) {
         session.user.id = token.userId as string;
-        session.user.role = (token.userRole ?? "USER") as "USER" | "MODERATOR" | "ADMIN";
-        session.user.username = token.username as string;
-        const fresh = await prisma.user.findUnique({
-          where: { id: token.userId as string },
-          select: {
-            isBanned: true,
-            isSuspended: true,
-            suspensionExpiresAt: true,
-            role: true,
-            username: true,
-            displayName: true,
-            avatarUrl: true,
-          },
-        });
-        if (fresh) {
-          session.user.role = fresh.role;
-          session.user.username = fresh.username;
-          session.user.displayName = fresh.displayName ?? undefined;
-          session.user.image = fresh.avatarUrl ?? undefined;
+        session.user.role = (token.r ?? "USER") as "USER" | "MODERATOR" | "ADMIN";
+        session.user.username = token.u as string | undefined;
+        try {
+          const fresh = await prisma.user.findUnique({
+            where: { id: token.userId as string },
+            select: {
+              isBanned: true,
+              isSuspended: true,
+              suspensionExpiresAt: true,
+              role: true,
+              username: true,
+              displayName: true,
+              avatarUrl: true,
+            },
+          });
+          if (fresh) {
+            session.user.role = fresh.role;
+            session.user.username = fresh.username;
+            session.user.displayName = fresh.displayName ?? undefined;
+            session.user.image = fresh.avatarUrl ?? undefined;
+          }
+        } catch {
         }
       }
       return session;

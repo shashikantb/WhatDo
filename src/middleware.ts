@@ -3,22 +3,104 @@ import { NextRequest, NextResponse } from "next/server";
 export const SESSION_COOKIE_NAME = "authjs.session-token";
 export const SESSION_COOKIE_NAME_CS = "authjs.csrf-token";
 
-function getSessionCookie(req: NextRequest): string | undefined {
-  const c = req.cookies.get(SESSION_COOKIE_NAME)?.value;
-  if (c) return c;
-  return req.cookies.get("__Secure-" + SESSION_COOKIE_NAME)?.value;
+function allSessionCookies(req: NextRequest): { name: string; value: string }[] {
+  const out: { name: string; value: string }[] = [];
+  try {
+    for (const c of req.cookies.getAll()) {
+      if (
+        c.name === SESSION_COOKIE_NAME ||
+        c.name.startsWith(SESSION_COOKIE_NAME + ".") ||
+        c.name === "__Secure-" + SESSION_COOKIE_NAME ||
+        c.name.startsWith("__Secure-" + SESSION_COOKIE_NAME + ".")
+      ) {
+        out.push({ name: c.name, value: c.value });
+      }
+    }
+  } catch {}
+  return out;
+}
+
+function safeB64UrlDecode(s: string): string {
+  s = s.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = s.length % 4;
+  if (pad) s += "=".repeat(4 - pad);
+  if (typeof atob === "function") return atob(s);
+  return Buffer.from(s, "base64").toString("utf8");
+}
+
+function parseJWTPayload(jwt: string): any | null {
+  try {
+    const parts = jwt.split(".");
+    if (parts.length < 2) return null;
+    return JSON.parse(safeB64UrlDecode(parts[1]));
+  } catch {
+    return null;
+  }
+}
+
+function getSessionCookie(req: NextRequest): { name: string; value: string; payload: any } | null {
+  const all = allSessionCookies(req);
+  if (!all.length) return null;
+  let best: { name: string; value: string; payload: any; iat: number } | null = null;
+  for (const c of all) {
+    const p = parseJWTPayload(c.value);
+    if (!p) continue;
+    const iat = Number(p.iat ?? 0);
+    if (!best || iat > best.iat) best = { name: c.name, value: c.value, payload: p, iat };
+  }
+  if (best) return { name: best.name, value: best.value, payload: best.payload };
+  return { name: all[0].name, value: all[0].value, payload: null };
 }
 
 function readSessionRoleFromCookie(req: NextRequest): "ADMIN" | "MODERATOR" | "USER" | null {
-  const raw = getSessionCookie(req);
-  if (!raw) return null;
-  try {
-    const decoded = JSON.parse(raw);
-    const r = decoded?.data?.user?.role ?? decoded?.user?.role;
-    if (r === "ADMIN" || r === "MODERATOR" || r === "USER") return r;
-  } catch {
+  const s = getSessionCookie(req);
+  if (!s) return null;
+  const r = (s.payload?.r ?? s.payload?.userRole ?? s.payload?.data?.user?.role ?? s.payload?.user?.role) as string | undefined;
+  if (r === "ADMIN" || r === "MODERATOR" || r === "USER") return r;
+  return "USER";
+}
+
+function purgeBloatedCookies(res: NextResponse, req: NextRequest) {
+  const secure = process.env.NODE_ENV === "production";
+  const proto = secure ? "https://" : "http://";
+  const host = req.headers.get("x-forwarded-host") || req.nextUrl.host;
+  const domain = (req.headers.get("x-forwarded-host") || req.nextUrl.hostname) || undefined;
+
+  const all = allSessionCookies(req);
+  const keep = getSessionCookie(req);
+
+  for (const c of all) {
+    if (keep && c.name === keep.name) continue;
+    res.cookies.set({
+      name: c.name,
+      value: "",
+      path: "/",
+      httpOnly: true,
+      sameSite: "lax",
+      secure,
+      expires: new Date(0),
+      maxAge: 0,
+      ...(domain && { domain }),
+    } as any);
   }
-  return raw ? "USER" : null;
+
+  for (const c of req.cookies.getAll()) {
+    if (c.name.startsWith("__Secure-authjs.") && c.name !== keep?.name) {
+      if (all.some((s) => s.name === c.name)) continue;
+      res.cookies.set({
+        name: c.name,
+        value: "",
+        path: "/",
+        httpOnly: true,
+        sameSite: "lax",
+        secure: true,
+        expires: new Date(0),
+        maxAge: 0,
+        ...(domain && { domain }),
+      } as any);
+    }
+  }
+  void proto; void host;
 }
 
 export default function middleware(req: NextRequest) {
@@ -39,17 +121,23 @@ export default function middleware(req: NextRequest) {
   if (isAdminRoute && (!isLoggedIn || role !== "ADMIN")) {
     const login = new URL("/login", req.nextUrl);
     login.searchParams.set("callbackUrl", req.nextUrl.pathname + req.nextUrl.search);
-    return NextResponse.redirect(login);
+    const r = NextResponse.redirect(login);
+    purgeBloatedCookies(r, req);
+    return r;
   }
 
   if (isProtectedRoute && !isLoggedIn) {
     const login = new URL("/login", req.nextUrl);
     login.searchParams.set("callbackUrl", req.nextUrl.pathname + req.nextUrl.search);
-    return NextResponse.redirect(login);
+    const r = NextResponse.redirect(login);
+    purgeBloatedCookies(r, req);
+    return r;
   }
 
   if (path === "/login" && isLoggedIn) {
-    return NextResponse.redirect(new URL("/feed", req.nextUrl));
+    const r = NextResponse.redirect(new URL("/feed", req.nextUrl));
+    purgeBloatedCookies(r, req);
+    return r;
   }
 
   const ref = req.nextUrl.searchParams.get("ref");
@@ -65,7 +153,16 @@ export default function middleware(req: NextRequest) {
       maxAge: 30 * 24 * 60 * 60,
       path: "/",
     });
+    purgeBloatedCookies(res, req);
     return res;
+  }
+
+  const allCookies = allSessionCookies(req);
+  const needsPurge = allCookies.length > 1 || allCookies.some((c) => c.value.length > 4200);
+  if (needsPurge) {
+    const r = NextResponse.next();
+    purgeBloatedCookies(r, req);
+    return r;
   }
 
   return NextResponse.next();

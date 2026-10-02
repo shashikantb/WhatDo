@@ -40,7 +40,8 @@ import { useToast } from "@/components/design-system/Toaster";
 function usePersistedWhatdoArgs() {
   const params = useSearchParams();
   const fromQuery = params?.get("id");
-  const [state, setState] = React.useState<{ identityId?: string; sessionId?: string }>({});
+  const [hydrated, setHydrated] = React.useState(false);
+  const [state, setState] = React.useState<{ identityId?: string; sessionId?: string }>({ identityId: fromQuery ?? undefined });
   React.useEffect(() => {
     let identityId: string | undefined = fromQuery ?? undefined;
     let sessionId: string | undefined;
@@ -56,8 +57,9 @@ function usePersistedWhatdoArgs() {
       } catch {}
     }
     setState({ identityId, sessionId });
+    setHydrated(true);
   }, [fromQuery]);
-  return state;
+  return { ...state, hydrated };
 }
 
 export default function WhatDoResultPage() {
@@ -79,15 +81,30 @@ export default function WhatDoResultPage() {
       identityId: persisted.identityId,
       sessionId: persisted.sessionId,
     },
-    { staleTime: 30_000, enabled: !!(persisted.identityId || persisted.sessionId || isLoggedIn) }
+    {
+      staleTime: 30_000,
+      retry: (count, e: any) => count < 4 && e?.data?.code !== "NOT_FOUND",
+      retryDelay: (i) => 250 * (i + 1),
+      enabled: persisted.hydrated && !!(persisted.identityId || persisted.sessionId || (isLoggedIn && (me.data || me.isFetched || !isLoggedIn))),
+    }
   );
-  const me = trpc.auth.me.useQuery(undefined, { staleTime: 60_000, enabled: isLoggedIn });
-  const calc = trpc.whatdo.calculateResult.useMutation();
+  const me = trpc.auth.me.useQuery(undefined, {
+    staleTime: 60_000,
+    enabled: isLoggedIn,
+    retry: (count) => count < 3,
+    retryDelay: (i) => 300 * (i + 1),
+  });
+  const calc = trpc.whatdo.calculateResult.useMutation({ retry: 2, retryDelay: 250 });
   const utils = trpc.useUtils();
-  const genToken = trpc.whatdo.generateShareToken.useMutation();
+  const genToken = trpc.whatdo.generateShareToken.useMutation({ retry: 2, retryDelay: 300 });
   const genPrompt = trpc.whatdo.generateAIPrompt.useQuery(
     { template: (CARD_TEMPLATES[templateIdx] as WhatDoCardTemplate), identityId: identity.data?.id ?? undefined },
-    { enabled: !!identity.data?.id, staleTime: 60_000 }
+    {
+      enabled: !!identity.data?.id,
+      staleTime: 60_000,
+      retry: (count, e: any) => count < 3 && e?.data?.code !== "BAD_REQUEST" && e?.data?.code !== "UNAUTHORIZED",
+      retryDelay: (i) => 350 * (i + 1),
+    }
   );
 
   const trackClick = trpc.whatdo.trackShareClick.useMutation();
@@ -97,7 +114,25 @@ export default function WhatDoResultPage() {
   const id: any = rawIdentity;
 
   React.useEffect(() => {
-    if (!persisted.sessionId || id || identity.isFetching || identity.isLoading) return;
+    if (genPrompt.error) {
+      toast.show(
+        "Couldn't build the AI prompt: " +
+          ((genPrompt.error as any)?.message || (genPrompt.error as any)?.data?.code || "try again in a few seconds"),
+        "danger",
+      );
+    }
+  }, [genPrompt.error, toast]);
+
+  React.useEffect(() => {
+    if (identity.error && (identity.error as any)?.data?.code !== "NOT_FOUND") {
+      const m = (identity.error as any)?.message || "";
+      if (m.toLowerCase().includes("not found") || (identity.error as any)?.data?.code === "NOT_FOUND") return;
+      toast.show("Still loading your WhatDo result… tap Retry below if needed", "info");
+    }
+  }, [identity.error, toast]);
+
+  React.useEffect(() => {
+    if (!persisted.sessionId || id || identity.isFetching || identity.isLoading || !persisted.hydrated) return;
     if (calc.isPending || calc.isSuccess) return;
     const computeSafe = async () => {
       try {
@@ -115,7 +150,7 @@ export default function WhatDoResultPage() {
       }
     };
     void computeSafe();
-  }, [persisted.sessionId, id, identity.isFetching, identity.isLoading, calc.isPending, calc.isSuccess, utils.whatdo.getIdentity]);
+  }, [persisted.sessionId, persisted.hydrated, id, identity.isFetching, identity.isLoading, calc.isPending, calc.isSuccess, utils.whatdo.getIdentity]);
 
   const manualCompute = async () => {
     if (!persisted.sessionId || !isLoggedIn) {
