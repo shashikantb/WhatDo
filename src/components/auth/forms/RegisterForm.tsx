@@ -21,7 +21,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { registerUser } from "@/lib/actions/auth.actions";
-import { cn } from "@/lib/utils";
+import { cn, purgeStaleAuthCookies } from "@/lib/utils";
 import { useToast } from "@/components/design-system/Toaster";
 import { trpc } from "@/lib/trpc/client";
 
@@ -279,6 +279,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
         toast.show("Account created. Sign in to continue.", "info");
       }
       setCreatedSessionRedirect(dest);
+      try { purgeStaleAuthCookies(); } catch {}
       if (onSuccess) onSuccess();
     };
     void doAutoLogin();

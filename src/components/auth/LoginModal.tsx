@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { Modal } from "@/components/design-system/Modal";
 import { LoginForm } from "./forms/LoginForm";
 import { RegisterForm } from "./forms/RegisterForm";
-import { cn } from "@/lib/utils";
+import { cn, purgeStaleAuthCookies } from "@/lib/utils";
 import { trpc } from "@/lib/trpc/client";
 import { useToast } from "@/components/design-system/Toaster";
 
@@ -92,6 +92,7 @@ export const LoginModalProvider: React.FC<LoginModalProviderProps> = ({ children
 
   const handleLoginSuccess = () => {
     const intent = returnIntent;
+    try { purgeStaleAuthCookies(); } catch {}
     setIsOpen(false);
     router.refresh();
     if (intent?.type === "whatdo_reveal") {
@@ -101,6 +102,7 @@ export const LoginModalProvider: React.FC<LoginModalProviderProps> = ({ children
 
   const handleRegisterSuccess = () => {
     const intent = returnIntent;
+    try { purgeStaleAuthCookies(); } catch {}
     setIsOpen(false);
     router.refresh();
     if (intent?.type === "whatdo_reveal") {

@@ -14,7 +14,7 @@ import {
   EyeOff,
   Chrome,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, purgeStaleAuthCookies } from "@/lib/utils";
 
 const loginFormSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -123,8 +123,10 @@ export const LoginForm: React.FC<LoginFormProps> = ({
       }
 
       if (onSuccess) {
+        try { purgeStaleAuthCookies(); } catch {}
         onSuccess();
       } else {
+        try { purgeStaleAuthCookies(); } catch {}
         router.push("/feed");
         router.refresh();
       }
