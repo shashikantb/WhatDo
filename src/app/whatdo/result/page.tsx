@@ -370,9 +370,27 @@ export default function WhatDoResultPage() {
     }
   };
 
+  React.useEffect(() => {
+    if (genPrompt.error) {
+      toast.show(
+        "Couldn't build the AI prompt: " + ((genPrompt.error as any)?.message ?? "Please refresh and try again"),
+        "danger",
+      );
+    }
+  }, [genPrompt.error]);
+
   const copyAIPrompt = async () => {
+    if (genPrompt.error) {
+      toast.show("AI prompt failed to build — refresh the page and try again", "danger");
+      return;
+    }
     if (!genPrompt.data?.prompt) {
-      toast.show("AI prompt still loading — try again in a moment", "info");
+      toast.show(
+        genPrompt.isFetching || genPrompt.isLoading
+          ? "AI prompt still building — try again in 2 seconds"
+          : "AI prompt not ready yet — try refreshing",
+        "info",
+      );
       return;
     }
     safeTrackClick("PROMPT_COPY");
@@ -528,7 +546,7 @@ export default function WhatDoResultPage() {
           onClick={copyAIPrompt}
           disabled={!genPrompt.data?.prompt || shareLoading === "prompt"}
           loading={shareLoading === "prompt"}
-          className="rounded-full border border-white/15 bg-white/[0.03] text-white hover:bg-white/[0.08]"
+          className="rounded-full border border-white/30 bg-white/10 text-white hover:bg-white/20 shadow-lg shadow-black/30 disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {copied === "prompt" ? (
             <>
@@ -544,7 +562,7 @@ export default function WhatDoResultPage() {
           size="md"
           onClick={challengeFriend}
           loading={shareLoading === "challenge"}
-          className="rounded-full border border-white/15 bg-white/[0.03] text-white hover:bg-white/[0.08]"
+          className="rounded-full border border-white/30 bg-white/10 text-white hover:bg-white/20 shadow-lg shadow-black/30"
         >
           <MessageCircle className="h-4 w-4" /> Challenge a friend
         </Button>

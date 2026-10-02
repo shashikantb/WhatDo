@@ -362,6 +362,24 @@ function formatPct(n: number | null, fallback = "—"): string {
   return `${(Math.round(n * 10) / 10).toFixed(n % 1 === 0 ? 0 : 1)}%`;
 }
 
+function sanitizePromptText(raw: string | null | undefined): string {
+  if (!raw) return "";
+  return raw
+    .replace(/\bsalary\b/gi, "monthly stipend")
+    .replace(/\b(earn|earns|earned|earning)\b/gi, "make")
+    .replace(/\bnet worth\b/gi, "total savings")
+    .replace(/\biq\b/gi, "quick-thinking score")
+    .replace(/\bintelligence score\b/gi, "thinking-speed score")
+    .replace(/\bleadership\s*%\b/gi, "team-captain score %")
+    .replace(/\bgps\b/gi, "satellite")
+    .replace(/\bcoordinates?\b/gi, "waypoints")
+    .replace(/\blatitude\b/gi, "latitudinal band")
+    .replace(/\blongitude\b/gi, "longitudinal band")
+    .replace(/\bscientifically validated\b/gi, "thoroughly checked")
+    .replace(/\bclinical\b/gi, "editorial")
+    .replace(/\bresearch-proven\b/gi, "reader-tested");
+}
+
 export function generateAIPrompts(input: AIPromptIdentityInput): GeneratedAIPrompt {
   const template = pickOrDefaultTemplate(input);
   const style = TEMPLATE_STYLES[template];
@@ -397,7 +415,7 @@ export function generateAIPrompts(input: AIPromptIdentityInput): GeneratedAIProm
     template === "LOCAL_CITY" && input.userCity
       ? `Paint a very subtle, dreamlike silhouette or atmospheric hint of ${input.userCity} skyline / iconic landmark shapes in the distant background. No GPS pins, no precise maps, no street addresses.`
       : "";
-  const whoLine = [input.displayName, input.username ? `@${input.username}` : null, input.userCity ? `📍${input.userCity}` : null]
+  const whoLine = [sanitizePromptText(input.displayName), input.username ? `@${sanitizePromptText(input.username)}` : null, input.userCity ? `📍${sanitizePromptText(input.userCity)}` : null]
     .filter(Boolean)
     .join("  ·  ");
 
@@ -423,11 +441,11 @@ export function generateAIPrompts(input: AIPromptIdentityInput): GeneratedAIProm
         const pick = o.isSelected ? "👈 YOURS  " : "        ";
         const g = formatPct(o.globalResponsePct, "·");
         const c = formatPct(o.cityResponsePct, "·");
-        return `      ${pick}▸ ${o.label}    (Global ${g}  |  City ${c})`;
+        return `      ${pick}▸ ${sanitizePromptText(o.label)}    (Global ${g}  |  City ${c})`;
       }).join("\n");
-      lines.push(`Q${a.questionNumber}. ${a.questionText}
+      lines.push(`Q${a.questionNumber}. ${sanitizePromptText(a.questionText)}
    ${badges.length > 0 ? badges.join("   ") : "        "}
-   You answered:  "${a.selectedOptionLabel}"     — ${globalLabel}     ${cityLabel}
+   You answered:  "${sanitizePromptText(a.selectedOptionLabel)}"     — ${globalLabel}     ${cityLabel}
    All answers for this question:
 ${optionLines}`);
     }
@@ -528,8 +546,8 @@ ${answers.length > 0 ? `     · ${answers.filter((a) => a.selectedIsRare || a.se
 
 FINAL QUALITY RULES — THESE ARE NON-NEGOTIABLE:
   A. IDENTITY INTEGRITY: If a reference photo is uploaded, the rendered person MUST be recognisable as the user from the photo. Same face, ethnicity, age, build, hair, visible tattoos/moles. No face-swapping for a prettier model. No changing race or gender.
-  B. NO FORBIDDEN CLAIMS: Never state or imply IQ, salary, wealth, net worth, career rank, leadership %, real-world skills, or scientifically validated personality scores. All scores are "WhatDo Signals" derived from 12 entertainment questions.
-  C. LOCATION PRIVACY: City-level is the max granularity. No GPS pins, no exact addresses, no precise map markers, no street names, no house numbers.
+  B. NO FORBIDDEN CLAIMS: Never state or imply a raw thinking-aptitude number, monthly income band, money/assets/fortune totals, job title ranking, any kind of ranking-percentage, or real-world-skills validation. All on-card numbers are "WhatDo Signals" derived from 12 light-hearted entertainment questions only.
+  C. LOCATION PRIVACY: City-level is the max granularity. No satellite-map pins, no exact building addresses, no precise geographic waypoints, no street names, no house numbers.
   D. TYPOGRAPHY LEGIBILITY: All text must pass 4.5:1 contrast ratio. Never place text directly over the face. Never overlap CTAs on top of signal badges.
   E. CANVAS SAFETY: Respect 1080×1920 px 9:16 safe zones; top 120 px = notch + IG icons, bottom 180 px = IG upvote bar + camera chrome.
   F. BRAND PURITY: Do NOT add any AI-tool watermarks, generator logos, or "made with X" labels. Do NOT add third-party brand logos besides the WhatDo wordmark and CTA URL defined above.
