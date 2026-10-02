@@ -67,9 +67,10 @@ export default function WhatDoResultPage() {
   const isLoggedIn = status === "authenticated";
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const [templateIdx, setTemplateIdx] = React.useState(1);
-  const [copied, setCopied] = React.useState<"link" | "prompt" | null>(null);
+  const [copied, setCopied] = React.useState<"link" | "prompt" | "prompt-long" | null>(null);
   const [shareToken, setShareToken] = React.useState<string | null>(null);
   const [shareLoading, setShareLoading] = React.useState<"share" | "challenge" | "prompt" | null>(null);
+  const [promptTab, setPromptTab] = React.useState<"short" | "long">("short");
   const persisted = usePersistedWhatdoArgs();
   const toast = useToast();
 
@@ -379,6 +380,26 @@ export default function WhatDoResultPage() {
     }
   }, [genPrompt.error]);
 
+  const copyTextFallback = (text: string): boolean => {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.top = "0";
+      ta.style.left = "0";
+      ta.style.opacity = "0";
+      ta.style.pointerEvents = "none";
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, text.length);
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch {
+      return false;
+    }
+  };
+
   const copyAIPrompt = async () => {
     if (genPrompt.error) {
       toast.show("AI prompt failed to build — refresh the page and try again", "danger");
@@ -397,12 +418,22 @@ export default function WhatDoResultPage() {
     safeTrackClick("PROMPT_COPY");
     setShareLoading("prompt");
     try {
-      await navigator.clipboard.writeText(text);
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const ok = copyTextFallback(text);
+        if (!ok) throw new Error("fallback copy failed");
+      }
       setCopied("prompt");
       setTimeout(() => setCopied(null), 1600);
       toast.show("AI IMAGE prompt copied ✓ Paste into ChatGPT / Gemini, then upload your selfie", "success");
     } catch {
-      toast.show("Clipboard blocked — copy the prompt text manually from the card below", "danger");
+      setPromptTab("short");
+      setTimeout(() => {
+        const el = document.querySelector<HTMLTextAreaElement>('textarea[readonly]');
+        if (el) { el.focus(); el.select(); el.scrollIntoView({ behavior: "smooth", block: "center" }); }
+      }, 60);
+      toast.show("Clipboard permission blocked · text auto-selected below → press ⌘C (Mac) or Ctrl+C", "info");
     } finally {
       setShareLoading(null);
     }
@@ -414,10 +445,22 @@ export default function WhatDoResultPage() {
       return;
     }
     try {
-      await navigator.clipboard.writeText(genPrompt.data.prompt);
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(genPrompt.data.prompt);
+      } else {
+        const ok = copyTextFallback(genPrompt.data.prompt);
+        if (!ok) throw new Error("fallback copy failed");
+      }
+      setCopied("prompt-long");
+      setTimeout(() => setCopied(null), 1600);
       toast.show("Full analysis prompt copied (answers + caption + breakdown) ✓", "success");
     } catch {
-      toast.show("Clipboard blocked", "danger");
+      setPromptTab("long");
+      setTimeout(() => {
+        const el = document.querySelector<HTMLTextAreaElement>('textarea[readonly]');
+        if (el) { el.focus(); el.select(); el.scrollIntoView({ behavior: "smooth", block: "center" }); }
+      }, 60);
+      toast.show("Clipboard blocked · Full breakdown auto-selected below → press ⌘C (Mac) or Ctrl+C", "info");
     }
   };
 
@@ -639,16 +682,65 @@ export default function WhatDoResultPage() {
         </section>
       )}
 
-      {genPrompt.data?.prompt && (
+      {(genPrompt.data?.shortPrompt || genPrompt.data?.prompt) && (
         <section className="rounded-3xl bg-white/5 border border-white/10 p-5 space-y-3">
-          <p className="text-xs font-bold uppercase tracking-widest text-white/70">
-            AI image prompt
-          </p>
-          <p className="text-[12.5px] leading-relaxed text-white/85 whitespace-pre-wrap">
-            {genPrompt.data.prompt}
-          </p>
-          <p className="text-[11px] text-amber-200/80 font-semibold">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-1 rounded-full bg-black/20 p-1 border border-white/10">
+              <button
+                type="button"
+                onClick={() => setPromptTab("short")}
+                className={`rounded-full px-3 py-1 text-[11.5px] font-black transition-all ${
+                  promptTab === "short"
+                    ? "bg-gradient-to-r from-fuchsia-500 to-indigo-500 text-white shadow-md shadow-fuchsia-900/40"
+                    : "text-white/65 hover:text-white"
+                }`}
+              >
+                ✏️ AI IMAGE PROMPT · {(genPrompt.data?.shortPrompt?.length ?? 0) < 1000 ? (genPrompt.data?.shortPrompt?.length ?? 0) : (genPrompt.data?.shortPrompt?.length ?? 0)} chars
+              </button>
+              <button
+                type="button"
+                onClick={() => setPromptTab("long")}
+                className={`rounded-full px-3 py-1 text-[11.5px] font-black transition-all ${
+                  promptTab === "long"
+                    ? "bg-white/15 text-white"
+                    : "text-white/65 hover:text-white"
+                }`}
+              >
+                📋 FULL BREAKDOWN + Answers · {(genPrompt.data?.prompt?.length ?? 0)} chars
+              </button>
+            </div>
+            <div className="flex items-center gap-1">
+              {promptTab === "short" ? (
+                <button
+                  type="button"
+                  onClick={copyAIPrompt}
+                  className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-white/20"
+                >
+                  {copied === "prompt" ? <><Check className="h-3 w-3 inline mr-1 text-emerald-300" /> Copied</> : <><Copy className="h-3 w-3 inline mr-1" /> Copy short</>}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={copyAIPromptLong}
+                  className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-white/20"
+                >
+                  {copied === "prompt-long" ? <><Check className="h-3 w-3 inline mr-1 text-emerald-300" /> Copied</> : <><Copy className="h-3 w-3 inline mr-1" /> Copy full</>}
+                </button>
+              )}
+            </div>
+          </div>
+          <textarea
+            readOnly
+            rows={promptTab === "short" ? 18 : 28}
+            spellCheck={false}
+            className="w-full rounded-2xl border border-white/10 bg-black/30 p-4 text-[12.5px] leading-relaxed text-white/90 font-mono resize-y focus:outline-none focus:ring-2 focus:ring-fuchsia-400/40 selection:bg-fuchsia-500/30"
+            value={promptTab === "short" ? (genPrompt.data.shortPrompt || genPrompt.data.prompt || "") : (genPrompt.data.prompt || "")}
+            onFocus={(e) => e.currentTarget.select()}
+          />
+          <p className="text-[11px] text-amber-200/80 font-semibold leading-snug">
             {genPrompt.data.validated ? "Validated: Yes · WhatDo checks for forbidden claims." : "Validated: Review before use."}
+            {" · "}
+            To use: paste into ChatGPT / Gemini / Ideogram <u>as plain text</u> (not as a .txt attachment), then upload your selfie in the same message and hit Send.
           </p>
         </section>
       )}
