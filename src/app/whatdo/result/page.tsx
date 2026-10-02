@@ -24,6 +24,7 @@ import {
   Copy,
   Download,
   Eye,
+  ImageIcon,
   Lock,
   MessageCircle,
   Share2,
@@ -33,6 +34,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useLoginModal } from "@/components/auth/LoginModal";
 import { ProgressBar } from "@/components/design-system/ProgressBar";
+import { loadAvatarImage } from "@/lib/whatdo/share-canvas";
 
 function usePersistedWhatdoArgs() {
   const params = useSearchParams();
@@ -75,6 +77,7 @@ export default function WhatDoResultPage() {
     },
     { staleTime: 30_000, enabled: !!(persisted.identityId || persisted.sessionId || isLoggedIn) }
   );
+  const me = trpc.auth.me.useQuery(undefined, { staleTime: 60_000, enabled: isLoggedIn });
   const calc = trpc.whatdo.calculateResult.useMutation();
   const utils = trpc.useUtils();
   const genToken = trpc.whatdo.generateShareToken.useMutation();
@@ -138,8 +141,9 @@ export default function WhatDoResultPage() {
   };
   const snapshot: ShareCardResultSnapshot | null = id
     ? {
-        displayName: user?.displayName ?? user?.name ?? null,
-        username: user?.username ?? null,
+        displayName: (me.data?.displayName ?? user?.displayName ?? user?.name ?? null) as any,
+        username: (me.data?.username ?? user?.username ?? null) as any,
+        avatarUrl: (me.data?.avatarUrl ?? user?.avatarUrl ?? user?.image ?? null) as any,
         archetype: id.whatdoType as any,
         agreementPct: id.agreementPct ?? null,
         rarityPct: id.rarityPct ?? null,
@@ -161,6 +165,21 @@ export default function WhatDoResultPage() {
       }
     : null;
 
+  const [avatarImg, setAvatarImg] = React.useState<HTMLImageElement | null>(null);
+  React.useEffect(() => {
+    let cancelled = false;
+    const src = snapshot?.avatarUrl ?? null;
+    setAvatarImg(null);
+    if (!src) return;
+    void (async () => {
+      const img = await loadAvatarImage(src);
+      if (!cancelled) setAvatarImg(img);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [snapshot?.avatarUrl]);
+
   React.useEffect(() => {
     if (isLoggedIn && id && !shareToken && !genToken.isPending) {
       const p = genToken.mutateAsync({});
@@ -178,8 +197,8 @@ export default function WhatDoResultPage() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const tpl = CARD_TEMPLATES[templateIdx] as WhatDoCardTemplate;
-    drawShareCard(ctx, tpl, { ...snapshot, shareToken });
-  }, [snapshot, templateIdx, shareToken]);
+    drawShareCard(ctx, tpl, { ...snapshot, shareToken }, { avatarImg });
+  }, [snapshot, templateIdx, shareToken, avatarImg]);
 
   if (identity.isFetching && !identity.data) {
     return (

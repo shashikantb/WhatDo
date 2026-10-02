@@ -14,6 +14,7 @@ export const CARD_H = 1920;
 type ResultSnapshot = {
   displayName: string | null;
   username: string | null;
+  avatarUrl: string | null;
   archetype: WhatDoArchetype;
   agreementPct: number | null;
   rarityPct: number | null;
@@ -27,6 +28,91 @@ type ResultSnapshot = {
   shareToken: string | null;
   identityId: string;
 };
+
+export function getInitials(displayName: string | null, username: string | null): string {
+  const name = (displayName ?? username ?? "W").trim();
+  if (!name) return "W";
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return (parts[0]?.[0] ?? "").toUpperCase() + (parts[parts.length - 1]?.[0] ?? "").toUpperCase();
+  }
+  const single = parts[0] ?? name;
+  if (!single) return "W";
+  return single.length > 1 ? (single[0]! + single[1]!).toUpperCase() : single.toUpperCase() + "•";
+}
+
+export function loadAvatarImage(src: string | null | undefined): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    if (!src) return resolve(null);
+    try {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.referrerPolicy = "no-referrer";
+      img.decoding = "async";
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = src;
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+function drawCircularProfile(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  radius: number,
+  img: HTMLImageElement | null,
+  initials: string,
+  col: { ring: string; ringInner: string; accent: string; pillText: string },
+) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius + 14, 0, Math.PI * 2);
+  ctx.fillStyle = col.ring;
+  ctx.fill();
+  ctx.closePath();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius + 6, 0, Math.PI * 2);
+  ctx.fillStyle = col.ringInner;
+  ctx.fill();
+  ctx.closePath();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.save();
+  ctx.clip();
+  if (img) {
+    const scale = Math.max(radius * 2 / img.width, radius * 2 / img.height);
+    const drawW = img.width * scale;
+    const drawH = img.height * scale;
+    const dx = cx - drawW / 2;
+    const dy = cy - drawH / 2;
+    ctx.drawImage(img, dx, dy, drawW, drawH);
+  } else {
+    const grad = ctx.createLinearGradient(cx - radius, cy - radius, cx + radius, cy + radius);
+    grad.addColorStop(0, col.accent);
+    grad.addColorStop(1, col.pillText);
+    ctx.fillStyle = grad;
+    ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
+    ctx.fillStyle = "rgba(255,255,255,0.98)";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `900 ${Math.round(radius * 1.02)}px 'Space Grotesk', system-ui, sans-serif`;
+    ctx.fillText(initials.slice(0, 2), cx, cy + 4);
+  }
+  ctx.restore();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "rgba(255,255,255,0.22)";
+  ctx.stroke();
+  ctx.restore();
+}
 
 function loadGoogleFont(ctx: CanvasRenderingContext2D) {
   try {
@@ -267,6 +353,7 @@ export function drawShareCard(
   ctx: CanvasRenderingContext2D,
   template: WhatDoCardTemplate,
   opts: ResultSnapshot,
+  extra?: { avatarImg?: HTMLImageElement | null },
 ) {
   loadGoogleFont(ctx);
   const w = CARD_W;
@@ -282,44 +369,80 @@ export function drawShareCard(
   ctx.save();
   ctx.font = "900 40px 'Space Grotesk', system-ui, sans-serif";
   ctx.fillStyle = col.brand;
-  ctx.fillText("WHATDO", 90, 160);
+  ctx.fillText("WHATDO", 90, 130);
   ctx.font = "600 26px 'Space Grotesk', system-ui, sans-serif";
   ctx.fillStyle = col.secondary;
-  ctx.fillText("My WhatDo · Identity Card", 90, 200);
+  ctx.fillText("My WhatDo · Identity Card", 90, 170);
+  ctx.restore();
 
-  if (opts.displayName || opts.username) {
-    ctx.font = "600 32px 'Space Grotesk', system-ui, sans-serif";
-    ctx.fillStyle = col.secondary;
-    ctx.textAlign = "right";
-    ctx.fillText(
-      `@${opts.username ?? opts.displayName ?? "friend"}`,
-      w - 90,
-      170,
-    );
-    ctx.textAlign = "left";
+  const avatarCol = {
+    ring: "rgba(255,255,255,0.32)",
+    ringInner:
+      template === "COLORFUL" || template === "MINIMAL"
+        ? "rgba(15,23,42,0.05)"
+        : "rgba(255,255,255,0.16)",
+    accent: col.accent,
+    pillText: col.pillText,
+  };
+  const avatarCx = 90 + 118;
+  const avatarCy = 300;
+  const avatarRadius = 118;
+  const initials = getInitials(opts.displayName, opts.username);
+  drawCircularProfile(ctx, avatarCx, avatarCy, avatarRadius, extra?.avatarImg ?? null, initials, avatarCol);
+
+  // User info (to the right of the avatar) — displayName first, @username below
+  ctx.save();
+  const infoX = avatarCx + avatarRadius + 50;
+  const nameTop = avatarCy - 38;
+  const nameStr = opts.displayName?.trim() ? opts.displayName.trim() : "WhatDo Friend";
+  ctx.fillStyle = col.primary;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  ctx.font = "900 64px 'Space Grotesk', system-ui, sans-serif";
+  const displayLines = wrapText(ctx, nameStr, w - infoX - 60, 2);
+  for (let i = 0; i < displayLines.length; i++) {
+    ctx.fillText(displayLines[i] ?? "", infoX, nameTop + i * 70);
   }
+  ctx.fillStyle = col.secondary;
+  ctx.font = "600 34px 'Space Grotesk', system-ui, sans-serif";
+  const handleLineY = nameTop + Math.min(displayLines.length, 2) * 70 + 16;
+  ctx.fillText(`@${opts.username?.trim() || "friend"}`, infoX, handleLineY);
+
+  ctx.font = "500 26px 'Space Grotesk', system-ui, sans-serif";
+  ctx.fillStyle = col.secondary;
+  ctx.globalAlpha = 0.7;
+  ctx.fillText("answered " + String(opts.totalQuestions) + " WhatDo questions", infoX, handleLineY + 52);
+  ctx.globalAlpha = 1;
+
+  // Small @username top-right corner reference keeps the existing symmetry
+  ctx.font = "600 30px 'Space Grotesk', system-ui, sans-serif";
+  ctx.fillStyle = col.secondary;
+  ctx.textAlign = "right";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText(`@${opts.username?.trim() || "friend"}`, w - 90, 130);
   ctx.restore();
 
   // Archetype pill
   ctx.save();
-  drawRoundedRect(ctx, 90, 300, 280, 78, 36);
+  const pillY = avatarCy + avatarRadius + 70;
+  drawRoundedRect(ctx, 90, pillY, 280, 78, 36);
   ctx.fillStyle = col.pill;
   ctx.fill();
   ctx.font = "800 34px 'Space Grotesk', system-ui, sans-serif";
   ctx.fillStyle = col.pillText;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(`${emoji}  WHATDO TYPE`, 90 + 140, 300 + 39);
+  ctx.fillText(`${emoji}  WHATDO TYPE`, 90 + 140, pillY + 39);
   ctx.restore();
 
-  // Big label
+  // Big label (shifted down since avatar takes the top 220+ px now)
   ctx.save();
   ctx.font = "900 104px 'Space Grotesk', system-ui, sans-serif";
   ctx.fillStyle = col.primary;
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
   const labelLines = wrapText(ctx, label, w - 180, 3);
-  let yy = 460;
+  let yy = pillY + 170;
   for (const ln of labelLines) {
     ctx.fillText(ln, 90, yy);
     yy += 112;
