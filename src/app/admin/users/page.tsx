@@ -96,6 +96,17 @@ export default function AdminUsersPage() {
     },
   });
 
+  const roleMut = trpc.admin.usersUpdateRole.useMutation({
+    onSuccess: (data) => {
+      void utils.admin.usersList.invalidate();
+      show(`Role updated to ${data.role}`, "success");
+      setRowMenu(null);
+    },
+    onError: (err) => {
+      show(`Role update failed: ${err.message}`, "danger");
+    },
+  });
+
   const handleVerify = (u: any) => setConfirmAction({ user: u, action: "VERIFY" });
   const handleRestore = (u: any) => setConfirmAction({ user: u, action: "RESTORE" });
 
@@ -436,6 +447,45 @@ export default function AdminUsersPage() {
                                   >
                                     <Undo2 className="h-4 w-4" />
                                     Restore user
+                                  </button>
+                                )}
+                                {!isSelf && u.role !== "MODERATOR" && (
+                                  <button
+                                    type="button"
+                                    disabled={roleMut.isPending}
+                                    onClick={() => {
+                                      roleMut.mutate({ id: u.id, role: "MODERATOR" });
+                                    }}
+                                    className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm hover:bg-info/10 text-info disabled:opacity-50"
+                                  >
+                                    <Crown className="h-4 w-4" />
+                                    Promote → Moderator
+                                  </button>
+                                )}
+                                {!isSelf && u.role !== "ADMIN" && (
+                                  <button
+                                    type="button"
+                                    disabled={roleMut.isPending}
+                                    onClick={() => {
+                                      roleMut.mutate({ id: u.id, role: "ADMIN" });
+                                    }}
+                                    className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm hover:bg-danger/10 text-danger disabled:opacity-50"
+                                  >
+                                    <Shield className="h-4 w-4" />
+                                    Promote → Administrator
+                                  </button>
+                                )}
+                                {!isSelf && u.role !== "USER" && (
+                                  <button
+                                    type="button"
+                                    disabled={roleMut.isPending}
+                                    onClick={() => {
+                                      roleMut.mutate({ id: u.id, role: "USER" });
+                                    }}
+                                    className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
+                                  >
+                                    <UsersIcon className="h-4 w-4" />
+                                    Demote → Regular user
                                   </button>
                                 )}
                               </div>

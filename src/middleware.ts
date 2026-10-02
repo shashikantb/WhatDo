@@ -118,7 +118,7 @@ export default function middleware(req: NextRequest) {
 
   const isAdminRoute = path.startsWith("/admin");
 
-  if (isAdminRoute && (!isLoggedIn || role !== "ADMIN")) {
+  if (isAdminRoute && !isLoggedIn) {
     const login = new URL("/login", req.nextUrl);
     login.searchParams.set("callbackUrl", req.nextUrl.pathname + req.nextUrl.search);
     const r = NextResponse.redirect(login);

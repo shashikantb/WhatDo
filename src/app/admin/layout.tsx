@@ -19,6 +19,7 @@ import {
   Shield,
   Home,
   AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/design-system/Card";
@@ -46,8 +47,9 @@ export default function AdminLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { data: session } = useSession();
+  const { data: session, status, update: updateSession } = useSession();
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  const [refreshing, setRefreshing] = React.useState(false);
 
   const userRole = session?.user?.role;
   const isAuthorized = userRole === "ADMIN" || userRole === "MODERATOR";
@@ -78,7 +80,18 @@ export default function AdminLayout({
     return crumbs;
   }, [pathname]);
 
-  if (!isAuthorized) {
+  if (!isAuthorized && status !== "loading") {
+    const isAuthed = !!session?.user?.id;
+    const handleRefreshRole = async () => {
+      try {
+        setRefreshing(true);
+        await updateSession({} as any);
+        router.refresh();
+        setTimeout(() => window.location.reload(), 300);
+      } finally {
+        setRefreshing(false);
+      }
+    };
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
@@ -88,10 +101,23 @@ export default function AdminLayout({
             </div>
             <CardTitle className="text-xl">403 — Not Authorized</CardTitle>
             <p className="text-sm text-muted-foreground mt-2">
-              You must be an Administrator or Moderator to access this area.
+              {isAuthed
+                ? "This account does not have Administrator or Moderator permissions. If you were just promoted, refresh your session to sync your new role."
+                : "You must be an Administrator or Moderator to access this area."}
             </p>
+            {isAuthed && session?.user?.role && (
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-bold pt-3">
+                Current role: <span className="text-foreground">{session.user.role}</span>
+              </p>
+            )}
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
+            {isAuthed && (
+              <Button variant="outline" loading={refreshing} onClick={() => void handleRefreshRole()} fullWidth>
+                <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
+                Refresh role & retry
+              </Button>
+            )}
             <Button onClick={() => router.push("/feed")} fullWidth>
               <Home className="h-4 w-4 mr-2" />
               Back to feed
