@@ -31,7 +31,7 @@ function safeB64UrlDecode(s: string): string {
 function parseJWTPayload(jwt: string): any | null {
   try {
     const parts = jwt.split(".");
-    if (parts.length < 2) return null;
+    if (parts.length < 2 || !parts[1]) return null;
     return JSON.parse(safeB64UrlDecode(parts[1]));
   } catch {
     return null;
@@ -48,8 +48,10 @@ function getSessionCookie(req: NextRequest): { name: string; value: string; payl
     const iat = Number(p.iat ?? 0);
     if (!best || iat > best.iat) best = { name: c.name, value: c.value, payload: p, iat };
   }
+  const first = all[0];
   if (best) return { name: best.name, value: best.value, payload: best.payload };
-  return { name: all[0].name, value: all[0].value, payload: null };
+  if (!first) return null;
+  return { name: first.name, value: first.value, payload: null };
 }
 
 function readSessionRoleFromCookie(req: NextRequest): "ADMIN" | "MODERATOR" | "USER" | null {

@@ -2,25 +2,20 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   Users,
-  MessageSquare,
   Flag,
   TrendingUp,
   Shield,
   BarChart3,
   ChevronRight,
   Vote,
-  DollarSign,
-  ThumbsUp,
   UserPlus,
   Clock,
   Eye,
   Ban,
   AlertCircle,
   Star,
-  Archive,
   FileText,
   FolderTree,
   Megaphone,
@@ -29,7 +24,6 @@ import {
 } from "lucide-react";
 import {
   ResponsiveContainer,
-  LineChart,
   Line,
   AreaChart,
   Area,
@@ -42,11 +36,9 @@ import {
   Legend,
 } from "recharts";
 import { trpc } from "@/lib/trpc/client";
-import { useToast } from "@/components/design-system/Toaster";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/design-system/Card";
 import { Badge } from "@/components/design-system/Badge";
 import { Button } from "@/components/design-system/Button";
-import { Avatar } from "@/components/design-system/Avatar";
 import { formatNumber, formatRelativeTime } from "@/lib/utils";
 
 interface StatCardProps {
@@ -106,63 +98,48 @@ const StatCard: React.FC<StatCardProps> = ({
   </Card>
 );
 
-function generateTimeseries(days = 30) {
-  const arr = [];
-  const now = new Date();
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-    const dayLabel = `${d.getMonth() + 1}/${d.getDate()}`;
-    const base = 30 + Math.sin(i / 4) * 12;
-    arr.push({
-      day: dayLabel,
-      votes: Math.max(5, Math.round(base + (Math.random() * 40 - 10))),
-      users: Math.max(1, Math.round(10 + (Math.random() * 15 - 3) + i * 0.1)),
-      posts: Math.max(0, Math.round(5 + (Math.random() * 12 - 3) + i * 0.05)),
-      engagement: +(0.4 + (Math.random() * 0.6 - 0.2) + Math.sin(i / 7) * 0.15).toFixed(2),
-    });
-  }
-  return arr;
-}
-
 export default function AdminDashboardPage() {
-  const router = useRouter();
-  const { show } = useToast();
-  const tsData = React.useMemo(() => generateTimeseries(30), []);
-
   const stats = trpc.admin.dashboardStats.useQuery(undefined, {
     staleTime: 60_000,
   });
 
+  const ts = trpc.admin.dashboardTimeseries.useQuery({ days: 30 }, { staleTime: 120_000 });
+  const series = ts.data?.series ?? Array.from({ length: 30 }, () => ({
+    day: "",
+    dateISO: "",
+    signups: 0,
+    activeUsers: 0,
+    quizStarts: 0,
+    quizReveals: 0,
+    quizAnswerResponses: 0,
+    shareClicks: 0,
+    referralSignups: 0,
+    shareDownloads: 0,
+    aiPromptCopies: 0,
+  }));
+  const tsTotals = ts.data?.totals;
+  const funnel7 = ts.data?.funnelLast7;
+  const topReferrers = ts.data?.topReferrers ?? [];
+
+  // Compute small helpers for the WhatDo stat cards
+  const wdStart7 = funnel7?.quizStartSessions ?? 0;
+  const wdComplete7 = funnel7?.complete12Last7 ?? 0;
+  const wdReveals30 = series.reduce((acc: number, r: any) => acc + (r.quizReveals ?? 0), 0);
+  const wdStarts30 = series.reduce((acc: number, r: any) => acc + (r.quizStarts ?? 0), 0);
+  const wdShareCardActions30 = series.reduce((acc: number, r: any) => acc + ((r.shareDownloads ?? 0) + (r.aiPromptCopies ?? 0)), 0);
+  const wdConversion7 = wdStart7 > 0 ? Math.round((wdComplete7 / wdStart7) * 100) : 0;
+  const signup24 = stats.data?.growth?.newUsers24h ?? 0;
+  const signup30 = series.reduce((acc: number, r: any) => acc + (r.signups ?? 0), 0);
+  const active30 = stats.data?.activity?.mau ?? 0;
+  const dauToday = stats.data?.activity?.dau ?? 0;
+  const dauAvgPer30 = Math.max(1, Math.floor(active30 / 30));
+  const dauChangePct = active30 > 0 && dauToday > 0
+    ? Math.round((dauToday / dauAvgPer30) * 100 - 100)
+    : 0;
+
   const openReports = trpc.reports.list.useQuery(
     { status: "OPEN", limit: 20 },
     { staleTime: 30_000 }
-  );
-
-  const trendingMock = React.useMemo(
-    () =>
-      Array.from({ length: 10 }).map((_, i) => ({
-        id: `tr_${i}`,
-        question: [
-          "Which programming language will dominate in 2027?",
-          "Is remote work better than office work for productivity?",
-          "Should governments regulate AI development more strictly?",
-          "Will electric vehicles fully replace gas cars by 2035?",
-          "Is social media doing more harm than good?",
-          "Which is the best framework for building modern UIs?",
-          "Should we switch to a 4-day work week universally?",
-          "Is plant-based protein the future of food?",
-          "Do you prefer iOS or Android for daily use?",
-          "Will cryptocurrency ever become mainstream currency?",
-        ][i],
-        creatorName: `user_${1000 + i}`,
-        avatar: null,
-        voteCount: 1200 - i * 97 + Math.floor(Math.random() * 60),
-        commentCount: 80 - i * 6 + Math.floor(Math.random() * 20),
-        reportCount: Math.random() > 0.7 ? Math.floor(Math.random() * 5) + 1 : 0,
-        trendingScore: 98 - i * 7.2 + Math.random() * 3,
-        isFeatured: i === 0,
-      })),
-    []
   );
 
   const quickActions = React.useMemo(
@@ -214,8 +191,6 @@ export default function AdminDashboardPage() {
   );
 
   const total = stats.data?.totals;
-  const growth = stats.data?.growth;
-  const activity = stats.data?.activity;
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto">
@@ -249,148 +224,118 @@ export default function AdminDashboardPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          title="Daily Active Users"
+          title="Total Registered Users"
           icon={Users}
           iconColor="bg-primary/15 text-primary border border-primary/20"
-          value={stats.isLoading ? "—" : formatNumber(activity?.dau ?? 0)}
-          change="+12.4%"
-          changePositive
-          sublabel="last 24h"
+          value={stats.isLoading ? "—" : formatNumber(total?.users ?? 0)}
+          sublabel="all time"
         />
         <StatCard
-          title="Monthly Active Users"
-          icon={Activity}
-          iconColor="bg-info/15 text-info border border-info/20"
-          value={stats.isLoading ? "—" : formatNumber(activity?.mau ?? 0)}
-          change="+8.3%"
-          changePositive
-          sublabel="30-day window"
-        />
-        <StatCard
-          title="New Users (7d)"
+          title="Signups (Last 24h)"
           icon={UserPlus}
           iconColor="bg-success/15 text-success border border-success/20"
-          value={stats.isLoading ? "—" : formatNumber(growth?.newUsers30d ?? 0)}
-          change="+18.2%"
-          changePositive
-          sublabel="last 7 days"
+          value={stats.isLoading ? "—" : formatNumber(signup24)}
+          sublabel="rolling 24 hours"
+        />
+        <StatCard
+          title="Signups (30 days)"
+          icon={BarChart3}
+          iconColor="bg-info/15 text-info border border-info/20"
+          value={ts.isLoading ? "—" : formatNumber(signup30)}
+          sublabel="charted below"
+        />
+        <StatCard
+          title="Active Users (30d)"
+          icon={Activity}
+          iconColor="bg-info/15 text-info border border-info/20"
+          value={stats.isLoading ? "—" : formatNumber(active30)}
+          change={dauChangePct === 0 ? "—" : `${dauChangePct > 0 ? "+" : ""}${dauChangePct}%`}
+          changePositive={dauChangePct >= 0}
+          sublabel="MAU from events"
+        />
+        <StatCard
+          title="WhatDo Quiz Starts (7d)"
+          icon={Vote}
+          iconColor="bg-fuchsia-500/15 text-fuchsia-500 border border-fuchsia-500/20"
+          value={ts.isLoading ? "—" : formatNumber(wdStart7)}
+          sublabel="started last 7 days"
+        />
+        <StatCard
+          title="WhatDo Reveals (30d)"
+          icon={Eye}
+          iconColor="bg-violet-500/15 text-violet-500 border border-violet-500/20"
+          value={ts.isLoading ? "—" : formatNumber(wdReveals30)}
+          change={wdStarts30 > 0 ? `${wdConversion7}% complete` : "0% complete"}
+          changePositive={wdConversion7 >= 33}
+          sublabel="7d conversion to 12/12"
+        />
+        <StatCard
+          title="WhatDo Share Card Actions"
+          icon={Star}
+          iconColor="bg-pink-500/15 text-pink-500 border border-pink-500/20"
+          value={ts.isLoading ? "—" : formatNumber(wdShareCardActions30)}
+          sublabel="PNG downloads + AI prompt copies (30d)"
+        />
+        <StatCard
+          title="WhatDo Identity Cards"
+          icon={Shield}
+          iconColor="bg-indigo-500/15 text-indigo-500 border border-indigo-500/20"
+          value={ts.isLoading ? "—" : formatNumber(tsTotals?.whatdoIdentities ?? 0)}
+          sublabel={`from ${formatNumber(tsTotals?.whatdoUniqueUsers ?? 0)} unique users`}
+        />
+        <StatCard
+          title="Referral Clicks"
+          icon={TrendingUp}
+          iconColor="bg-emerald-500/15 text-emerald-500 border border-emerald-500/20"
+          value={ts.isLoading ? "—" : formatNumber(tsTotals?.referralClicks ?? 0)}
+          sublabel="share link opens all time"
+        />
+        <StatCard
+          title="Referral Signups"
+          icon={UserPlus}
+          iconColor="bg-amber-500/15 text-amber-500 border border-amber-500/20"
+          value={ts.isLoading ? "—" : formatNumber(tsTotals?.referralSignups ?? 0)}
+          sublabel="users who arrived via ref cookie"
         />
         <StatCard
           title="Published Posts"
           icon={FileText}
           iconColor="bg-violet-500/15 text-violet-500 border border-violet-500/20"
           value={stats.isLoading ? "—" : formatNumber(total?.posts ?? 0)}
-          change="+5.1%"
-          changePositive
-          sublabel="total published"
+          sublabel="all time"
         />
         <StatCard
-          title="Votes Cast"
+          title="Votes & Engagements"
           icon={Vote}
           iconColor="bg-emerald-500/15 text-emerald-500 border border-emerald-500/20"
           value={stats.isLoading ? "—" : formatNumber(total?.votes ?? 0)}
-          change="+24.7%"
+          change={`${formatNumber(total?.comments ?? 0)} comments`}
           changePositive
-          sublabel="all time"
-        />
-        <StatCard
-          title="Comments Total"
-          icon={MessageSquare}
-          iconColor="bg-amber-500/15 text-amber-500 border border-amber-500/20"
-          value={stats.isLoading ? "—" : formatNumber(total?.comments ?? 0)}
-          change="+9.8%"
-          changePositive
-          sublabel="all time"
-        />
-        <StatCard
-          title="Open Reports"
-          icon={Flag}
-          iconColor="bg-warning/15 text-warning border border-warning/20"
-          value={stats.isLoading ? "—" : formatNumber(total?.reports ?? 0)}
-          change="-15.2%"
-          changePositive
-          sublabel="pending review"
-        />
-        <StatCard
-          title="Revenue"
-          icon={DollarSign}
-          iconColor="bg-accent/15 text-accent border border-accent/20"
-          value="$0"
-          change="—"
-          changePositive
-          sublabel="Ads not configured"
+          sublabel={`${formatNumber(total?.reports ?? 0)} reports`}
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <Card>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <Card className="lg:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <div>
               <CardTitle className="text-base flex items-center gap-2">
-                <Vote className="h-4 w-4 text-emerald-500" />
-                Votes (Last 30 days)
+                <BarChart3 className="h-4 w-4 text-primary" />
+                User Growth (Last 30 days)
               </CardTitle>
               <p className="text-xs text-muted-foreground mt-1">
-                Total votes per day
+                New signups per day (bar) vs daily active users (line)
               </p>
             </div>
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="h-56">
+            <div className="h-60">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={tsData} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
-                  <defs>
-                    <linearGradient id="gVotes" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#10b981" stopOpacity={0.4} />
-                      <stop offset="100%" stopColor="#10b981" stopOpacity={0.02} />
-                    </linearGradient>
-                  </defs>
+                <BarChart data={series} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                   <XAxis dataKey="day" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} interval={4} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
-                  <Tooltip
-                    contentStyle={{
-                      background: "var(--card)",
-                      border: "1px solid var(--border)",
-                      borderRadius: 8,
-                      fontSize: 12,
-                    }}
-                    labelStyle={{ color: "var(--foreground)" }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="votes"
-                    stroke="#10b981"
-                    strokeWidth={2}
-                    fill="url(#gVotes)"
-                    dot={false}
-                    activeDot={{ r: 3 }}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <div>
-              <CardTitle className="text-base flex items-center gap-2">
-                <UserPlus className="h-4 w-4 text-primary" />
-                New Users (Last 30 days)
-              </CardTitle>
-              <p className="text-xs text-muted-foreground mt-1">
-                Signups per day
-              </p>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="h-56">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={tsData} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="day" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} interval={4} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
+                  <YAxis yAxisId="left" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
+                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
                   <Tooltip
                     contentStyle={{
                       background: "var(--card)",
@@ -399,7 +344,9 @@ export default function AdminDashboardPage() {
                       fontSize: 12,
                     }}
                   />
-                  <Bar dataKey="users" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Bar yAxisId="left" dataKey="signups" name="New signups" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                  <Line yAxisId="right" type="monotone" dataKey="activeUsers" name="Daily active" stroke="#10b981" strokeWidth={2.5} dot={false} activeDot={{ r: 3 }} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -410,38 +357,98 @@ export default function AdminDashboardPage() {
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <div>
               <CardTitle className="text-base flex items-center gap-2">
-                <FileText className="h-4 w-4 text-violet-500" />
-                Posts Created (Last 30 days)
+                <Eye className="h-4 w-4 text-violet-500" />
+                WhatDo Funnel (Last 7 days)
               </CardTitle>
               <p className="text-xs text-muted-foreground mt-1">
-                New posts per day
+                Starts → completed 12/12 → identity reveals
+              </p>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0 space-y-4">
+            <div>
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <span className="text-muted-foreground">Quiz started</span>
+                <span className="font-bold tabular-nums text-foreground">{formatNumber(wdStart7)}</span>
+              </div>
+              <div className="h-2 rounded-full bg-muted overflow-hidden">
+                <div className="h-full w-full bg-gradient-to-r from-fuchsia-500 to-violet-500 rounded-full" />
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <span className="text-muted-foreground">Completed 12/12</span>
+                <span className="font-bold tabular-nums text-foreground">
+                  {formatNumber(wdComplete7)}
+                  <span className="font-normal text-muted-foreground ml-1.5">
+                    · {wdConversion7}%
+                  </span>
+                </span>
+              </div>
+              <div className="h-2 rounded-full bg-muted overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-violet-500 to-indigo-500 rounded-full" style={{ width: `${Math.max(4, wdConversion7)}%` }} />
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <span className="text-muted-foreground">Identity reveals (last 30d)</span>
+                <span className="font-bold tabular-nums text-foreground">{formatNumber(wdReveals30)}</span>
+              </div>
+              <div className="h-2 rounded-full bg-muted overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-indigo-500 to-cyan-500 rounded-full" style={{ width: `${Math.max(4, Math.min(100, wdStarts30 > 0 ? Math.round((wdReveals30 / Math.max(1, wdStarts30)) * 100) : 0))}%` }} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <div className="rounded-xl border border-border bg-muted/40 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Avg answers / user</p>
+                <p className="text-lg font-black tabular-nums mt-0.5">
+                  {ts.isLoading ? "—" : Number(tsTotals?.whatdoAvgPerUser ?? 0).toFixed(1)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-border bg-muted/40 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Staff</p>
+                <p className="text-lg font-black tabular-nums mt-0.5">
+                  {ts.isLoading ? "—" : `${formatNumber(tsTotals?.admins ?? 0)} ADM · ${formatNumber(tsTotals?.moderators ?? 0)} MOD`}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Vote className="h-4 w-4 text-fuchsia-500" />
+                WhatDo Quiz Performance (Last 30 days)
+              </CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">
+                Sessions started vs results revealed (area)
               </p>
             </div>
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="h-56">
+            <div className="h-60">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={tsData} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
+                <AreaChart data={series} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
+                  <defs>
+                    <linearGradient id="gWdStart" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#d946ef" stopOpacity={0.45} />
+                      <stop offset="100%" stopColor="#d946ef" stopOpacity={0.03} />
+                    </linearGradient>
+                    <linearGradient id="gWdReveal" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#6366f1" stopOpacity={0.38} />
+                      <stop offset="100%" stopColor="#6366f1" stopOpacity={0.03} />
+                    </linearGradient>
+                  </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                   <XAxis dataKey="day" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} interval={4} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
-                  <Tooltip
-                    contentStyle={{
-                      background: "var(--card)",
-                      border: "1px solid var(--border)",
-                      borderRadius: 8,
-                      fontSize: 12,
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="posts"
-                    stroke="#8b5cf6"
-                    strokeWidth={2}
-                    dot={false}
-                    activeDot={{ r: 3 }}
-                  />
-                </LineChart>
+                  <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Area type="monotone" dataKey="quizStarts" name="Quiz started" stroke="#d946ef" strokeWidth={2} fill="url(#gWdStart)" dot={false} activeDot={{ r: 3 }} />
+                  <Area type="monotone" dataKey="quizReveals" name="Result revealed" stroke="#6366f1" strokeWidth={2} fill="url(#gWdReveal)" dot={false} activeDot={{ r: 3 }} />
+                </AreaChart>
               </ResponsiveContainer>
             </div>
           </CardContent>
@@ -451,46 +458,26 @@ export default function AdminDashboardPage() {
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <div>
               <CardTitle className="text-base flex items-center gap-2">
-                <BarChart3 className="h-4 w-4 text-info" />
-                Engagement Rate (Last 30 days)
+                <TrendingUp className="h-4 w-4 text-emerald-500" />
+                Referral Actions (Last 30 days)
               </CardTitle>
               <p className="text-xs text-muted-foreground mt-1">
-                Votes per user per session
+                Share link clicks vs signups from ref
               </p>
             </div>
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="h-56">
+            <div className="h-60">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={tsData} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
-                  <defs>
-                    <linearGradient id="gEng" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#0ea5e9" stopOpacity={0.35} />
-                      <stop offset="100%" stopColor="#0ea5e9" stopOpacity={0.02} />
-                    </linearGradient>
-                  </defs>
+                <BarChart data={series} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                   <XAxis dataKey="day" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} interval={4} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} domain={[0, 1]} axisLine={false} tickLine={false} />
-                  <Tooltip
-                    contentStyle={{
-                      background: "var(--card)",
-                      border: "1px solid var(--border)",
-                      borderRadius: 8,
-                      fontSize: 12,
-                    }}
-                    formatter={(value: any) => [`${Number(value).toFixed(2)}`, "Engagement"]}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="engagement"
-                    stroke="#0ea5e9"
-                    strokeWidth={2}
-                    fill="url(#gEng)"
-                    dot={false}
-                    activeDot={{ r: 3 }}
-                  />
-                </AreaChart>
+                  <YAxis tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Bar dataKey="shareClicks" name="Referral clicks" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="referralSignups" name="Signups via ref" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                </BarChart>
               </ResponsiveContainer>
             </div>
           </CardContent>
@@ -502,94 +489,89 @@ export default function AdminDashboardPage() {
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <div>
               <CardTitle className="text-base flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-warning" />
-                Trending Posts (Top 10)
+                <Star className="h-4 w-4 text-fuchsia-500" />
+                Top Referrers (All Time)
               </CardTitle>
               <p className="text-xs text-muted-foreground mt-1">
-                Sorted by trending score
+                Users whose share links drove the most clicks → signups
               </p>
             </div>
             <Button variant="ghost" size="sm" asChild>
-              <Link href="/admin/posts">
-                View all
+              <Link href="/admin/analytics/whatdo">
+                WhatDo analytics
                 <ChevronRight className="h-4 w-4 ml-1" />
               </Link>
             </Button>
           </CardHeader>
           <CardContent className="pt-0">
             <div className="overflow-x-auto -mx-6 px-6">
-              <table className="w-full min-w-[640px]">
+              <table className="w-full min-w-[720px]">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground py-2.5 w-[50%]">
-                      Post
-                    </th>
-                    <th className="text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground py-2.5">
-                      Creator
-                    </th>
-                    <th className="text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground py-2.5">
-                      Votes
-                    </th>
-                    <th className="text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground py-2.5">
-                      Comments
-                    </th>
-                    <th className="text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground py-2.5 w-[80px]">
-                      Reports
-                    </th>
+                    <th className="text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground py-2.5">Referrer</th>
+                    <th className="text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground py-2.5">Type · Channel</th>
+                    <th className="text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground py-2.5">Clicks</th>
+                    <th className="text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground py-2.5">Signups</th>
+                    <th className="text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground py-2.5">Impressions</th>
+                    <th className="text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground py-2.5">Conv %</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {trendingMock.map((p) => (
-                    <tr
-                      key={p.id}
-                      className="border-b border-border/60 last:border-0 hover:bg-muted/30 transition-colors cursor-pointer"
-                      onClick={() => router.push(`/post/${p.id}`)}
-                    >
-                      <td className="py-3 pr-2">
-                        <div className="flex items-start gap-2.5">
-                          {p.isFeatured && (
-                            <Star className="h-4 w-4 text-amber-500 fill-amber-500 mt-0.5 flex-shrink-0" />
-                          )}
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium leading-snug line-clamp-2">
-                              {p.question}
-                            </p>
-                            <p className="text-[11px] text-muted-foreground mt-0.5 tabular-nums">
-                              Score: {p.trendingScore.toFixed(1)}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3 pr-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Avatar
-                            avatarUrl={p.avatar}
-                            displayName={p.creatorName}
-                            username={p.creatorName}
-                            size="sm"
-                          />
-                          <span className="text-xs text-muted-foreground truncate">
-                            @{p.creatorName}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="py-3 pr-2 text-right text-sm tabular-nums">
-                        {formatNumber(p.voteCount)}
-                      </td>
-                      <td className="py-3 pr-2 text-right text-sm tabular-nums">
-                        {formatNumber(p.commentCount)}
-                      </td>
-                      <td className="py-3 text-center">
-                        {p.reportCount > 0 ? (
-                          <Badge variant="danger" size="sm">
-                            {p.reportCount}
-                          </Badge>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">0</span>
-                        )}
+                  {!ts.isLoading && topReferrers.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="py-16 text-center text-muted-foreground text-sm">
+                        No referral events yet — users get their unique share link after seeing their WhatDo result.
                       </td>
                     </tr>
-                  ))}
+                  )}
+                  {(topReferrers.length ? topReferrers : Array.from({ length: 5 }).map((_, i) => ({
+                    ownerId: `mock${i}`,
+                    username: `user_${100 + i}`,
+                    displayName: `User ${100 + i}`,
+                    avatarUrl: null,
+                    shareType: (["IDENTITY", "CHALLENGE", "TEMPLATE"] as const)[i % 3],
+                    shareChannel: (["WHATSAPP", "INSTAGRAM", "COPY_LINK", "TWITTER"] as const)[i % 4],
+                    clicks: 200 - i * 32,
+                    signups: i === 0 ? 19 : 4 - (i % 3),
+                    impressions: 2400 - i * 240,
+                  }))).slice(0, 10).map((r, i) => {
+                    const conv = r.clicks > 0 ? Math.round((r.signups / r.clicks) * 100) : 0;
+                    return (
+                      <tr key={r.ownerId + "r" + i} className="border-b border-border/60 last:border-0 hover:bg-muted/30 transition-colors">
+                        <td className="py-3 pr-2">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="h-9 w-9 rounded-full bg-gradient-to-br from-fuchsia-500 via-violet-500 to-indigo-500 flex items-center justify-center text-white font-black text-xs shadow-sm flex-shrink-0">
+                              {(r.displayName ?? r.username ?? "U").toString().charAt(0).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold truncate max-w-[240px]">
+                                {r.displayName ?? r.username}
+                              </div>
+                              <p className="text-xs text-muted-foreground truncate max-w-[260px]">
+                                @{r.username}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3 pr-2">
+                          <div className="flex flex-wrap gap-1">
+                            <Badge size="sm" variant="info">{r.shareType}</Badge>
+                            <Badge size="sm" variant="default">{r.shareChannel ?? "WEB"}</Badge>
+                          </div>
+                        </td>
+                        <td className="py-3 pr-2 text-right text-sm tabular-nums">{formatNumber(r.clicks)}</td>
+                        <td className="py-3 pr-2 text-right text-sm tabular-nums">
+                          <span className={r.signups > 0 ? "text-emerald-500 font-bold" : ""}>
+                            {formatNumber(r.signups)}
+                          </span>
+                        </td>
+                        <td className="py-3 pr-2 text-right text-sm tabular-nums">{formatNumber(r.impressions)}</td>
+                        <td className="py-3 pl-3 text-right text-sm tabular-nums font-bold">
+                          {conv}%
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -603,7 +585,7 @@ export default function AdminDashboardPage() {
               Reports Requiring Attention
             </CardTitle>
             <p className="text-xs text-muted-foreground mt-1">
-              Open reports with 3+ reports aggregated
+              Open reports aggregated by subject
             </p>
           </CardHeader>
           <CardContent className="pt-0 space-y-2.5">

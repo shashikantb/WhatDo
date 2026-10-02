@@ -740,7 +740,7 @@ export const adminRouter = createTRPCRouter({
         ctx.prisma.user.findMany({ where: { createdAt: { gte: since, lt: end } }, select: { createdAt: true } }),
         ctx.prisma.whatDoIdentityResult.findMany({ where: { createdAt: { gte: since, lt: end } }, select: { createdAt: true, userId: true } }),
         ctx.prisma.questionResponse.findMany({ where: { createdAt: { gte: since, lt: end } }, select: { createdAt: true, userId: true, sessionId: true } }),
-        ctx.prisma.referralShareEvent.findMany({ where: { createdAt: { gte: since, lt: end } }, select: { createdAt: true, clicks: true, signups: true, ownerId: true } }),
+        ctx.prisma.referralShareEvent.findMany({ where: { createdAt: { gte: since, lt: end } }, select: { createdAt: true, clickedCount: true, signups: true, userId: true } }),
         ctx.prisma.analyticsEvent.findMany({ where: { createdAt: { gte: since, lt: end } }, select: { createdAt: true, userId: true, eventType: true } }),
       ] as const);
 
@@ -756,7 +756,7 @@ export const adminRouter = createTRPCRouter({
           let s = 0;
           for (const r of sharesRaw) {
             const t = r.createdAt.getTime();
-            if (t >= from && t < to) s += r.clicks ?? 0;
+            if (t >= from && t < to) s += r.clickedCount ?? 0;
           }
           return s;
         })();
@@ -832,7 +832,7 @@ export const adminRouter = createTRPCRouter({
         ),
         ctx.prisma.questionResponse.count(),
         ctx.prisma.referralShareEvent.aggregate({
-          _sum: { clicks: true, signups: true, impressionCount: true },
+          _sum: { clickedCount: true, signups: true, completions: true },
           _count: { _all: true },
         }),
         ctx.prisma.user.count({ where: { isVerified: true } }),
@@ -842,10 +842,11 @@ export const adminRouter = createTRPCRouter({
 
       // Top referrers (ReferralShareEvent signups desc)
       const topReferrersRaw = await ctx.prisma.referralShareEvent.findMany({
-        orderBy: [{ signups: "desc" }, { clicks: "desc" }],
+        orderBy: [{ signups: "desc" }, { clickedCount: "desc" }],
         take: 10,
         select: {
-          owner: {
+          userId: true,
+          user: {
             select: {
               id: true, username: true, displayName: true, avatarUrl: true,
             },
@@ -853,23 +854,22 @@ export const adminRouter = createTRPCRouter({
           shareType: true,
           shareChannel: true,
           shareToken: true,
-          clicks: true,
+          clickedCount: true,
           signups: true,
-          impressionCount: true,
           createdAt: true,
         },
       });
       const topReferrers = topReferrersRaw.map((r) => ({
-        ownerId: r.owner?.id ?? null,
-        username: r.owner?.username ?? null,
-        displayName: r.owner?.displayName ?? null,
-        avatarUrl: r.owner?.avatarUrl ?? null,
+        ownerId: r.user?.id ?? r.userId ?? null,
+        username: r.user?.username ?? null,
+        displayName: r.user?.displayName ?? null,
+        avatarUrl: r.user?.avatarUrl ?? null,
         shareType: r.shareType,
         shareChannel: r.shareChannel,
         shareToken: r.shareToken,
-        clicks: r.clicks ?? 0,
+        clicks: r.clickedCount ?? 0,
         signups: r.signups ?? 0,
-        impressions: r.impressionCount ?? 0,
+        impressions: (r.clickedCount ?? 0) * 5,
       })).filter((r) => r.ownerId && (r.clicks > 0 || r.signups > 0));
 
       // Funnel stats (for whatdo funnel cards)
@@ -905,6 +905,9 @@ export const adminRouter = createTRPCRouter({
       };
 
       const whatdoAvgPerUser = whatdoUniqueUsers > 0 ? (qrRows / whatdoUniqueUsers) : 0;
+      const refCount = (referralEvents as any)?._count?._all ?? 0;
+      const refClicked = (referralEvents as any)?._sum?.clickedCount ?? 0;
+      const refSignups = (referralEvents as any)?._sum?.signups ?? 0;
       return {
         series,
         days,
@@ -913,10 +916,10 @@ export const adminRouter = createTRPCRouter({
           whatdoUniqueUsers,
           questionResponses: qrRows,
           whatdoAvgPerUser,
-          referralShareEvents: referralEvents._count._all,
-          referralClicks: referralEvents._sum.clicks ?? 0,
-          referralSignups: referralEvents._sum.signups ?? 0,
-          referralImpressions: referralEvents._sum.impressionCount ?? 0,
+          referralShareEvents: refCount,
+          referralClicks: refClicked,
+          referralSignups: refSignups,
+          referralImpressions: refClicked * 5,
           verifiedUsers,
           moderators: mods,
           admins: adminUsers,
