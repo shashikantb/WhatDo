@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useFormState, useFormStatus } from "react-dom";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import {
   Mail,
   Lock,
@@ -14,9 +15,15 @@ import {
   Eye,
   EyeOff,
   Chrome,
+  Upload,
+  X,
+  ImageIcon,
+  Loader2,
 } from "lucide-react";
 import { registerUser } from "@/lib/actions/auth.actions";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/components/design-system/Toaster";
+import { trpc } from "@/lib/trpc/client";
 
 const registerFormSchema = z
   .object({
@@ -46,12 +53,52 @@ const registerFormSchema = z
 
 type RegisterFormValues = z.infer<typeof registerFormSchema>;
 
+async function compressImageToMaxBytes(
+  file: File,
+  opts: { maxSide?: number; maxBytes?: number; mime?: string; quality?: number } = {}
+): Promise<{ blob: Blob; dataUrl: string }> {
+  const { maxSide = 512, maxBytes = 256 * 1024, mime = "image/jpeg", quality = 0.86 } = opts;
+  const bitmap = await (globalThis as any).createImageBitmap(file);
+  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+  const dw = Math.round(bitmap.width * scale);
+  const dh = Math.round(bitmap.height * scale);
+  const canvas = document.createElement("canvas");
+  canvas.width = dw;
+  canvas.height = dh;
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(bitmap, 0, 0, dw, dh);
+  let q = quality;
+  let bestBlob: Blob | null = null;
+  while (q >= 0.4) {
+    const blob: Blob | null = await new Promise((resolve) =>
+      canvas.toBlob((b) => resolve(b), mime, q),
+    );
+    if (blob) {
+      bestBlob = blob;
+      if (blob.size <= maxBytes) break;
+    }
+    q -= 0.08;
+  }
+  if (!bestBlob) {
+    throw new Error("Could not compress the image.");
+  }
+  const reader = new FileReader();
+  const dataUrlP = new Promise<string>((resolve, reject) => {
+    reader.onerror = () => reject(reader.error);
+    reader.onload = () => resolve(String(reader.result));
+  });
+  reader.readAsDataURL(bestBlob);
+  return { blob: bestBlob, dataUrl: await dataUrlP };
+}
+
 function SubmitButton({
   children,
   variant = "primary",
+  disabled,
 }: {
   children: React.ReactNode;
   variant?: "primary" | "secondary";
+  disabled?: boolean;
 }) {
   const { pending } = useFormStatus();
   const baseStyles =
@@ -65,30 +112,11 @@ function SubmitButton({
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={pending || disabled}
       className={`${baseStyles} ${variants[variant]}`}
     >
       {pending && (
-        <svg
-          className="animate-spin h-4 w-4"
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-        >
-          <circle
-            className="opacity-25"
-            cx="12"
-            cy="12"
-            r="10"
-            stroke="currentColor"
-            strokeWidth="4"
-          ></circle>
-          <path
-            className="opacity-75"
-            fill="currentColor"
-            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-          ></path>
-        </svg>
+        <Loader2 className="h-4 w-4 animate-spin" />
       )}
       {children}
     </button>
@@ -100,6 +128,9 @@ export interface RegisterFormProps {
   onSuccess?: () => void;
   isModal?: boolean;
   className?: string;
+  postRegisterRedirect?: string;
+  defaultTab?: "login" | "register";
+  onSwitchTab?: (tab: "login" | "register") => void;
 }
 
 export const RegisterForm: React.FC<RegisterFormProps> = ({
@@ -107,8 +138,21 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
   onSuccess,
   isModal = false,
   className,
+  postRegisterRedirect,
 }) => {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState<boolean>(false);
+  const [avatarStage, setAvatarStage] = useState<string>("");
+  const [createdSessionRedirect, setCreatedSessionRedirect] = useState<string | null>(null);
+  const toast = useToast();
+  const presignAvatar = trpc.media.requestPresignedUpload.useMutation();
+  const confirmAvatar = trpc.media.confirmUpload.useMutation();
+  const { data: session } = useSession();
+  const isLoggedIn = !!session?.user;
+
   const [registerState, registerAction] = useFormState(registerUser, {
     success: false,
     message: "",
@@ -118,6 +162,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<RegisterFormValues>({
     resolver: zodResolver(registerFormSchema),
@@ -130,6 +175,76 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
     },
   });
 
+  const emailVal = watch("email");
+  const passwordVal = watch("password");
+
+  const onAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.show("Please pick an image file (PNG, JPG, or WebP)", "danger");
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      toast.show("Photo must be smaller than 8 MB", "danger");
+      return;
+    }
+    setAvatarUploading(true);
+    setAvatarStage("Compressing…");
+    try {
+      const { blob, dataUrl } = await compressImageToMaxBytes(file, {
+        maxSide: 512,
+        maxBytes: 256 * 1024,
+        mime: "image/jpeg",
+        quality: 0.86,
+      });
+      setAvatarPreview(dataUrl);
+      let finalUrl: string | null = null;
+      if (isLoggedIn) {
+        setAvatarStage("Preparing upload…");
+        const ps = await presignAvatar.mutateAsync({
+          type: "image",
+          contentType: "image/jpeg",
+          fileSize: blob.size,
+          fileName: `avatar-${Date.now()}.jpg`,
+        });
+        setAvatarStage("Uploading…");
+        const putRes = await fetch(ps.uploadUrl, {
+          method: "PUT",
+          body: blob,
+          headers: { "Content-Type": "image/jpeg" },
+        });
+        if (!putRes.ok) throw new Error("Upload failed");
+        try {
+          await confirmAvatar.mutateAsync({ fileKey: ps.fileKey });
+        } catch {}
+        finalUrl = ps.publicUrl;
+      } else {
+        if (blob.size > 128 * 1024) {
+          const smaller = await compressImageToMaxBytes(file, {
+            maxSide: 384,
+            maxBytes: 128 * 1024,
+            mime: "image/jpeg",
+            quality: 0.72,
+          });
+          finalUrl = smaller.dataUrl;
+          setAvatarPreview(smaller.dataUrl);
+        } else {
+          finalUrl = dataUrl;
+        }
+      }
+      setAvatarUrl(finalUrl);
+      toast.show("Profile photo added to your WhatDo card ✓", "success");
+    } catch (err: any) {
+      toast.show(err?.message || "Couldn't prepare your photo — try a smaller file", "danger");
+      setAvatarPreview(null);
+      setAvatarUrl(null);
+    } finally {
+      setAvatarUploading(false);
+      setAvatarStage("");
+    }
+  };
+
   const onSubmit = (data: RegisterFormValues) => {
     const formData = new FormData();
     formData.append("username", data.username);
@@ -137,20 +252,79 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
     formData.append("email", data.email);
     formData.append("password", data.password);
     formData.append("confirmPassword", data.confirmPassword);
+    if (avatarUrl) formData.append("avatarUrl", avatarUrl);
     (registerAction as any)(formData);
   };
 
-  if (registerState.success && onSuccess) {
-    onSuccess();
+  if (registerState.success && !createdSessionRedirect) {
+    const doAutoLogin = async () => {
+      const dest =
+        postRegisterRedirect || (registerState as any).redirectTo || "/onboarding";
+      if (emailVal && passwordVal) {
+        try {
+          const r = await signIn("credentials", {
+            email: emailVal,
+            password: passwordVal,
+            redirect: false,
+          });
+          if (r?.ok) {
+            toast.show("Welcome to WhatDo! 🎉 Your account is ready.", "success", 3500);
+          } else {
+            toast.show("Account created — please sign in to continue.", "info");
+          }
+        } catch {
+          toast.show("Account created — please sign in to continue.", "info");
+        }
+      } else {
+        toast.show("Account created. Sign in to continue.", "info");
+      }
+      setCreatedSessionRedirect(dest);
+      if (onSuccess) onSuccess();
+    };
+    void doAutoLogin();
+  }
+
+  useEffect(() => {
+    if (!createdSessionRedirect) return;
+    const id = window.setTimeout(() => {
+      router.push(createdSessionRedirect);
+      router.refresh();
+    }, 650);
+    return () => window.clearTimeout(id);
+  }, [createdSessionRedirect, router]);
+
+  if (createdSessionRedirect) {
+    return (
+      <div className="space-y-4 text-center py-4">
+        <div className="mx-auto h-14 w-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-500/30 animate-[pulse_1.6s_ease-in-out_infinite]">
+          <svg viewBox="0 0 24 24" fill="none" className="h-7 w-7 text-white">
+            <path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+        <div>
+          <p className="text-lg font-black text-white">You&apos;re in!</p>
+          <p className="text-sm text-slate-400 mt-1">
+            Taking you to {createdSessionRedirect === "/onboarding" ? "onboarding" : "your result"}…
+          </p>
+        </div>
+      </div>
+    );
   }
 
   const handleOAuthDefault = async (provider: string) => {
     if (onOAuthClick) {
       onOAuthClick(provider);
     } else {
-      await signIn(provider, { callbackUrl: "/onboarding" });
+      await signIn(provider, { callbackUrl: postRegisterRedirect || "/onboarding" });
     }
   };
+
+  const changeLabel =
+    avatarUploading && avatarStage
+      ? avatarStage
+      : avatarPreview
+      ? "Change"
+      : "Upload photo";
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className={cn("space-y-4", className)}>
@@ -168,6 +342,58 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
           )}
         </div>
       )}
+
+      <label className="block">
+        <span className="block text-sm font-medium text-slate-300 mb-2">
+          Profile photo <span className="text-slate-500 font-normal">· appears on your WhatDo share card</span>
+        </span>
+        <div className="flex items-center gap-4 rounded-2xl border border-dashed border-slate-700 bg-slate-800/30 p-3">
+          <div className={cn(
+            "shrink-0 h-16 w-16 rounded-2xl overflow-hidden flex items-center justify-center bg-slate-800 border border-slate-700",
+            !avatarPreview && "text-slate-500"
+          )}>
+            {avatarPreview ? (
+              <img src={avatarPreview} alt="avatar preview" className="h-full w-full object-cover" />
+            ) : (
+              <ImageIcon className="h-7 w-7" />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-slate-400">
+              {avatarPreview ? "Looks great! This will show on your result card PNG after you sign up." : "Optional but recommended — your face makes share cards way more personal."}
+            </p>
+            <div className="mt-2 flex items-center gap-2">
+              <label className={cn(
+                "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors",
+                "bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-100",
+                avatarUploading && "opacity-60 cursor-not-allowed"
+              )}>
+                {avatarUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                {changeLabel}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={onAvatarFile}
+                  disabled={avatarUploading}
+                />
+              </label>
+              {avatarPreview && !avatarUploading && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAvatarPreview(null);
+                    setAvatarUrl(null);
+                  }}
+                  className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-slate-400 hover:text-slate-200 border border-slate-700 hover:border-slate-600 bg-slate-800/40"
+                >
+                  <X className="h-3 w-3" /> Remove
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </label>
 
       <div className={cn("grid gap-4", isModal ? "grid-cols-1" : "grid-cols-2")}>
         <div>
@@ -284,7 +510,9 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
         </div>
       </div>
 
-      <SubmitButton>Create Account</SubmitButton>
+      <SubmitButton disabled={avatarUploading}>
+        {avatarUploading ? "Finishing photo…" : "Create Account"}
+      </SubmitButton>
 
       <div className="relative my-6">
         <div className="absolute inset-0 flex items-center">

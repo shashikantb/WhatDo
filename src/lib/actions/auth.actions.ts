@@ -38,6 +38,7 @@ export async function registerUser(prevState: any, formData: FormData) {
     displayName: formData.get("displayName") as string,
     email: formData.get("email") as string,
     password: formData.get("password") as string,
+    avatarUrl: (formData.get("avatarUrl") as string) || undefined,
   };
 
   const validated = registerSchema.safeParse(rawData);
@@ -52,6 +53,7 @@ export async function registerUser(prevState: any, formData: FormData) {
   }
 
   const { username, displayName, email, password } = validated.data;
+  const avatarUrl = rawData.avatarUrl;
 
   const emailAvailable = await validateUniqueEmail(email);
   const usernameAvailable = await validateUniqueUsername(username);
@@ -64,26 +66,58 @@ export async function registerUser(prevState: any, formData: FormData) {
     return { success: false, message: "Validation failed", issues };
   }
 
+  let createdId: string | null = null;
   try {
     const passwordHash = await hashPassword(password);
 
-    await prisma.user.create({
+    const created = await prisma.user.create({
       data: {
         email: email.toLowerCase(),
         username,
         displayName,
         passwordHash,
+        avatarUrl: avatarUrl || undefined,
         role: Role.USER,
         preferences: {
           create: {},
         },
       },
+      select: { id: true, email: true, username: true, displayName: true, avatarUrl: true },
     });
+    createdId = created.id;
+
+    const refToken = readRefCookie();
+    if (refToken && typeof refToken === "string" && refToken.length > 0) {
+      try {
+        const ref = await prisma.referralShareEvent.findFirst({
+          where: { shareToken: refToken },
+          select: { id: true, userId: true, signups: true },
+        });
+        if (ref && ref.userId !== created.id) {
+          await prisma.referralShareEvent.update({
+            where: { id: ref.id },
+            data: {
+              signups: (ref.signups ?? 0) + 1,
+            },
+          }).catch(() => {});
+        }
+      } catch {}
+    }
+
+    return { success: true, user: created, redirectTo: "/onboarding" };
   } catch (error) {
     return { success: false, message: "Failed to create account" };
   }
+}
 
-  redirect("/onboarding");
+function readRefCookie(): string | null {
+  try {
+    const { cookies } = require("next/headers") as typeof import("next/headers");
+    const store = cookies();
+    return store.get("whatdo_ref")?.value ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function loginUserAction(_prev: any, formData: FormData) {

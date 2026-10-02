@@ -35,6 +35,7 @@ import { cn } from "@/lib/utils";
 import { useLoginModal } from "@/components/auth/LoginModal";
 import { ProgressBar } from "@/components/design-system/ProgressBar";
 import { loadAvatarImage } from "@/lib/whatdo/share-canvas";
+import { useToast } from "@/components/design-system/Toaster";
 
 function usePersistedWhatdoArgs() {
   const params = useSearchParams();
@@ -68,7 +69,9 @@ export default function WhatDoResultPage() {
   const [templateIdx, setTemplateIdx] = React.useState(1);
   const [copied, setCopied] = React.useState<"link" | "prompt" | null>(null);
   const [shareToken, setShareToken] = React.useState<string | null>(null);
+  const [shareLoading, setShareLoading] = React.useState<"share" | "challenge" | "prompt" | null>(null);
   const persisted = usePersistedWhatdoArgs();
+  const toast = useToast();
 
   const identity = trpc.whatdo.getIdentity.useQuery(
     {
@@ -307,59 +310,119 @@ export default function WhatDoResultPage() {
     }, 500);
   };
 
+  const buildSharePNG = async (): Promise<File | null> => {
+    const c = canvasRef.current;
+    if (!c) return null;
+    const blob = await new Promise<Blob | null>((resolve) =>
+      c.toBlob((b) => resolve(b), "image/png"),
+    );
+    if (!blob) return null;
+    const name = `my-whatdo-${(CARD_TEMPLATES[templateIdx] ?? "MINIMAL").toLowerCase()}.png`;
+    return new File([blob], name, { type: "image/png" });
+  };
+
+  const copyPngToClipboard = async (file: File): Promise<boolean> => {
+    try {
+      if (!(navigator as any).clipboard || !(window as any).isSecureContext) return false;
+      const ClipboardItemCtor = (window as any).ClipboardItem;
+      if (!ClipboardItemCtor) return false;
+      await (navigator as any).clipboard.write([new ClipboardItemCtor({ [file.type]: file })]);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const shareNative = async () => {
     safeTrackClick("CLICK");
-    const c = canvasRef.current;
-    const files: File[] = [];
-    if (c) {
-      const blob = await new Promise<Blob | null>((resolve) =>
-        c.toBlob((b) => resolve(b), "image/png"),
-      );
-      if (blob) {
-        files.push(
-          new File([blob], `my-whatdo-${CARD_TEMPLATES[templateIdx] ?? "MINIMAL"}.png`, {
-            type: "image/png",
-          }),
-        );
-      }
-    }
-    const anyNav = navigator as any;
-    if (anyNav.share && anyNav.canShare && files.length > 0) {
-      try {
-        await anyNav.share({ title: "My WhatDo Type", text: shareText, files, url: shareUrl });
+    setShareLoading("share");
+    try {
+      const file = await buildSharePNG();
+      const files = file ? [file] : [];
+      const anyNav = navigator as any;
+      const sharePayload: any = { title: "My WhatDo Type", text: shareText, url: shareUrl };
+      if (files.length > 0 && anyNav.canShare && anyNav.canShare({ ...sharePayload, files })) {
+        await anyNav.share({ ...sharePayload, files });
+        toast.show("Shared your WhatDo card ✓", "success");
         return;
-      } catch {
       }
-    }
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(`${shareText}\n${shareUrl}`);
-      setCopied("link");
-      setTimeout(() => setCopied(null), 1400);
-      return;
+      if (anyNav.share) {
+        try {
+          await anyNav.share(sharePayload);
+          toast.show("Shared your WhatDo link ✓", "success");
+          return;
+        } catch {}
+      }
+      let pngCopied = false;
+      if (file) pngCopied = await copyPngToClipboard(file);
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(`${shareText}\n${shareUrl}`);
+        setCopied("link");
+        setTimeout(() => setCopied(null), 1600);
+        toast.show(pngCopied ? "PNG + link copied. Paste to WhatsApp/Instagram ✓" : "Link copied — paste to WhatsApp/Instagram and attach the downloaded PNG", pngCopied ? "success" : "info");
+        return;
+      }
+      toast.show("Download the PNG and share manually — clipboard unavailable", "info");
+    } catch (e: any) {
+      toast.show(e?.message || "Share didn't complete — try Download PNG", "danger");
+    } finally {
+      setShareLoading(null);
     }
   };
 
   const copyAIPrompt = async () => {
-    if (!genPrompt.data?.prompt) return;
+    if (!genPrompt.data?.prompt) {
+      toast.show("AI prompt still loading — try again in a moment", "info");
+      return;
+    }
     safeTrackClick("PROMPT_COPY");
-    await navigator.clipboard.writeText(genPrompt.data.prompt);
-    setCopied("prompt");
-    setTimeout(() => setCopied(null), 1400);
+    setShareLoading("prompt");
+    try {
+      await navigator.clipboard.writeText(genPrompt.data.prompt);
+      setCopied("prompt");
+      setTimeout(() => setCopied(null), 1600);
+      toast.show("AI prompt copied to clipboard ✓", "success");
+    } catch {
+      toast.show("Clipboard blocked — copy the prompt text manually from the card below", "danger");
+    } finally {
+      setShareLoading(null);
+    }
   };
 
   const challengeFriend = async () => {
     safeTrackClick("CHALLENGE");
-    const t = `Challenge accepted? 🎯 I just got "${arch?.label ?? "My WhatDo Type"}.\nTake the 2-min quiz and compare → ${shareUrl}`;
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: "Challenge your WhatDo", text: t, url: shareUrl });
+    setShareLoading("challenge");
+    try {
+      const file = await buildSharePNG();
+      const t = `Challenge accepted? 🎯 I just got "${arch?.label ?? "My WhatDo Type"}".\nTake the 2-min quiz and compare → ${shareUrl}`;
+      const anyNav = navigator as any;
+      const sharePayload = { title: "Challenge your WhatDo", text: t, url: shareUrl };
+      if (file && anyNav.canShare && anyNav.canShare({ ...sharePayload, files: [file] })) {
+        await anyNav.share({ ...sharePayload, files: [file] });
+        toast.show("Challenge sent with your WhatDo card ✓", "success");
         return;
-      } catch {}
-    }
-    if (navigator.clipboard) {
-      await navigator.clipboard.writeText(t);
-      setCopied("link");
-      setTimeout(() => setCopied(null), 1400);
+      }
+      if (anyNav.share) {
+        try {
+          await anyNav.share(sharePayload);
+          toast.show("Challenge shared ✓", "success");
+          return;
+        } catch {}
+      }
+      let pngCopied = false;
+      if (file) pngCopied = await copyPngToClipboard(file);
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(t);
+        setCopied("link");
+        setTimeout(() => setCopied(null), 1600);
+        toast.show(pngCopied ? "Challenge + PNG copied — paste to WhatsApp ✓" : "Challenge text copied. Also tap Download PNG then attach it in WhatsApp/Instagram Status", pngCopied ? "success" : "info");
+        return;
+      }
+      toast.show("Download PNG and share the challenge link manually", "info");
+    } catch (e: any) {
+      toast.show(e?.message || "Challenge didn't send — try copying the link below", "danger");
+    } finally {
+      setShareLoading(null);
     }
   };
 
@@ -452,15 +515,20 @@ export default function WhatDoResultPage() {
         <Button size="lg" onClick={downloadPNG} className="rounded-full bg-white text-black hover:bg-white/95 border-0 shadow-xl shadow-black/30">
           <Download className="h-4.5 w-4.5" /> Download PNG
         </Button>
-        <Button size="lg" variant="outline" onClick={shareNative} className="rounded-full">
+        <Button
+          size="lg"
+          onClick={shareNative}
+          loading={shareLoading === "share"}
+          className="rounded-full border border-white/20 bg-white/5 text-white hover:bg-white/10"
+        >
           <Share2 className="h-4.5 w-4.5" /> Share
         </Button>
         <Button
           size="md"
-          variant="outline"
           onClick={copyAIPrompt}
-          disabled={!genPrompt.data?.prompt}
-          className="rounded-full"
+          disabled={!genPrompt.data?.prompt || shareLoading === "prompt"}
+          loading={shareLoading === "prompt"}
+          className="rounded-full border border-white/15 bg-white/[0.03] text-white hover:bg-white/[0.08]"
         >
           {copied === "prompt" ? (
             <>
@@ -472,7 +540,12 @@ export default function WhatDoResultPage() {
             </>
           )}
         </Button>
-        <Button size="md" variant="outline" onClick={challengeFriend} className="rounded-full">
+        <Button
+          size="md"
+          onClick={challengeFriend}
+          loading={shareLoading === "challenge"}
+          className="rounded-full border border-white/15 bg-white/[0.03] text-white hover:bg-white/[0.08]"
+        >
           <MessageCircle className="h-4 w-4" /> Challenge a friend
         </Button>
       </section>

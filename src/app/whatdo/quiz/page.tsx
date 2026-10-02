@@ -22,7 +22,7 @@ const MIN_TO_COMPUTE = 10;
 export default function WhatDoQuizPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
-  const { openLogin } = useLoginModal();
+  const { openLogin, setReturnIntent } = useLoginModal();
   const [sessionId, setSessionId] = React.useState<string | null>(null);
   const [city, setCity] = React.useState<string | null>(null);
   const [answered, setAnswered] = React.useState<
@@ -97,8 +97,13 @@ export default function WhatDoQuizPage() {
 
   const handleCompute = async (requireLogin: boolean) => {
     if (!sessionId) return;
-    if (requireLogin && status !== "authenticated") {
-      openLogin();
+    if (status !== "authenticated") {
+      setReturnIntent({
+        type: "whatdo_reveal",
+        sessionId,
+        minQuestions: MIN_TO_COMPUTE,
+      } as any);
+      openLogin(undefined, "register");
       return;
     }
     setCalcBusy(true);
@@ -123,7 +128,8 @@ export default function WhatDoQuizPage() {
 
   const progressPct = Math.min(100, (Math.min(progressDone, progressTotal) / progressTotal) * 100);
   const canFinish = progressDone >= MIN_TO_COMPUTE;
-  const canFinishWithLogin = canFinish && status !== "authenticated";
+  const isAnon = status !== "authenticated";
+  const canFinishWithLogin = canFinish && isAnon;
 
   const onPrimaryClick = () => {
     if (allAnswered) {
@@ -257,33 +263,75 @@ export default function WhatDoQuizPage() {
           {(allAnswered || (sessionId && !nextQ.isFetching && !q)) && (
             <div className="mx-auto w-full max-w-lg rounded-3xl border border-white/10 bg-white/5 p-6 space-y-4 text-center">
               <p className="text-lg font-black">All {progressTotal} questions complete!</p>
-              <p className="text-sm text-white/75">
-                You answered <b className="text-white">{progressDone}</b>{" "}
-                {progressDone === 1 ? "question" : "questions"}. You need at
-                least {MIN_TO_COMPUTE} to unlock your WhatDo Type.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
-                <Button
-                  size="lg"
-                  onClick={() => handleCompute(false)}
-                  disabled={!canFinish || calcBusy}
-                  rightIcon={calcBusy ? undefined : <ArrowRight className="h-5 w-5" />}
-                  className="rounded-full bg-white text-black hover:bg-white/95 border-0 shadow-lg"
-                >
-                  {calcBusy ? "Computing…" : "See result"}
-                </Button>
-                {canFinishWithLogin && (
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    onClick={() => handleCompute(true)}
-                    className="rounded-full"
-                  >
-                    <Lock className="h-4 w-4 mr-1.5" />
-                    Login to claim + share
-                  </Button>
-                )}
-              </div>
+              {isAnon ? (
+                <>
+                  <div className="rounded-2xl border border-fuchsia-400/20 bg-gradient-to-br from-fuchsia-500/10 via-violet-500/5 to-indigo-500/10 p-4 text-left space-y-2">
+                    <div className="flex items-start gap-2.5">
+                      <div className="mt-0.5 h-8 w-8 shrink-0 rounded-xl bg-gradient-to-br from-fuchsia-400 to-pink-500 flex items-center justify-center shadow-lg shadow-fuchsia-500/30">
+                        <Lock className="h-4 w-4 text-white" />
+                      </div>
+                      <div className="space-y-0.5 min-w-0">
+                        <p className="text-sm font-black text-white leading-tight">
+                          One last step → register to reveal your WhatDo Type
+                        </p>
+                        <p className="text-[11.5px] text-fuchsia-100/90 leading-relaxed">
+                          Upload a profile photo now and it will appear on your 6 share-card designs. We auto-save all 12 answers you just picked to your new account.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2.5 pt-1">
+                    <Button
+                      size="lg"
+                      onClick={() => handleCompute(false)}
+                      disabled={!canFinish || calcBusy}
+                      rightIcon={calcBusy ? undefined : <ArrowRight className="h-5 w-5" />}
+                      className="rounded-full bg-gradient-to-r from-fuchsia-500 to-violet-500 text-white hover:from-fuchsia-500/90 hover:to-violet-500/90 border-0 shadow-xl shadow-fuchsia-500/30"
+                    >
+                      {calcBusy ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" /> Preparing your result…
+                        </>
+                      ) : (
+                        <>Create account + see my WhatDo Type</>
+                      )}
+                    </Button>
+                    <p className="text-[11px] text-white/60 -mt-1">
+                      Already have an account? The login tab works too — your answers are still there.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-white/75">
+                    You answered <b className="text-white">{progressDone}</b>{" "}
+                    {progressDone === 1 ? "question" : "questions"}. You need at
+                    least {MIN_TO_COMPUTE} to unlock your WhatDo Type.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
+                    <Button
+                      size="lg"
+                      onClick={() => handleCompute(false)}
+                      disabled={!canFinish || calcBusy}
+                      rightIcon={calcBusy ? undefined : <ArrowRight className="h-5 w-5" />}
+                      className="rounded-full bg-white text-black hover:bg-white/95 border-0 shadow-lg"
+                    >
+                      {calcBusy ? "Computing…" : "See result"}
+                    </Button>
+                    {canFinishWithLogin && (
+                      <Button
+                        size="lg"
+                        variant="outline"
+                        onClick={() => handleCompute(true)}
+                        className="rounded-full"
+                      >
+                        <Lock className="h-4 w-4 mr-1.5" />
+                        Login to claim + share
+                      </Button>
+                    )}
+                  </div>
+                </>
+              )}
               {!canFinish && (
                 <p className="text-[11.5px] text-amber-200 font-semibold pt-1">
                   You need {MIN_TO_COMPUTE - progressDone} more answers before

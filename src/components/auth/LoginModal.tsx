@@ -8,16 +8,19 @@ import { Modal } from "@/components/design-system/Modal";
 import { LoginForm } from "./forms/LoginForm";
 import { RegisterForm } from "./forms/RegisterForm";
 import { cn } from "@/lib/utils";
+import { trpc } from "@/lib/trpc/client";
+import { useToast } from "@/components/design-system/Toaster";
 
 export type ReturnIntent =
   | { type: "vote"; postId: string; optionId?: string; ratingValue?: number; emojiValue?: string; priceValue?: number }
   | { type: "comment"; postId?: string }
   | { type: "follow"; userId?: string }
   | { type: "create_post" }
+  | { type: "whatdo_reveal"; sessionId: string; minQuestions: number }
   | null;
 
 interface LoginModalContextValue {
-  openLogin: (intent?: ReturnIntent) => void;
+  openLogin: (intent?: ReturnIntent, tab?: "login" | "register") => void;
   closeLogin: () => void;
   returnIntent: ReturnIntent;
   setReturnIntent: (intent: ReturnIntent) => void;
@@ -43,10 +46,13 @@ export const LoginModalProvider: React.FC<LoginModalProviderProps> = ({ children
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
   const { data: session } = useSession();
   const router = useRouter();
+  const revealAfter = trpc.whatdo.revealAfterLogin.useMutation();
+  const calc = trpc.whatdo.calculateResult.useMutation();
+  const toast = useToast();
 
-  const openLogin = React.useCallback((intent?: ReturnIntent) => {
+  const openLogin = React.useCallback((intent?: ReturnIntent, tab?: "login" | "register") => {
     if (intent) setReturnIntent(intent);
-    setActiveTab("login");
+    setActiveTab(tab ?? (intent?.type === "whatdo_reveal" ? "register" : "login"));
     setIsOpen(true);
   }, []);
 
@@ -56,24 +62,64 @@ export const LoginModalProvider: React.FC<LoginModalProviderProps> = ({ children
   }, []);
 
   const handleOAuthClick = async (provider: string) => {
-    const callbackUrl = returnIntent?.type ? "/feed" : "/feed";
+    const callbackUrl = returnIntent?.type === "whatdo_reveal"
+      ? "/whatdo/result"
+      : returnIntent?.type ? "/feed" : "/feed";
     await signIn(provider, { callbackUrl });
   };
 
+  const handleRevealMerge = async (intent: Exclude<ReturnIntent, null> & { type: "whatdo_reveal" }) => {
+    try {
+      const r = await calc.mutateAsync({
+        sessionId: intent.sessionId,
+        minQuestions: intent.minQuestions,
+      });
+      await revealAfter.mutateAsync({ sessionId: intent.sessionId }).catch(() => {});
+      if (r?.identityId) {
+        try { window.sessionStorage.setItem("whatdo_last_identity", r.identityId); } catch {}
+      }
+      const dest = new URLSearchParams();
+      if (r?.identityId) dest.set("id", r.identityId);
+      router.push(dest.toString() ? `/whatdo/result?${dest.toString()}` : "/whatdo/result");
+      toast.show("Your WhatDo Type is ready 🎉", "success", 3200);
+      return true;
+    } catch (e: any) {
+      toast.show(e?.message || "Almost there — go to /whatdo/result to see your type.", "info");
+      router.push("/whatdo/result");
+      return false;
+    }
+  };
+
   const handleLoginSuccess = () => {
+    const intent = returnIntent;
     setIsOpen(false);
     router.refresh();
+    if (intent?.type === "whatdo_reveal") {
+      setTimeout(() => void handleRevealMerge(intent), 400);
+    }
   };
 
   const handleRegisterSuccess = () => {
+    const intent = returnIntent;
     setIsOpen(false);
     router.refresh();
+    if (intent?.type === "whatdo_reveal") {
+      setTimeout(() => void handleRevealMerge(intent), 400);
+    }
   };
 
   const value = React.useMemo(
     () => ({ openLogin, closeLogin, returnIntent, setReturnIntent }),
     [openLogin, closeLogin, returnIntent]
   );
+
+  const whatdoHint = React.useMemo(() => {
+    if (returnIntent?.type !== "whatdo_reveal") return null;
+    return {
+      title: "Create account to reveal your WhatDo Type",
+      subtitle: "Add a profile photo now and it will appear on your share cards.",
+    };
+  }, [returnIntent]);
 
   return (
     <LoginModalContext.Provider value={value}>
@@ -84,13 +130,18 @@ export const LoginModalProvider: React.FC<LoginModalProviderProps> = ({ children
         size="md"
         showCloseButton={true}
       >
-        <div className="space-y-6">
+        <div className="space-y-5">
           <div className="text-center space-y-2">
             <div className="text-3xl font-black bg-gradient-to-r from-violet-400 via-fuchsia-400 to-pink-400 bg-clip-text text-transparent">
               WHATDO
             </div>
             <p className="text-sm text-muted-foreground">
-              {returnIntent?.type === "vote"
+              {whatdoHint ? (
+                <span className="block space-y-1">
+                  <span className="block text-base font-black text-white">{whatdoHint.title}</span>
+                  <span className="block text-[12px] text-fuchsia-200/90">{whatdoHint.subtitle}</span>
+                </span>
+              ) : returnIntent?.type === "vote"
                 ? "Sign in to cast your vote"
                 : returnIntent?.type === "comment"
                 ? "Sign in to join the conversation"
@@ -139,6 +190,9 @@ export const LoginModalProvider: React.FC<LoginModalProviderProps> = ({ children
                 onOAuthClick={handleOAuthClick}
                 onSuccess={handleRegisterSuccess}
                 isModal={true}
+                postRegisterRedirect={
+                  returnIntent?.type === "whatdo_reveal" ? "/whatdo/result" : undefined
+                }
               />
             )}
           </div>

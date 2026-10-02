@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Sparkles, ChevronRight, BarChart3, Eye, Users } from "lucide-react";
+import { Sparkles, ChevronRight, BarChart3, Eye, Users, Link2 } from "lucide-react";
 import { Button } from "@/components/design-system/Button";
 import { trpc } from "@/lib/trpc/client";
 import { cn } from "@/lib/utils";
@@ -41,10 +41,22 @@ export function DailyWhatDoHero() {
     refetchOnMount: true,
   });
   const [localSessionId, setLocalSessionId] = React.useState<string | null>(null);
+  const [refToken, setRefToken] = React.useState<string | null>(null);
+  const [refBannerDismissed, setRefBannerDismissed] = React.useState(false);
   React.useEffect(() => {
     try {
       const sid = window.localStorage.getItem("whatdo_sess");
       if (sid) setLocalSessionId(sid);
+    } catch {}
+    try {
+      const refMatch = document.cookie
+        .split(";")
+        .map((s) => s.trim())
+        .find((s) => s.startsWith("whatdo_ref="));
+      if (refMatch) {
+        const token = decodeURIComponent(refMatch.split("=")[1] ?? "");
+        if (token) setRefToken(token);
+      }
     } catch {}
   }, []);
   const existingIdentity = trpc.whatdo.getIdentity.useQuery(
@@ -79,6 +91,7 @@ export function DailyWhatDoHero() {
   }, [trackRefCookie]);
 
   const handleStart = async () => {
+    if (refToken) setRefBannerDismissed(true);
     let sid = null;
     try {
       sid = window.localStorage.getItem("whatdo_sess");
@@ -115,6 +128,31 @@ export function DailyWhatDoHero() {
         <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-black via-black/60 to-transparent" />
 
         <div className="relative z-10 w-full max-w-md px-6 pt-16 pb-24 text-center">
+          {refToken && !refBannerDismissed && (
+            <div className="mb-6 rounded-3xl border-2 border-dashed border-fuchsia-400/70 bg-gradient-to-br from-fuchsia-500/25 via-violet-500/15 to-indigo-500/20 backdrop-blur-md px-4 py-4 text-left shadow-2xl shadow-fuchsia-900/40 ring-1 ring-fuchsia-400/30">
+              <div className="flex items-center gap-2 mb-2.5">
+                <div className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-fuchsia-400 to-violet-500 shadow-lg shadow-fuchsia-900/50">
+                  <Link2 className="h-3.5 w-3.5 text-white" />
+                </div>
+                <span className="inline-flex items-center rounded-full bg-white/10 border border-white/15 px-2.5 py-0.5 text-[10.5px] font-black uppercase tracking-[0.08em] text-fuchsia-100">
+                  Your friend sent you a WhatDo Type · Referral
+                </span>
+              </div>
+              <p className="text-[14.5px] font-bold leading-snug text-white drop-shadow">
+                👉 Take the 2-min quiz, compare your answers, and unlock
+                your own share cards.
+              </p>
+              <Button
+                size="sm"
+                onClick={handleStart}
+                rightIcon={<ChevronRight className="h-4 w-4" />}
+                className="mt-3.5 w-full rounded-full bg-white text-black border-0 hover:bg-white/95 shadow-lg shadow-black/30 font-bold"
+              >
+                Start WhatDo Quiz
+              </Button>
+            </div>
+          )}
+
           <div className="mx-auto mb-6 inline-flex items-center gap-1.5 rounded-full bg-white/15 border border-white/20 backdrop-blur-md px-3.5 py-1.5 shadow-xl shadow-black/20">
             <Sparkles className="h-3.5 w-3.5 text-fuchsia-300" />
             <span className="text-[11px] font-bold tracking-wide text-white/95 uppercase">
