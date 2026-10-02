@@ -28,6 +28,7 @@ import {
   Smartphone,
   AlertTriangle,
   LogOut,
+  Loader2,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { signOut } from "next-auth/react";
@@ -245,22 +246,126 @@ export default function SettingsPage() {
     },
   });
 
+  const presignAvatar = trpc.media.requestPresignedUpload.useMutation();
+  const confirmAvatar = trpc.media.confirmUpload.useMutation();
+
+  const [avatarUploadState, setAvatarUploadState] = React.useState<
+    "idle" | "compressing" | "presigning" | "uploading" | "error"
+  >("idle");
   const avatarFileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const onPickAvatar = () => {
+    if (avatarUploadState !== "idle" && avatarUploadState !== "error") return;
     avatarFileInputRef.current?.click();
   };
 
+  async function compressImageToMaxBytes(
+    file: File,
+    opts: { maxSide: number; maxBytes: number; mime: string; quality: number },
+  ): Promise<{ blob: Blob; dataUrlPreview: string }> {
+    const { maxSide, maxBytes, mime, quality } = opts;
+    const bitmap = await createImageBitmap(file);
+    let { width, height } = bitmap;
+    const scale = Math.min(1, maxSide / Math.max(width, height));
+    width = Math.max(1, Math.round(width * scale));
+    height = Math.max(1, Math.round(height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas not supported");
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    try {
+      bitmap.close();
+    } catch {
+    }
+    let finalBlob: Blob | null = null;
+    let curQuality = quality;
+    for (let i = 0; i < 6; i += 1) {
+      const b: Blob = await new Promise((resolve, reject) => {
+        canvas.toBlob(
+          (bb) => (bb ? resolve(bb) : reject(new Error("toBlob null"))),
+          mime,
+          curQuality,
+        );
+      });
+      finalBlob = b;
+      if (b.size <= maxBytes || curQuality <= 0.45) break;
+      curQuality = Math.max(0.45, curQuality - 0.08);
+    }
+    if (!finalBlob) throw new Error("Image compression failed");
+    const dataUrlPreview = canvas.toDataURL(mime, Math.max(0.6, curQuality));
+    return { blob: finalBlob, dataUrlPreview };
+  }
+
   const onAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      setAvatarUrl(dataUrl);
+    if (!file.type.startsWith("image/")) {
+      show("Unsupported file: Please upload a JPG, PNG, GIF, or WebP image.", "danger");
+      return;
+    }
+    const MAX_RAW_BYTES = 8 * 1024 * 1024;
+    if (file.size > MAX_RAW_BYTES) {
+      show("File too large: Please choose an image under 8MB.", "danger");
+      return;
+    }
+    try {
+      setAvatarUploadState("compressing");
+      const mime = "image/jpeg";
+      const compressed = await compressImageToMaxBytes(file, {
+        maxSide: 512,
+        maxBytes: 256 * 1024,
+        mime,
+        quality: 0.86,
+      });
+      setAvatarUrl(compressed.dataUrlPreview);
       setProfileChanged(true);
-    };
-    reader.readAsDataURL(file);
+      const tryPresign = status === "authenticated";
+      let finalUrl: string | null = null;
+      if (tryPresign && compressed.blob.size > 0) {
+        try {
+          setAvatarUploadState("presigning");
+          const presign = await presignAvatar.mutateAsync({
+            type: "image",
+            contentType: mime,
+            fileSize: compressed.blob.size,
+            fileName: `avatar_${Date.now()}.jpg`,
+          });
+          setAvatarUploadState("uploading");
+          const resp = await fetch(presign.uploadUrl, {
+            method: "PUT",
+            headers: { "Content-Type": mime },
+            body: compressed.blob,
+          });
+          if (!resp.ok) throw new Error(`Upload HTTP ${resp.status}`);
+          await confirmAvatar.mutateAsync({ fileKey: presign.fileKey });
+          finalUrl = presign.publicUrl || presign.fileKey;
+        } catch (presignErr) {
+          setAvatarUploadState("error");
+          const msg =
+            presignErr instanceof Error ? presignErr.message : String(presignErr);
+          if (msg.includes("Storage not configured")) {
+            finalUrl = compressed.dataUrlPreview;
+          } else {
+            show("Upload failed: " + (msg || "please try again."), "danger");
+            return;
+          }
+        }
+      } else {
+        finalUrl = compressed.dataUrlPreview;
+      }
+      if (finalUrl) {
+        setAvatarUrl(finalUrl);
+        setProfileChanged(true);
+      }
+      setAvatarUploadState("idle");
+    } catch (err) {
+      setAvatarUploadState("error");
+      const msg = err instanceof Error ? err.message : String(err);
+      show("Could not process image: " + (msg || "unknown error"), "danger");
+    }
   };
 
   const onSaveProfile = () => {
@@ -382,9 +487,29 @@ export default function SettingsPage() {
                         }}
                         size="md"
                       />
-                      <Button variant="outline" size="sm" onClick={onPickAvatar}>
-                        <Upload className="h-4 w-4 mr-1.5" />
-                        Change
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={onPickAvatar}
+                        disabled={avatarUploadState !== "idle" && avatarUploadState !== "error"}
+                      >
+                        {avatarUploadState === "compressing" && (
+                          <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                        )}
+                        {avatarUploadState === "presigning" || avatarUploadState === "uploading" ? (
+                          <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                        ) : (
+                          <Upload className="h-4 w-4 mr-1.5" />
+                        )}
+                        {avatarUploadState === "compressing"
+                          ? "Compressing…"
+                          : avatarUploadState === "presigning"
+                          ? "Preparing…"
+                          : avatarUploadState === "uploading"
+                          ? "Uploading…"
+                          : avatarUploadState === "error"
+                          ? "Retry"
+                          : "Change"}
                       </Button>
                     </div>
                   }
@@ -451,7 +576,11 @@ export default function SettingsPage() {
                     variant="primary"
                     onClick={onSaveProfile}
                     loading={updateProfile.isPending}
-                    disabled={!profileChanged || meLoading}
+                    disabled={
+                      !profileChanged ||
+                      meLoading ||
+                      (avatarUploadState !== "idle" && avatarUploadState !== "error")
+                    }
                   >
                     Save changes
                   </Button>
