@@ -132,12 +132,18 @@ export default function WhatDoResultPage() {
     }
   }, [identity.error, toast]);
 
+  const ranOnceRef = React.useRef<Set<string>>(new Set());
+
   React.useEffect(() => {
-    if (identity.isFetching || identity.isLoading || !persisted.hydrated) return;
+    if (!persisted.hydrated) return;
     if (id) return;
-    if (calc.isPending || calc.isSuccess) return;
+    if (identity.isFetching || identity.isLoading) return;
+    if (calc.isPending || calc.isSuccess || calc.isError) return;
     const canCompute = !!persisted.sessionId || isLoggedIn;
     if (!canCompute) return;
+    const key = (persisted.sessionId ?? (user?.id as string) ?? "anon") as string;
+    if (ranOnceRef.current.has(key)) return;
+    ranOnceRef.current.add(key);
     const computeSafe = async () => {
       try {
         const sid = persisted.sessionId ?? "logged-in-fallback";
@@ -149,13 +155,17 @@ export default function WhatDoResultPage() {
             sessionId: persisted.sessionId ?? undefined,
           });
           const dest = new URLSearchParams({ id: r.identityId });
-          window.history.replaceState(null, "", `${location.pathname}?${dest.toString()}`);
+          router.replace(`/whatdo/result?${dest.toString()}`);
+          return;
+        }
+        if (r.reason && (r as any).countAnswers && (r.reason === "INSUFFICIENT_DATA")) {
+          router.push("/whatdo/quiz");
         }
       } catch {
       }
     };
     void computeSafe();
-  }, [persisted.sessionId, persisted.hydrated, id, identity.isFetching, identity.isLoading, calc.isPending, calc.isSuccess, utils.whatdo.getIdentity, isLoggedIn]);
+  }, [persisted.hydrated, id, persisted.sessionId, isLoggedIn]);
 
   const manualCompute = async () => {
     const canCompute = !!persisted.sessionId || isLoggedIn;
@@ -174,7 +184,9 @@ export default function WhatDoResultPage() {
         });
         const dest = new URLSearchParams({ id: r.identityId });
         router.replace(`/whatdo/result?${dest.toString()}`);
-      } else if (r.reason) {
+        return;
+      }
+      if (r.reason) {
         router.push("/whatdo/quiz");
       }
     } catch {
