@@ -76,6 +76,13 @@ export default function WhatDoResultPage() {
   const persisted = usePersistedWhatdoArgs();
   const toast = useToast();
 
+  const me = trpc.auth.me.useQuery(undefined, {
+    staleTime: 60_000,
+    enabled: isLoggedIn,
+    retry: (count) => count < 3,
+    retryDelay: (i) => 300 * (i + 1),
+  });
+
   const identity = trpc.whatdo.getIdentity.useQuery(
     {
       identityId: persisted.identityId,
@@ -85,15 +92,9 @@ export default function WhatDoResultPage() {
       staleTime: 30_000,
       retry: (count, e: any) => count < 4 && e?.data?.code !== "NOT_FOUND",
       retryDelay: (i) => 250 * (i + 1),
-      enabled: persisted.hydrated && !!(persisted.identityId || persisted.sessionId || (isLoggedIn && (me.data || me.isFetched || !isLoggedIn))),
+      enabled: persisted.hydrated && !!(persisted.identityId || persisted.sessionId || isLoggedIn),
     }
   );
-  const me = trpc.auth.me.useQuery(undefined, {
-    staleTime: 60_000,
-    enabled: isLoggedIn,
-    retry: (count) => count < 3,
-    retryDelay: (i) => 300 * (i + 1),
-  });
   const calc = trpc.whatdo.calculateResult.useMutation({ retry: 2, retryDelay: 250 });
   const utils = trpc.useUtils();
   const genToken = trpc.whatdo.generateShareToken.useMutation({ retry: 2, retryDelay: 300 });
@@ -132,16 +133,20 @@ export default function WhatDoResultPage() {
   }, [identity.error, toast]);
 
   React.useEffect(() => {
-    if (!persisted.sessionId || id || identity.isFetching || identity.isLoading || !persisted.hydrated) return;
+    if (identity.isFetching || identity.isLoading || !persisted.hydrated) return;
+    if (id) return;
     if (calc.isPending || calc.isSuccess) return;
+    const canCompute = !!persisted.sessionId || isLoggedIn;
+    if (!canCompute) return;
     const computeSafe = async () => {
       try {
-        const r = await calc.mutateAsync({ sessionId: persisted.sessionId!, minQuestions: 10 });
+        const sid = persisted.sessionId ?? "logged-in-fallback";
+        const r = await calc.mutateAsync({ sessionId: sid, minQuestions: 10 });
         if (r.computed && r.identityId) {
           try { window.sessionStorage.setItem("whatdo_last_identity", r.identityId); } catch {}
           await utils.whatdo.getIdentity.invalidate({
             identityId: r.identityId,
-            sessionId: persisted.sessionId,
+            sessionId: persisted.sessionId ?? undefined,
           });
           const dest = new URLSearchParams({ id: r.identityId });
           window.history.replaceState(null, "", `${location.pathname}?${dest.toString()}`);
@@ -150,24 +155,22 @@ export default function WhatDoResultPage() {
       }
     };
     void computeSafe();
-  }, [persisted.sessionId, persisted.hydrated, id, identity.isFetching, identity.isLoading, calc.isPending, calc.isSuccess, utils.whatdo.getIdentity]);
+  }, [persisted.sessionId, persisted.hydrated, id, identity.isFetching, identity.isLoading, calc.isPending, calc.isSuccess, utils.whatdo.getIdentity, isLoggedIn]);
 
   const manualCompute = async () => {
-    if (!persisted.sessionId || !isLoggedIn) {
-      if (isLoggedIn) return;
-    }
-    const sid = persisted.sessionId;
-    if (!sid) {
+    const canCompute = !!persisted.sessionId || isLoggedIn;
+    if (!canCompute) {
       router.push("/whatdo/quiz");
       return;
     }
+    const sid = persisted.sessionId ?? "logged-in-fallback";
     try {
       const r = await calc.mutateAsync({ sessionId: sid, minQuestions: 10 });
       if (r.computed && r.identityId) {
         try { window.sessionStorage.setItem("whatdo_last_identity", r.identityId); } catch {}
         await utils.whatdo.getIdentity.invalidate({
           identityId: r.identityId,
-          sessionId: persisted.sessionId,
+          sessionId: persisted.sessionId ?? undefined,
         });
         const dest = new URLSearchParams({ id: r.identityId });
         router.replace(`/whatdo/result?${dest.toString()}`);
@@ -256,6 +259,13 @@ export default function WhatDoResultPage() {
   }
 
   if (!snapshot) {
+    const missingBecause = persisted.identityId
+      ? identity.error && (identity.error as any)?.data?.code === "NOT_FOUND"
+        ? "The result link expired or hasn't been saved yet. Re-compute below."
+        : "Still loading your stored result."
+      : persisted.sessionId || isLoggedIn
+        ? "We couldn't find a computed result for your session yet."
+        : "Answer 10+ questions to unlock your result.";
     return (
       <main className="min-h-[100dvh] bg-slate-950 text-white">
         <div className="mx-auto max-w-md px-5 py-12 text-center space-y-5">
@@ -266,9 +276,7 @@ export default function WhatDoResultPage() {
         <p className="text-sm text-white/70">
           {calc.isPending
             ? "Running the archetype classifier against your 12 answers. This takes ~5 seconds."
-            : persisted.sessionId
-              ? "We couldn't find a computed result for your session. If you've already answered 10+ questions, press Retry compute below."
-              : "Answer 10+ questions to unlock your result and generate your share cards."}
+            : missingBecause}
         </p>
         <div className="w-full max-w-[240px] mx-auto">
           <ProgressBar
@@ -277,7 +285,7 @@ export default function WhatDoResultPage() {
           />
         </div>
         <div className="flex flex-col items-center gap-2 pt-2">
-          {persisted.sessionId ? (
+          {(persisted.sessionId || isLoggedIn) ? (
             <>
               <Button
                 size="lg"
