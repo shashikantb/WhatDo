@@ -24,12 +24,13 @@ import {
   Copy,
   Download,
   Eye,
-  ImageIcon,
   Lock,
   MessageCircle,
   Share2,
+  Sparkles,
   Trophy,
   Users,
+  Wand2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLoginModal } from "@/components/auth/LoginModal";
@@ -109,6 +110,126 @@ export default function WhatDoResultPage() {
   );
 
   const trackClick = trpc.whatdo.trackShareClick.useMutation();
+  const aiImageMut = trpc.whatdo.generateAIImage.useMutation();
+  const [aiImageResult, setAiImageResult] = React.useState<{
+    publicUrl: string;
+    fileKey: string;
+    enhancedPrompt: string;
+    sizeBytes: number;
+  } | null>(null);
+  const [aiStage, setAiStage] = React.useState<null | "starting" | "prompt" | "rendering" | "uploading" | "done">(null);
+
+  const downloadAIImage = async () => {
+    if (!aiImageResult?.publicUrl) return;
+    try {
+      const resp = await fetch(aiImageResult.publicUrl, { cache: "no-store" });
+      if (!resp.ok) throw new Error("Fetch");
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `whatdo-${snapshot?.archetype ?? "identity"}-ai.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } catch (e) {
+      toast.show("Download failed — try opening the image and long-pressing Save.", "danger");
+    }
+  };
+
+  const shareAIImage = async () => {
+    if (!aiImageResult?.publicUrl) return;
+    try {
+      const resp = await fetch(aiImageResult.publicUrl, { cache: "no-store" });
+      if (!resp.ok) throw new Error("Fetch");
+      const blob = await resp.blob();
+      const f = new File([blob], `whatdo-${snapshot?.archetype ?? "identity"}-ai.png`, { type: blob.type || "image/png" });
+      const shareData: ShareData & { files?: File[] } = {
+        title: "My WhatDo Type",
+        text: `I got ${snapshot?.archetype ?? "my WhatDo identity"} on WhatDo — take the quiz and see yours! ${shareUrl ?? ""}`,
+        url: shareUrl ?? (typeof window !== "undefined" ? window.location.href : ""),
+        files: [f],
+      };
+      if (typeof (navigator as any).canShare === "function" && (navigator as any).canShare({ files: [f] })) {
+        await navigator.share(shareData);
+        toast.show("Shared to WhatsApp/Instagram ✓", "success");
+        return;
+      }
+      // Mobile fallback: try navigator.share even if canShare is unknown
+      if (typeof navigator.share === "function") {
+        try {
+          await navigator.share(shareData);
+          toast.show("Shared ✓", "success");
+          return;
+        } catch {}
+      }
+      // Desktop: copy URL + show prompt
+      try {
+        await navigator.clipboard.writeText(
+          `My WhatDo Type: ${snapshot?.archetype ?? ""} — ${shareUrl ?? aiImageResult.publicUrl}`,
+        );
+        toast.show("Link copied. Download PNG + paste to WhatsApp/Instagram.", "info");
+      } catch {
+        toast.show("Use Download PNG then share manually.", "info");
+      }
+    } catch (e: any) {
+      if (e && typeof e === "object" && (e as any).name === "AbortError") return;
+      toast.show("Share didn't complete — try Download PNG instead.", "danger");
+    }
+  };
+
+  const startGenAIImage = async () => {
+    if (!identity.data?.id && !shareToken) {
+      toast.show("Still loading your result — try again in 2 seconds.", "info");
+      return;
+    }
+    setAiStage("starting");
+    setAiImageResult(null);
+    const stageTimers: NodeJS.Timeout[] = [];
+    try {
+      await new Promise((r) => setTimeout(r, 150));
+      setAiStage("prompt");
+      stageTimers.push(setTimeout(() => setAiStage("rendering"), 2200));
+      stageTimers.push(setTimeout(() => setAiStage("uploading"), 10000));
+      const out = await aiImageMut.mutateAsync({
+        identityId: identity.data?.id ?? undefined,
+        shareToken: shareToken ?? undefined,
+        template: (CARD_TEMPLATES[templateIdx] as WhatDoCardTemplate) ?? "BRIGHT_HERO",
+        useShortPrompt: true,
+      });
+      stageTimers.forEach(clearTimeout);
+      if (!out?.publicUrl) throw new Error("Missing image URL");
+      setAiStage("uploading");
+      await new Promise((r) => setTimeout(r, 400));
+      setAiImageResult({
+        publicUrl: out.publicUrl,
+        fileKey: out.fileKey,
+        enhancedPrompt: out.enhancedPrompt,
+        sizeBytes: out.sizeBytes,
+      });
+      setAiStage("done");
+      toast.show("AI image ready — share it everywhere!", "success");
+    } catch (e: any) {
+      stageTimers.forEach(clearTimeout);
+      setAiStage(null);
+      const msg: string =
+        (e?.message as string) ??
+        (e?.data?.code as string) ??
+        "Image generation failed. Try again in a few seconds.";
+      if (msg.toLowerCase().includes("set CF_API_TOKEN") || msg.toLowerCase().includes("not enabled")) {
+        toast.show(
+          "Workers AI not enabled yet — admin: add CF_API_TOKEN at dash.cloudflare.com in env vars. Canvas PNG still available below.",
+          "danger",
+          8000,
+        );
+      } else if (msg.toLowerCase().includes("workers ai") || msg.toLowerCase().includes("524") || msg.toLowerCase().includes("522")) {
+        toast.show("Workers AI timed out — Cloudflare is under load. Retry in 10s or use Canvas PNG below.", "danger");
+      } else {
+        toast.show(msg, "danger");
+      }
+    }
+  };
 
   const user = session?.user as any;
   const rawIdentity = identity.data as any;
@@ -639,6 +760,145 @@ export default function WhatDoResultPage() {
             className="w-full h-auto block"
           />
         </div>
+      </section>
+
+      <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-fuchsia-500/10 via-violet-500/10 to-indigo-500/10 p-4 space-y-3">
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-1.5">
+            <Sparkles className="h-4 w-4 text-fuchsia-300" />
+            <p className="text-[11.5px] font-black uppercase tracking-widest text-white/80">
+              AI Portrait · One-click generate
+            </p>
+          </div>
+          <p className="text-[10.5px] font-bold text-white/55">
+            9:16 · 1080×1920
+          </p>
+        </div>
+
+        {!aiImageResult && !aiStage && (
+          <div className="space-y-3">
+            <div className="relative aspect-[9/16] w-full max-w-[260px] mx-auto rounded-2xl border-2 border-dashed border-white/15 bg-black/30 flex flex-col items-center justify-center text-center px-6 gap-3 overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-b from-fuchsia-500/10 via-transparent to-indigo-500/10 pointer-events-none" />
+              <div className="relative space-y-2">
+                <div className="h-16 w-16 mx-auto rounded-full bg-gradient-to-br from-fuchsia-500 via-violet-500 to-indigo-500 p-[2px] shadow-xl shadow-fuchsia-900/40">
+                  <div className="h-full w-full rounded-full bg-slate-950 flex items-center justify-center">
+                    <Wand2 className="h-7 w-7 text-white/90" />
+                  </div>
+                </div>
+                <p className="text-sm font-black text-white/90 leading-tight">
+                  Your AI WhatDo portrait
+                </p>
+                <p className="text-[11.5px] font-semibold text-white/65 leading-relaxed">
+                  Groq rewrites your identity prompt → Cloudflare Workers AI renders → R2 CDN hosts. Share to WhatsApp Status / Instagram Stories directly.
+                </p>
+              </div>
+            </div>
+            <Button
+              size="lg"
+              onClick={startGenAIImage}
+              className="w-full rounded-3xl border border-white/30 bg-gradient-to-r from-fuchsia-500 via-violet-500 to-indigo-500 text-white shadow-xl shadow-black/50 hover:from-fuchsia-500/95 hover:via-violet-500/95 hover:to-indigo-500/95 font-black"
+            >
+              <Wand2 className="h-4.5 w-4.5 mr-1.5" /> ✨ Generate AI Image
+            </Button>
+          </div>
+        )}
+
+        {aiStage && !aiImageResult && (
+          <div className="space-y-3.5">
+            <div className="relative aspect-[9/16] w-full max-w-[260px] mx-auto rounded-2xl border border-white/10 bg-black/50 overflow-hidden">
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(217,70,239,0.18),transparent_55%),radial-gradient(ellipse_at_bottom,rgba(99,102,241,0.18),transparent_55%)] animate-pulse" />
+              <div className="relative h-full w-full flex flex-col items-center justify-center text-center px-6 gap-3.5">
+                <div className="h-16 w-16 rounded-full bg-gradient-to-br from-fuchsia-500/25 via-violet-500/25 to-indigo-500/25 border border-white/15 flex items-center justify-center backdrop-blur">
+                  <Sparkles className="h-7 w-7 text-white/90 animate-spin" />
+                </div>
+                <div className="space-y-2 w-full max-w-[210px]">
+                  <ProgressBar
+                    value={
+                      aiStage === "starting" ? 8
+                        : aiStage === "prompt" ? 22
+                        : aiStage === "rendering" ? 58
+                        : aiStage === "uploading" ? 88
+                        : 0
+                    }
+                    className="h-1.5 bg-white/10 w-full"
+                  />
+                  <p className="text-[11.5px] font-black text-white/90">
+                    {aiStage === "starting" && "Warming up engines…"}
+                    {aiStage === "prompt" && "1/3 · Enhancing prompt via Groq LLM…"}
+                    {aiStage === "rendering" && "2/3 · Painting portrait on Cloudflare Workers AI…"}
+                    {aiStage === "uploading" && "3/3 · Saving to R2 CDN…"}
+                    {aiStage === "done" && "Complete"}
+                  </p>
+                  <p className="text-[10.5px] font-semibold text-white/55 leading-relaxed">
+                    Usually 12–25 seconds. If Workers AI is under load, this can take 60s.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <Button
+              size="lg"
+              disabled
+              className="w-full rounded-3xl border border-white/20 bg-white/5 text-white/70 shadow-lg shadow-black/40 font-black cursor-not-allowed"
+            >
+              <Sparkles className="animate-spin opacity-70 h-4.5 w-4.5 mr-1.5" /> Generating…
+            </Button>
+          </div>
+        )}
+
+        {aiImageResult && (
+          <div className="space-y-3.5">
+            <div className="relative aspect-[9/16] w-full max-w-[260px] mx-auto rounded-2xl border-2 border-white/15 bg-black shadow-2xl shadow-black/60 overflow-hidden">
+              <img
+                src={aiImageResult.publicUrl}
+                alt={`${snapshot?.archetype ?? "WhatDo"} AI portrait`}
+                className="h-full w-full object-cover block"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.opacity = "0.3";
+                }}
+              />
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/50 to-transparent" />
+              <div className="pointer-events-none absolute bottom-2 left-2 right-2 flex items-end justify-between">
+                <div className="rounded-full bg-black/50 backdrop-blur px-2 py-0.5 border border-white/15">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-white/90">
+                    {aiImageResult.sizeBytes ? `${(aiImageResult.sizeBytes / 1024).toFixed(0)} KB` : ""}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={startGenAIImage}
+                  className="rounded-full bg-black/50 backdrop-blur px-2.5 py-1 border border-white/15 text-[10px] font-black text-white/90 hover:bg-black/70 transition-colors"
+                >
+                  ↻ Regenerate
+                </button>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2.5">
+              <Button
+                size="lg"
+                onClick={downloadAIImage}
+                className="rounded-full bg-white text-black hover:bg-white/95 border-0 shadow-xl shadow-black/30 font-black"
+              >
+                <Download className="h-4.5 w-4.5 mr-1.5" /> Download
+              </Button>
+              <Button
+                size="lg"
+                onClick={shareAIImage}
+                className="rounded-full border border-white/20 bg-white/5 text-white hover:bg-white/10 font-black"
+              >
+                <Share2 className="h-4.5 w-4.5 mr-1.5" /> Share
+              </Button>
+            </div>
+            <div className="flex items-center justify-center pt-0.5">
+              <button
+                type="button"
+                onClick={startGenAIImage}
+                className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/55 hover:text-white underline-offset-4 hover:underline decoration-white/25"
+              >
+                ↻ Generate a different AI portrait
+              </button>
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="grid grid-cols-2 gap-2.5">

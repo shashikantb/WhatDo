@@ -31,6 +31,7 @@ import type { WhatDoCardTemplate } from "@/lib/whatdo/ai-prompt";
 import { WhatDoArchetype } from "@/lib/whatdo/archetypes";
 import crypto from "crypto";
 import { WHATDO_FUNNEL_EVENT_NAMES } from "@/lib/whatdo/funnel-events";
+import { generateAIImage, hasImageGen } from "@/lib/ai/image-gen";
 export type WhatDoFunnelEventName = (typeof WHATDO_FUNNEL_EVENT_NAMES)[number];
 
 function makeSessionId() {
@@ -773,6 +774,190 @@ export const whatdoRouter = createTRPCRouter({
         signalSummary: generated.signalSummary,
         template: generated.template,
         validated: safe.valid,
+      };
+    }),
+
+  generateAIImage: publicProcedure
+    .input(
+      z.object({
+        identityId: z.string().optional(),
+        shareToken: z.string().optional(),
+        template: z
+          .enum([
+            "MINIMAL",
+            "NEON_GENZ",
+            "PREMIUM_DARK",
+            "COLORFUL",
+            "FUTURISTIC_AI",
+            "LOCAL_CITY",
+          ])
+          .default("FUTURISTIC_AI"),
+        useShortPrompt: z.boolean().default(true),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!hasImageGen()) {
+        throw new TRPCError({
+          code: "METHOD_NOT_SUPPORTED",
+          message:
+            "Image generation not enabled. Ask admin to set CF_API_TOKEN (Workers AI Write) at dash.cloudflare.com.",
+        });
+      }
+      const userId = ctx.session?.user?.id;
+      const sessionId = (ctx as any).sessionId as string | undefined;
+      let aiInput: any = null;
+      let personalShareUrl = "";
+      if (input.identityId) {
+        const row = await ctx.prisma.whatDoIdentityResult.findUnique({
+          where: { id: input.identityId },
+          select: {
+            id: true,
+            userId: true,
+            sessionId: true,
+            whatdoType: true,
+            signalCuriosity: true,
+            signalRiskTaking: true,
+            signalCreativity: true,
+            signalSocial: true,
+            signalIndependence: true,
+            agreementScorePct: true,
+            rarityScorePct: true,
+            cityAlignmentPct: true,
+            rarestAnswerPct: true,
+            citySnapshot: true,
+            rarestAnswerQuestionId: true,
+            strongestTrait: true,
+            totalQuestions: true,
+          },
+        }).catch(() => null);
+        if (row) {
+          const engineResult: any = {
+            whatDoArchetype: row.whatdoType as any,
+            signalScores: {
+              CURIOSITY: row.signalCuriosity,
+              RISK_TAKING: row.signalRiskTaking,
+              CREATIVITY: row.signalCreativity,
+              SOCIAL: row.signalSocial,
+              INDEPENDENCE: row.signalIndependence,
+            },
+            agreementScorePct: row.agreementScorePct,
+            rarityScorePct: row.rarityScorePct,
+            cityAlignmentPct: row.cityAlignmentPct,
+            rarestAnswer: row.rarestAnswerPct ? { rarityPct: row.rarestAnswerPct, questionId: row.rarestAnswerQuestionId } : null,
+            citySnapshot: row.citySnapshot,
+            strongestTrait: row.strongestTrait ?? null,
+          };
+          let userMeta: { displayName: string | null; username: string | null; shareToken: string | null } = {
+            displayName: null,
+            username: null,
+            shareToken: null,
+          };
+          if (row.userId) {
+            const u = await ctx.prisma.user.findUnique({
+              where: { id: row.userId },
+              select: { displayName: true, username: true },
+            }).catch(() => null);
+            if (u) {
+              userMeta.displayName = u.displayName ?? null;
+              userMeta.username = u.username ?? null;
+            }
+            const share = await ctx.prisma.referralShareEvent.findFirst({
+              where: { userId: row.userId, shareType: { in: ["WHATDO_IDENTITY", "IDENTITY"] as any } },
+              orderBy: { createdAt: "desc" },
+              select: { shareToken: true },
+            }).catch(() => null);
+            if (share?.shareToken) userMeta.shareToken = share.shareToken;
+          } else if (row.sessionId) {
+            const shares = await ctx.prisma.referralShareEvent.findMany({
+              where: {
+                shareType: { in: ["WHATDO_IDENTITY_SESSION", "WHATDO_IDENTITY", "WHATDO_RESULT"] as any },
+                shareChannel: row.sessionId,
+              },
+              orderBy: { createdAt: "desc" },
+              take: 1,
+              select: { shareToken: true },
+            }).catch(() => []) as any[];
+            if (shares && shares[0]?.shareToken) {
+              userMeta.shareToken = shares[0].shareToken;
+            }
+          }
+          personalShareUrl = userMeta.shareToken
+            ? `https://whatdo.co.in/?ref=${userMeta.shareToken}`
+            : "";
+          aiInput = buildAIPromptIdentityInput(engineResult, {
+            userCity: row.citySnapshot ?? null,
+            displayName: userMeta.displayName,
+            username: userMeta.username,
+            cardTemplate: input.template as WhatDoCardTemplate,
+            userAnswers: [],
+            personalShareUrl,
+          });
+        }
+      }
+      if (!aiInput) {
+        aiInput = {
+          archetype: "CREATIVE_VISIONARY",
+          archetypeLabel: "Creative Visionary",
+          strongestTrait: "Curiosity",
+          tagline: "Your imagination is your superpower.",
+          signals: [],
+          personalShareUrl,
+          personalReferralCode: "",
+        };
+      }
+      if (input.shareToken && !personalShareUrl) {
+        personalShareUrl = `https://whatdo.co.in/?ref=${encodeURIComponent(input.shareToken)}`;
+      } else if (userId && !personalShareUrl) {
+        try {
+          const ref = await ctx.prisma.referralShareEvent.findFirst({
+            where: { userId, shareType: { in: ["IDENTITY", "WHATDO_IDENTITY"] as any } },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: { shareToken: true },
+          });
+          if (ref?.shareToken) {
+            personalShareUrl = `https://whatdo.co.in/?ref=${encodeURIComponent(ref.shareToken)}`;
+          }
+        } catch {}
+      }
+      const generated = generateAIPrompts(aiInput);
+      const validated = validateAIPrompt(generated);
+      if (!validated.valid) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Prompt validation failed: " + (validated.issues?.[0] ?? "forbidden"),
+        });
+      }
+      const prompt = input.useShortPrompt ? generated.shortImagePrompt : generated.imagePrompt;
+      const gen = await generateAIImage(prompt, {
+        userId,
+        identityId: input.identityId,
+        shareToken: input.shareToken,
+      });
+      try {
+        await ctx.prisma.analyticsEvent.create({
+          data: {
+            userId: userId ?? null,
+            sessionId: sessionId ?? null,
+            eventType: "AI_IMAGE_GENERATED",
+            properties: {
+              identityId: input.identityId ?? null,
+              shareToken: input.shareToken ?? null,
+              template: input.template,
+              fileKey: gen.fileKey,
+              sizeBytes: gen.sizeBytes,
+              urlExists: !!gen.publicUrl,
+            } as any,
+          },
+        });
+      } catch {}
+      return {
+        publicUrl: gen.publicUrl,
+        fileKey: gen.fileKey,
+        sizeBytes: gen.sizeBytes,
+        contentType: gen.contentType,
+        enhancedPrompt: gen.enhancedPrompt,
+        template: generated.template,
       };
     }),
 
