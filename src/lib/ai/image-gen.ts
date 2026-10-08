@@ -46,7 +46,7 @@ async function groqEnhancePrompt(rawPrompt: string): Promise<{ enhanced: string 
   if (!hasGroq()) {
     return { enhanced: rawPrompt.slice(0, 1200) };
   }
-  const safe = rawPrompt.replace(/salary|net worth|networth|iq\b/gi, (m) => {
+  const safe = rawPrompt.replace(/\bsalary\b|\bnet worth\b|\bnetworth\b|\biq\b/gi, (m) => {
     const map: Record<string, string> = {
       salary: "monthly stipend",
       "net worth": "total savings",
@@ -58,35 +58,49 @@ async function groqEnhancePrompt(rawPrompt: string): Promise<{ enhanced: string 
 
   const system =
     "You rewrite image-generation prompts for a portrait social-share card (9:16 vertical, 1080x1920). Rules: (1) Portrait 9:16 composition. (2) Keep all specific identity, signal-bar, and branding-burn directives verbatim at the end. (3) Remove forbidden financial/medical jargon. (4) Keep total prompt under 800 chars. (5) Output ONLY the rewritten prompt, no commentary, no quotes, no markdown. Start directly.";
-  try {
-    const resp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${env.GROQ_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "llama-3.1-8b-instant",
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: safe },
-        ],
-        max_tokens: 350,
-        temperature: 0.2,
-        stream: false,
-      }),
-      signal: AbortSignal.timeout(25_000),
-    });
-    if (!resp.ok) {
-      return { enhanced: safe.slice(0, 1000) };
+
+  const GROQ_CHAT_MODEL_FALLBACKS = [
+    "qwen/qwen3.8-27b",
+    "openai/gpt-oss-120b",
+    "openai/gpt-oss-20b",
+    "canopylabs/orpheus-v1-english",
+    "llama-3.1-8b-instant",
+    "meta-llama/llama-3.3-70b-instruct",
+  ];
+
+  for (const model of GROQ_CHAT_MODEL_FALLBACKS) {
+    try {
+      const resp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${env.GROQ_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: system },
+            { role: "user", content: safe },
+          ],
+          max_tokens: 350,
+          temperature: 0.2,
+          stream: false,
+        }),
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!resp.ok) continue;
+      const data: any = await resp.json();
+      const content: string = data?.choices?.[0]?.message?.content ?? "";
+      if (!content) continue;
+      const trimmed = content.trim().slice(0, 1000);
+      if (trimmed.length >= 120) {
+        return { enhanced: trimmed };
+      }
+    } catch {
+      /* try next model */
     }
-    const data: any = await resp.json();
-    const content: string = data?.choices?.[0]?.message?.content ?? "";
-    if (!content) return { enhanced: safe.slice(0, 1000) };
-    return { enhanced: content.trim().slice(0, 1000) };
-  } catch {
-    return { enhanced: safe.slice(0, 1000) };
   }
+  return { enhanced: safe.slice(0, 1000) };
 }
 
 async function workersAIGenerateImage(params: {

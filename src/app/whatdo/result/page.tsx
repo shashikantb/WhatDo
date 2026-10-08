@@ -217,14 +217,50 @@ export default function WhatDoResultPage() {
         (e?.message as string) ??
         (e?.data?.code as string) ??
         "Image generation failed. Try again in a few seconds.";
-      if (msg.toLowerCase().includes("set CF_API_TOKEN") || msg.toLowerCase().includes("not enabled")) {
+      const m = msg.toLowerCase();
+      if (
+        m.includes("cf_api_token") ||
+        m.includes("cf api token") ||
+        m.includes("not enabled yet") ||
+        m.includes("not configured") ||
+        m.includes("disabled") ||
+        m.includes("set ") && (m.includes("token") || m.includes("env")) ||
+        m.includes("dash.cloudflare.com")
+      ) {
         toast.show(
-          "Workers AI not enabled yet — admin: add CF_API_TOKEN at dash.cloudflare.com in env vars. Canvas PNG still available below.",
+          "Workers AI not enabled yet — admin: add CF_API_TOKEN (Workers AI Write permission) at dash.cloudflare.com → paste into Vercel env vars → Redeploy. Canvas PNG still available below.",
+          "danger",
+          10000,
+        );
+      } else if (
+        m.includes("timeout") ||
+        m.includes("abort") ||
+        m.includes("524 ") || m.endsWith("524") ||
+        m.includes("522 ") || m.endsWith("522") ||
+        m.includes("under load") ||
+        m.includes("rate limit") ||
+        m.includes("too many requests")
+      ) {
+        toast.show("Workers AI timed out — Cloudflare is under load. Retry in 10s or use Canvas PNG below.", "danger");
+      } else if (
+        m.includes("workers ai ") ||
+        m.includes("workers ai:") ||
+        m.startsWith("workers ai")
+      ) {
+        toast.show(
+          "Workers AI rejected the render request. First check Cloudflare bill / token at dash.cloudflare.com (Workers AI Write permission, single Edit row). Retry now or use Canvas PNG below. Details: " +
+            msg.slice(0, 120),
+          "danger",
+          9000,
+        );
+      } else if (m.includes("r2 storage") || m.includes("s3") || m.includes("putobject") || m.includes("bucket")) {
+        toast.show(
+          "Rendered the portrait but R2 CDN upload failed. Check R2_ACCESS_KEY_ID / R2_BUCKET env vars. Retrying or use Canvas PNG below.",
           "danger",
           8000,
         );
-      } else if (msg.toLowerCase().includes("workers ai") || msg.toLowerCase().includes("524") || msg.toLowerCase().includes("522")) {
-        toast.show("Workers AI timed out — Cloudflare is under load. Retry in 10s or use Canvas PNG below.", "danger");
+      } else if (m.includes("forbidden pattern") || m.includes("prompt validation")) {
+        toast.show("Prompt validation was not passed internally — this should auto-fix on retry. Try again.", "danger");
       } else {
         toast.show(msg, "danger");
       }
