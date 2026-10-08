@@ -881,9 +881,26 @@ export const whatdoRouter = createTRPCRouter({
               userMeta.shareToken = shares[0].shareToken;
             }
           }
-          personalShareUrl = userMeta.shareToken
-            ? `https://whatdo.co.in/?ref=${userMeta.shareToken}`
-            : "";
+          if (userMeta.shareToken) {
+            personalShareUrl = `https://whatdo.co.in/?ref=${userMeta.shareToken}`;
+          } else if (input.shareToken) {
+            personalShareUrl = `https://whatdo.co.in/?ref=${encodeURIComponent(input.shareToken)}`;
+          } else if (userId) {
+            try {
+              const ref = await ctx.prisma.referralShareEvent.findFirst({
+                where: { userId, shareType: { in: ["IDENTITY", "WHATDO_IDENTITY"] as any } },
+                orderBy: { createdAt: "desc" },
+                take: 1,
+                select: { shareToken: true },
+              });
+              if (ref?.shareToken) {
+                personalShareUrl = `https://whatdo.co.in/?ref=${encodeURIComponent(ref.shareToken)}`;
+              }
+            } catch {}
+          }
+          if (!personalShareUrl) {
+            personalShareUrl = "https://whatdo.co.in";
+          }
           aiInput = buildAIPromptIdentityInput(engineResult, {
             userCity: row.citySnapshot ?? null,
             displayName: userMeta.displayName,
@@ -895,6 +912,10 @@ export const whatdoRouter = createTRPCRouter({
         }
       }
       if (!aiInput) {
+        if (!personalShareUrl) {
+          if (input.shareToken) personalShareUrl = `https://whatdo.co.in/?ref=${encodeURIComponent(input.shareToken)}`;
+          else personalShareUrl = "https://whatdo.co.in";
+        }
         aiInput = {
           archetype: "CREATIVE_VISIONARY",
           archetypeLabel: "Creative Visionary",
@@ -920,8 +941,29 @@ export const whatdoRouter = createTRPCRouter({
           }
         } catch {}
       }
-      const generated = generateAIPrompts(aiInput);
-      const validated = validateAIPrompt(generated);
+      if (!personalShareUrl) personalShareUrl = "https://whatdo.co.in";
+      if (aiInput && !aiInput.personalShareUrl) aiInput.personalShareUrl = personalShareUrl;
+      if (aiInput && typeof aiInput.personalShareUrl === "string" && !/whatdo\.(co\.in|app)/i.test(aiInput.personalShareUrl)) {
+        aiInput.personalShareUrl = personalShareUrl;
+      }
+      let generated = generateAIPrompts(aiInput);
+      let validated = validateAIPrompt(generated);
+      if (!validated.valid) {
+        const patchShare = personalShareUrl || "https://whatdo.co.in";
+        generated = {
+          ...generated,
+          imagePrompt: generated.imagePrompt
+            + (generated.imagePrompt.includes("whatdo.co.") || generated.imagePrompt.includes("whatdo.app") ? "" : `\n\nWhatDo footer promo URL: ${patchShare}`)
+            + (generated.imagePrompt.includes("1080×1920") || generated.imagePrompt.includes("9:16") ? "" : `\n\nCanvas: 1080×1920 vertical 9:16.`)
+            + (/WHAT'S YOUR WHATDO TYPE\?/i.test(generated.imagePrompt) ? "" : `\n\nCTA header: "WHAT'S YOUR WHATDO TYPE?".`)
+            + (generated.imagePrompt.includes("WhatDo Signals") ? "" : `\n\nLabels: WhatDo Signals bar block.`),
+          shortImagePrompt: generated.shortImagePrompt
+            + (generated.shortImagePrompt.includes("whatdo.co.") || generated.shortImagePrompt.includes("whatdo.app") ? "" : `\n\nBurn footer URL: ${patchShare}`)
+            + (generated.shortImagePrompt.includes("1080×1920") || generated.shortImagePrompt.includes("9:16") ? "" : `\n\nCanvas size: 1080×1920 9:16 vertical.`)
+            + (/WHAT'S YOUR WHATDO TYPE\?/i.test(generated.shortImagePrompt) ? "" : `\n\n⑤ CTA pill -> "WHAT'S YOUR WHATDO TYPE?".`),
+        };
+        validated = validateAIPrompt(generated);
+      }
       if (!validated.valid) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",

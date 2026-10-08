@@ -595,7 +595,7 @@ ${cityHook}
 Top traits: ${strongTraitsText}
 
 What's your WhatDo Type? 👇
-Find yours → ${input.personalShareUrl ?? ""}`.trimEnd();
+Find yours → ${input.personalShareUrl ?? "https://whatdo.co.in"}`.trimEnd();
 
   const signalSummary = [
     `WhatDo Type: ${def.label}`,
