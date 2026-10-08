@@ -684,26 +684,22 @@ export function validateAIPrompt(prompt: GeneratedAIPrompt): {
   issues: string[];
 } {
   const issues: string[] = [];
-  const forbidden = [
-    /ceo/i,
-    /millionaire|billionaire/i,
-    /salary|earns?|net worth/i,
-    /iq|intelligence score/i,
-    /leadership.*%/i,
-    /guaranteed|will become/i,
-    /gps|coordinates|latitude|longitude/i,
-    /scientifically validated|clinical|research-proven/i,
+  const forbidden: Array<[label: string, re: RegExp]> = [
+    ["CEO / executive title", /\bceo\b/i],
+    ["millionaire/billionaire", /\b(millionaire|billionaire)\b/i],
+    ["salary / earnings / net worth", /\b(salary|earns?|earned|earning|net worth)\b/i],
+    ["IQ / intelligence score", /\biq\b|\bintelligence\s+score\b/i],
+    ["leadership %", /\bleadership\s*%\b/i],
+    ["guaranteed / will become", /\b(guaranteed|will become)\b/i],
+    ["GPS / coordinates / lat/lng", /\b(gps|coordinates?|latitude|longitude)\b/i],
+    ["scientifically validated / clinical / research-proven", /\b(scientifically\s+validated|clinical|research-proven)\b/i],
   ];
-  for (const re of forbidden) {
+  for (const [label, re] of forbidden) {
     if (re.test(prompt.imagePrompt)) {
-      issues.push(
-        `Prompt contains forbidden pattern: ${re.toString().slice(1, -3)}`,
-      );
+      issues.push(`Prompt contains forbidden pattern: ${label}`);
     }
     if (re.test(prompt.shortImagePrompt)) {
-      issues.push(
-        `Short prompt contains forbidden pattern: ${re.toString().slice(1, -3)}`,
-      );
+      issues.push(`Short prompt contains forbidden pattern: ${label}`);
     }
   }
   if (!prompt.imagePrompt.includes("WhatDo Signals")) {
