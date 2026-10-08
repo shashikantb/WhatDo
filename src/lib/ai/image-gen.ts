@@ -115,51 +115,93 @@ async function workersAIGenerateImage(params: {
   if (!accountId || !env.CF_API_TOKEN) {
     throw new Error("Workers AI not configured");
   }
-  const model = params.model ?? env.CF_WORKERS_AI_IMAGE_MODEL ?? "@cf/lykon/dreamshaper-8-lcm";
-  const width = params.width ?? 1080;
-  const height = params.height ?? 1920;
-  const numSteps = params.numSteps ?? 4;
-  const resp = await fetch(
-    `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/run/${encodeURIComponent(model)}`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.CF_API_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        prompt: params.prompt,
-        width,
-        height,
-        num_steps: numSteps,
-      }),
-      signal: params.signal ?? AbortSignal.timeout(120_000),
-    },
-  );
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => "");
-    throw new Error(`Workers AI ${resp.status} ${text.slice(0, 300)}`);
+  const baseModel = params.model ?? env.CF_WORKERS_AI_IMAGE_MODEL ?? "@cf/lykon/dreamshaper-8-lcm";
+  const candidates: Array<{ model: string; width: number; height: number; numSteps: number }> = [];
+  const w = params.width ?? 1080;
+  const h = params.height ?? 1920;
+  const s = params.numSteps ?? 4;
+  candidates.push({ model: baseModel, width: w, height: h, numSteps: s });
+  if (baseModel === "@cf/lykon/dreamshaper-8-lcm") {
+    const w16 = Math.round(h * (9 / 16));
+    candidates.push({
+      model: "@cf/bytedance/stable-diffusion-xl-lightning",
+      width: w16 % 2 === 0 ? w16 : w16 + 1,
+      height: h,
+      numSteps: Math.min(2, s),
+    });
   }
-  const contentType = (resp.headers.get("content-type") ?? "image/png").toLowerCase();
-  const blob = await resp.arrayBuffer();
-  const bytes = new Uint8Array(blob);
-  // Workers AI sometimes returns JSON wrapping { result: "b64..." } — try detect
-  if (contentType.includes("json") || (bytes.length > 16 && bytes[0] === 0x7b /* { */)) {
-    try {
-      const text = new TextDecoder().decode(bytes);
-      const parsed = JSON.parse(text);
-      const b64: string | undefined = parsed?.result ?? parsed?.image ?? parsed?.data?.image ?? undefined;
-      if (typeof b64 === "string" && b64.length > 100) {
-        const clean = b64.includes(",") ? b64.split(",")[1] ?? b64 : b64;
-        const decoded = Uint8Array.from(globalThis.Buffer ? Buffer.from(clean, "base64") : new Uint8Array(0));
-        if (globalThis.Buffer) {
-          return { bytes: decoded, contentType: "image/png" };
+  candidates.push({ model: "@cf/bytedance/stable-diffusion-xl-lightning", width: 1024, height: 1792, numSteps: 2 });
+  candidates.push({ model: "@cf/stabilityai/stable-diffusion-xl-base-1.0", width: 1024, height: 1792, numSteps: 8 });
+
+  let lastErr: any = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    for (const cand of candidates) {
+      try {
+        const signal = params.signal ?? AbortSignal.timeout(150_000);
+        const resp = await fetch(
+          `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/run/${cand.model}`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${env.CF_API_TOKEN}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              prompt: params.prompt,
+              width: cand.width,
+              height: cand.height,
+              num_steps: cand.numSteps,
+            }),
+            signal,
+          },
+        );
+        const contentType = (resp.headers.get("content-type") ?? "image/png").toLowerCase();
+        const blob = await resp.arrayBuffer();
+        let bytes = new Uint8Array(blob);
+        if (!resp.ok) {
+          const text = await new Response(blob).text().catch(() => "");
+          const code = /"code"\s*:\s*(\d+)/.exec(text)?.[1];
+          lastErr = new Error(`Workers AI ${cand.model} HTTP${resp.status} CF${code}: ${text.slice(0, 240)}`);
+          continue;
         }
+        if (contentType.includes("json") || (bytes.length > 16 && bytes[0] === 0x7b /* { */)) {
+          try {
+            const text = new TextDecoder().decode(bytes);
+            const parsed = JSON.parse(text);
+            if (parsed?.success === false && parsed?.errors?.length) {
+              lastErr = new Error(
+                `Workers AI ${cand.model} CF${parsed.errors[0].code}: ${String(parsed.errors[0].message ?? "").slice(0, 200)}`,
+              );
+              continue;
+            }
+            const b64: string | undefined =
+              parsed?.result?.result || parsed?.result || parsed?.result?.image || parsed?.image || undefined;
+            if (typeof b64 === "string" && b64.length > 100) {
+              const clean = b64.includes(",") ? b64.split(",")[1] ?? b64 : b64;
+              const decoded = Uint8Array.from(
+                globalThis.Buffer ? Buffer.from(clean, "base64") : new Uint8Array(0),
+              );
+              if (globalThis.Buffer && decoded.length > 2000) {
+                return { bytes: decoded, contentType: "image/png" };
+              }
+            }
+            lastErr = new Error(`Workers AI ${cand.model}: JSON result but no parseable image`);
+            continue;
+          } catch {
+            /* fall through to binary signature check */
+          }
+        }
+        const finalCT = bytes[1] === 0xd8 ? "image/jpeg" : "image/png";
+        if (bytes.length > 2000 && ((bytes[0] === 0x89 && bytes[1] === 0x50) || (bytes[0] === 0xff && bytes[1] === 0xd8))) {
+          return { bytes, contentType: finalCT as "image/png" };
+        }
+        lastErr = new Error(`Workers AI ${cand.model}: response too small or signature mismatch (len=${bytes.length})`);
+      } catch (err) {
+        lastErr = err;
       }
-    } catch {}
+    }
   }
-  const finalCT = contentType.includes("png") ? "image/png" : "image/png";
-  return { bytes, contentType: finalCT as "image/png" };
+  throw lastErr ?? new Error("Workers AI failed on all candidates.");
 }
 
 let s3Singleton: S3Client | null = null;
