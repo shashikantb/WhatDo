@@ -275,6 +275,30 @@ export default function middleware(req: NextRequest) {
     // Shard-safe: keep sibling indexes of the same session family together
     const keepSet = computeKeepSet(cookieHeader);
 
+    // 0) FORCE NUKES: too many shards = oversized session (legacy JWT bloat).
+    //    Even if all shards belong to a SINGLE session (1 iat group), >6 shards
+    //    still bursts well past Cloudflare 8KB 494 and NextAuth decode can fail.
+    //    Delete the entire family unconditionally, force a clean fresh login
+    //    where auth.ts JWT whitelist guarantees ~400 byte single cookie.
+    const tooManyShards = keepSet.size > 6;
+    if (tooManyShards && path !== "/clear-session" && !path.startsWith("/api/")) {
+      const namesToPurge: string[] = [];
+      for (const fam of PURGE_FAMILIES) {
+        namesToPurge.push(fam);
+        for (let k = 0; k < 25; k++) namesToPurge.push(fam + "." + k);
+      }
+      const allPresent = collectCookieNames(cookieHeader);
+      for (const n of allPresent) if (inFamily(n, PURGE_FAMILIES)) namesToPurge.push(n);
+      // Zero keep set = wipe ALL 14 shards clean.
+      const emptyKeep = new Set<string>();
+      const dest = new URL(req.nextUrl);
+      dest.searchParams.set("p", "1");
+      dest.searchParams.delete("p_nuke_skip");
+      const r = NextResponse.redirect(dest.toString(), 302);
+      purgeSetCookie(r, dedupe(namesToPurge), host, secure, emptyKeep);
+      return r;
+    }
+
     // 1) HEADER BLOAT PURGE
     const purgeTrigger =
       (authBytes > HEADER_BLOAT_BYTES && numSessionIatGroups > 1) ||
