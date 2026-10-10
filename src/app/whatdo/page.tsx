@@ -20,8 +20,9 @@ import {
 } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 import { ProgressBar } from "@/components/design-system/ProgressBar";
+import { CITY_NORMALIZATIONS, normalizeCityName } from "@/lib/whatdo/cities";
 
-export { CITY_NORMALIZATIONS, normalizeCityName } from "@/lib/whatdo/cities";
+export { CITY_NORMALIZATIONS, normalizeCityName };
 
 export default function WhatDoLandingPage() {
   const router = useRouter();
