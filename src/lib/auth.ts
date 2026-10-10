@@ -65,11 +65,47 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, account, profile }) {
+      // Prevent accidental OAuth adapter fields (access_token / refresh_token / full user objects)
+      // from leaking into the JWT cookie — those produce 10+ cookie shards and cause
+      // 494 REQUEST_HEADER_TOO_LARGE on Cloudflare + crash middleware.
+      delete (token as any).account;
+      delete (token as any).profile;
+      delete (token as any).access_token;
+      delete (token as any).refresh_token;
+      delete (token as any).expires_in;
+      delete (token as any).token_type;
+      delete (token as any).scope;
+      delete (token as any).id_token;
+      delete (token as any).oauth_token_state;
+      delete (token as any).provider;
+      delete (token as any).providerAccountId;
+      delete (token as any).type;
+      // Keep only compact primitives on token.
+      let dbRole: any = null;
+      let dbId: any = null;
       if (user) {
-        token.id = (user as { id: string }).id;
         const anyUser = user as any;
-        token.role = anyUser?.role ?? anyUser?.role_name ?? "USER";
+        dbId = anyUser?.id;
+        dbRole = anyUser?.role ?? anyUser?.role_name;
+        if (dbId) token.id = dbId;
+        if (dbRole) token.role = dbRole;
+      }
+      // Also strip a nested .user if OAuth2 pipeline leaked whole Prisma User row into token
+      if ((token as any).user && typeof (token as any).user === "object") {
+        const inner = (token as any).user as any;
+        if (inner && !dbId && inner.id) token.id = inner.id;
+        if (inner && !dbRole && (inner.role ?? inner.role_name)) {
+          token.role = inner.role ?? inner.role_name;
+        }
+        delete (token as any).user;
+      }
+      // Whitelist: keep only the keys we want (plus iat/exp/jti — auth runtime adds these)
+      const keepKeys = new Set<string>(["id", "role", "iat", "exp", "jti", "sub"]);
+      for (const k of Object.keys(token)) {
+        if (!keepKeys.has(k)) {
+          delete (token as any)[k];
+        }
       }
       return token;
     },
