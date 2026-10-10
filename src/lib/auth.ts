@@ -66,48 +66,37 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   ],
   callbacks: {
     async jwt({ token, user, account, profile }) {
-      // Prevent accidental OAuth adapter fields (access_token / refresh_token / full user objects)
-      // from leaking into the JWT cookie — those produce 10+ cookie shards and cause
-      // 494 REQUEST_HEADER_TOO_LARGE on Cloudflare + crash middleware.
-      delete (token as any).account;
-      delete (token as any).profile;
-      delete (token as any).access_token;
-      delete (token as any).refresh_token;
-      delete (token as any).expires_in;
-      delete (token as any).token_type;
-      delete (token as any).scope;
-      delete (token as any).id_token;
-      delete (token as any).oauth_token_state;
-      delete (token as any).provider;
-      delete (token as any).providerAccountId;
-      delete (token as any).type;
-      // Keep only compact primitives on token.
-      let dbRole: any = null;
-      let dbId: any = null;
-      if (user) {
-        const anyUser = user as any;
-        dbId = anyUser?.id;
-        dbRole = anyUser?.role ?? anyUser?.role_name;
-        if (dbId) token.id = dbId;
-        if (dbRole) token.role = dbRole;
-      }
-      // Also strip a nested .user if OAuth2 pipeline leaked whole Prisma User row into token
-      if ((token as any).user && typeof (token as any).user === "object") {
-        const inner = (token as any).user as any;
-        if (inner && !dbId && inner.id) token.id = inner.id;
-        if (inner && !dbRole && (inner.role ?? inner.role_name)) {
-          token.role = inner.role ?? inner.role_name;
-        }
-        delete (token as any).user;
-      }
-      // Whitelist: keep only the keys we want (plus iat/exp/jti — auth runtime adds these)
-      const keepKeys = new Set<string>(["id", "role", "iat", "exp", "jti", "sub"]);
-      for (const k of Object.keys(token)) {
-        if (!keepKeys.has(k)) {
-          delete (token as any)[k];
-        }
-      }
-      return token;
+      // IMPORTANT: DO NOT MUTATE then RETURN token. Instead, return a NEW
+      // plain object with ONLY id/role/iat/exp/jti/sub. This avoids:
+      //   1) PrismaAdapter leaking nested account/user/profile/oauth tokens
+      //      (which inflated the JWT to 35KB → 14 cookie shards → 494)
+      //   2) Non-enumerable / prototype-hung fields that Object.keys() misses
+      const idRaw =
+        (token && typeof (token as any).id === "string" && (token as any).id) ||
+        (user && typeof (user as any).id === "string" && (user as any).id) ||
+        (token && typeof (token as any).user?.id === "string" && (token as any).user.id) ||
+        (token && typeof token.sub === "string" ? token.sub : null);
+
+      const roleRaw =
+        (token && typeof (token as any).role === "string" && (token as any).role) ||
+        (token && typeof (token as any).role_name === "string" && (token as any).role_name) ||
+        (user && typeof (user as any).role === "string" && (user as any).role) ||
+        (user && typeof (user as any).role_name === "string" && (user as any).role_name) ||
+        (token && typeof (token as any).user?.role === "string" && (token as any).user.role) ||
+        (token && typeof (token as any).user?.role_name === "string" && (token as any).user.role_name) ||
+        "USER";
+
+      const newToken: Record<string, any> = {
+        iat: (token && typeof token.iat === "number" ? token.iat : Math.floor(Date.now() / 1000)),
+        exp: (token && typeof token.exp === "number" ? token.exp : Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60),
+      };
+      if (token && typeof token.jti === "string") newToken.jti = token.jti;
+      if (token && typeof token.sub === "string") newToken.sub = token.sub;
+      else if (typeof idRaw === "string") newToken.sub = idRaw;
+      if (typeof idRaw === "string") newToken.id = idRaw;
+      newToken.role = (roleRaw as any) ?? "USER";
+      // No trailing spread, no Object.assign from token — GUARANTEED minimal.
+      return newToken;
     },
     async session({ session, token }) {
       if (session.user) {
