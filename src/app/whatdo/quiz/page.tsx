@@ -15,6 +15,16 @@ import { ArrowLeft, ArrowRight, Loader2, Lock, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLoginModal } from "@/components/auth/LoginModal";
 import { useSession } from "next-auth/react";
+import { CITY_NORMALIZATIONS } from "../page";
+
+function normalizeCityName(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const clean = String(raw).trim().toLowerCase().replace(/\s+/g, " ");
+  if (!clean) return null;
+  if (CITY_NORMALIZATIONS[clean]) return CITY_NORMALIZATIONS[clean]!;
+  const rawClean = String(raw).trim().replace(/\s+/g, " ");
+  return rawClean.replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 const TARGET_COUNT = 12;
 const MIN_TO_COMPUTE = 10;
@@ -38,7 +48,15 @@ export default function WhatDoQuizPage() {
       const s = window.localStorage.getItem("whatdo_sess");
       if (s) setSessionId(s);
       const c = window.localStorage.getItem("whatdo_city");
-      if (c) setCity(c);
+      if (c) {
+        const normalized = normalizeCityName(c);
+        if (normalized) {
+          setCity(normalized);
+          if (normalized !== c) {
+            try { window.localStorage.setItem("whatdo_city", normalized); } catch {}
+          }
+        }
+      }
     } catch {
     }
   }, []);

@@ -21,6 +21,56 @@ import {
 import { trpc } from "@/lib/trpc/client";
 import { ProgressBar } from "@/components/design-system/ProgressBar";
 
+export const CITY_NORMALIZATIONS: Record<string, string> = {
+  bengaluru: "Bangalore",
+  "bengaluru ": "Bangalore",
+  banglore: "Bangalore",
+  bangloor: "Bangalore",
+  blore: "Bangalore",
+  blr: "Bangalore",
+  mumbai: "Mumbai",
+  bombay: "Mumbai",
+  delhi: "Delhi",
+  "new delhi": "Delhi",
+  "delhi ncr": "Delhi",
+  ncr: "Delhi",
+  gurgaon: "Delhi",
+  gurugram: "Delhi",
+  noida: "Delhi",
+  faridabad: "Delhi",
+  ghaziabad: "Delhi",
+  pune: "Pune",
+  poona: "Pune",
+  hyderabad: "Hyderabad",
+  hyd: "Hyderabad",
+  "secunderabad ": "Hyderabad",
+  secunderabad: "Hyderabad",
+  chennai: "Chennai",
+  madras: "Chennai",
+  kolkata: "Kolkata",
+  calcutta: "Kolkata",
+  ahmedabad: "Ahmedabad",
+  "ahemdabad ": "Ahmedabad",
+  surat: "Surat",
+  jaipur: "Jaipur",
+  lucknow: "Lucknow",
+  chandigarh: "Chandigarh",
+  mohali: "Chandigarh",
+  panchkula: "Chandigarh",
+  "navi mumbai": "Mumbai",
+  thane: "Mumbai",
+};
+
+export function normalizeCityName(raw: string): string | null {
+  if (!raw) return null;
+  const clean = String(raw).trim().toLowerCase().replace(/\s+/g, " ");
+  if (!clean) return null;
+  if (CITY_NORMALIZATIONS[clean]) return CITY_NORMALIZATIONS[clean]!;
+  const rawClean = String(raw).trim().replace(/\s+/g, " ");
+  // Title-case it if not in the map: "ahmedabad" → "Ahmedabad"
+  return rawClean.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export default function WhatDoLandingPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
@@ -56,12 +106,25 @@ export default function WhatDoLandingPage() {
       sid = window.localStorage.getItem("whatdo_sess");
     } catch {
     }
+    // Normalize city so Bengaluru / bangalore / " Bengaluru " all pick Bangalore-targeted questions
+    const normalizedCity = typeof city === "string" && city.trim().length > 0
+      ? normalizeCityName(city)
+      : null;
+    if (normalizedCity) {
+      try {
+        window.localStorage.setItem("whatdo_city", normalizedCity);
+      } catch {}
+    } else {
+      try {
+        window.localStorage.removeItem("whatdo_city");
+      } catch {}
+    }
     const resp = await trackLanding.mutateAsync({
       sessionId: sid ?? undefined,
     });
     const started = await start.mutateAsync({
       sessionId: resp.sessionId,
-      city: city || null,
+      city: normalizedCity,
       ageGroup: ageGroup || null,
     });
     try {
