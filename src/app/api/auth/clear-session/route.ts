@@ -1,10 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 
 // Server-side cookie purge. Responds to:
-// GET /api/auth/clear-session  (public, no auth needed)
-// This lets us drop ALL next-auth/auth.js/whatdo session cookies from inside
-// the same origin, even when httpOnly=true. Use it for 494 REQUEST_HEADER_TOO_LARGE.
-const CLEAR_FAMILIES = [
+//   GET /api/auth/clear-session
+//   GET /api/auth/clear-session?redirect=/login    (relative redirect only)
+//
+// Strategy — two-layer cleanup:
+//   1. Clear-Site-Data: "cookies", "storage"
+//      Wipes EVERY cookie / storage bucket scoped to this origin, regardless
+//      of name/path/domain/SameSite. Supported in all modern browsers. This is
+//      the primary, reliable mechanism.
+//   2. Individual Set-Cookie: expires=1970 writes
+//      Fallback for pre-2020 browsers / embedded webviews that ignore
+//      Clear-Site-Data. Only host-scoped SameSite=Lax (the common authjs
+//      default) — writing every attribute combination (domain scoped,
+//      SameSite=None, Strict, non-HttpOnly etc.) produces thousands of
+//      Set-Cookie headers and blows past Vercel's ~64KB response-header
+//      limit, surfacing a 500 on prod while working locally (the exact bug
+//      this rewrite fixes).
+//
+// Fail-safe: any exception falls back to a plain Response redirect so the
+// user never stares at a blank 500 page.
+
+const BASE_FAMILIES: readonly string[] = [
   "authjs.session-token",
   "__Secure-authjs.session-token",
   "authjs.csrf-token",
@@ -28,72 +45,77 @@ const CLEAR_FAMILIES = [
   "__wd_nuke",
 ];
 
+// Middleware force-nuke triggers at keepSet.size > 6 shards and deletes the
+// whole family. 0..5 is therefore the maximum number of shards any valid
+// authjs session cookie family can ever have when a user reaches this
+// endpoint through normal navigation. Raising this higher produces
+// unnecessary Set-Cookie headers that push the response past Vercel's
+// ~64KB response-header size limit on production.
+const MAX_SHARD = 5;
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function redirectTarget(req: NextRequest): string {
+  const raw = req.nextUrl.searchParams.get("redirect");
+  if (raw && /^\/[A-Za-z0-9_\-?=&./#%]*$/.test(raw)) return raw;
+  return "/clear-session?done=1";
+}
+
+function cookieNames(): string[] {
+  const out: string[] = [];
+  for (const base of BASE_FAMILIES) {
+    out.push(base);
+    for (let i = 0; i <= MAX_SHARD; i++) out.push(`${base}.${i}`);
+  }
+  return out;
+}
+
 export async function GET(req: NextRequest) {
+  const target = redirectTarget(req);
+
+  const fwdProto = (req.headers.get("x-forwarded-proto") ?? "").split(",")[0]?.trim().toLowerCase() ?? "";
+  const secure: boolean =
+    fwdProto === "https" ||
+    req.nextUrl.protocol === "https:" ||
+    process.env.NODE_ENV === "production";
+
+  let res: NextResponse;
   try {
-    const host = (req.headers.get("x-forwarded-host") || req.nextUrl.hostname || "").trim();
-    const proto = req.headers.get("x-forwarded-proto");
-    const secure = proto ? proto === "https" : process.env.NODE_ENV === "production";
-
-    const candidateDomains: string[] = [];
-    if (host) candidateDomains.push(host);
-    // NOTE: deliberately skip .co.in / public suffix wildcards.
-
-    const allNames: string[] = [];
-    for (const base of CLEAR_FAMILIES) {
-      allNames.push(base);
-      for (let k = 0; k < 25; k++) allNames.push(`${base}.${k}`);
-    }
-
-    const search = req.nextUrl.searchParams;
-    const redirect = search.get("redirect");
-    const redirectTo = redirect && /^\/[A-Za-z0-9_\-?=&./#]*$/.test(redirect)
-      ? redirect
-      : "/clear-session?done=1";
-
-    const res = NextResponse.redirect(new URL(redirectTo, req.nextUrl).toString(), 302);
-
-    const paths = ["/"];
-    for (const name of allNames) {
-      for (const path of paths) {
-        const expires = new Date(0);
-        const maxAge = 0;
-        const attempts: Array<[boolean, boolean, "lax" | "strict" | "none", string | undefined]> = [
-          [true, secure, "lax", undefined],
-          [true, secure, "strict", undefined],
-          [false, secure, "lax", undefined],
-          [false, secure, "strict", undefined],
-        ];
-        if (secure) attempts.push([true, true, "none", undefined]);
-        for (const d of candidateDomains) {
-          attempts.push([true, secure, "lax", d]);
-          attempts.push([false, secure, "lax", d]);
-          if (secure) attempts.push([true, true, "none", d]);
-        }
-        for (const [httpOnly, sec, sameSiteActual, domain] of attempts) {
-          try {
-            const opts: any = { path, expires, maxAge, httpOnly, sameSite: sameSiteActual, secure: sec };
-            if (domain) opts.domain = domain;
-            res.cookies.set(name, "", opts);
-          } catch {}
-        }
-      }
-    }
-    try {
-      res.headers.set("Clear-Site-Data", '"cookies", "storage"');
-    } catch {}
-    return res;
+    // Positional redirect arg. Next.js 14 edge/node crossover paths had bugs
+    // with the object-form `{status: 302}` init; positional is safe.
+    res = NextResponse.redirect(new URL(target, req.nextUrl).toString(), 302);
   } catch {
-    // Even on unexpected error, redirect the user so the browser isn't stuck.
+    return new Response("", {
+      status: 302,
+      headers: {
+        Location: target,
+        "Clear-Site-Data": '"cookies", "storage"',
+      },
+    });
+  }
+
+  const allNames = cookieNames();
+  for (const name of allNames) {
     try {
-      const r = req.nextUrl.clone();
-      r.searchParams.set("c", "1");
-      r.pathname = "/clear-session";
-      return NextResponse.redirect(r.toString(), 302);
+      res.cookies.set(name, "", {
+        path: "/",
+        expires: new Date(0),
+        maxAge: 0,
+        httpOnly: true,
+        sameSite: "lax",
+        secure,
+      });
     } catch {
-      return new Response("", { status: 302, headers: { Location: "/clear-session?done=1" } });
+      // reserved name / bad options — skip one cookie, keep going
     }
   }
+
+  try {
+    res.headers.set("Clear-Site-Data", '"cookies", "storage"');
+  } catch {
+    // ignore
+  }
+
+  return res;
 }
