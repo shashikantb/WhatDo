@@ -4,22 +4,22 @@ import { NextRequest, NextResponse } from "next/server";
 //   GET /api/auth/clear-session
 //   GET /api/auth/clear-session?redirect=/login    (relative redirect only)
 //
-// Strategy — two-layer cleanup:
-//   1. Clear-Site-Data: "cookies", "storage"
+// Strategy:
+//   1. Clear-Site-Data: "cookies", "storage"  — PRIMARY, reliable.
 //      Wipes EVERY cookie / storage bucket scoped to this origin, regardless
-//      of name/path/domain/SameSite. Supported in all modern browsers. This is
-//      the primary, reliable mechanism.
-//   2. Individual Set-Cookie: expires=1970 writes
-//      Fallback for pre-2020 browsers / embedded webviews that ignore
-//      Clear-Site-Data. Only host-scoped SameSite=Lax (the common authjs
-//      default) — writing every attribute combination (domain scoped,
-//      SameSite=None, Strict, non-HttpOnly etc.) produces thousands of
-//      Set-Cookie headers and blows past Vercel's ~64KB response-header
-//      limit, surfacing a 500 on prod while working locally (the exact bug
-//      this rewrite fixes).
+//      of name/path/domain/SameSite. Supported in all modern browsers.
+//   2. Per-family expires=1970 Set-Cookie writes  — FALLBACK.
+//      Only for old Safari (<13) / embedded webviews that ignore
+//      Clear-Site-Data. Only the base cookie family names, no shard suffixes
+//      — siblings are covered by Clear-Site-Data for modern browsers and by
+//      src/middleware.ts (force-nuke >6 shard families on every request) for
+//      the rest. Keeping the Set-Cookie count tiny (21) avoids blowing past
+//      Vercel's undocumented low header-count limit (the exact symptom that
+//      caused a prod-only 500 while localhost worked).
 //
-// Fail-safe: any exception falls back to a plain Response redirect so the
-// user never stares at a blank 500 page.
+// EVERYTHING runs inside one outer try/catch. Redirects use positional 302
+// (the Next.js 14 form that works reliably across runtimes) and a final
+// plain-Response fallback so the user never sees a blank 500.
 
 const BASE_FAMILIES: readonly string[] = [
   "authjs.session-token",
@@ -45,77 +45,92 @@ const BASE_FAMILIES: readonly string[] = [
   "__wd_nuke",
 ];
 
-// Middleware force-nuke triggers at keepSet.size > 6 shards and deletes the
-// whole family. 0..5 is therefore the maximum number of shards any valid
-// authjs session cookie family can ever have when a user reaches this
-// endpoint through normal navigation. Raising this higher produces
-// unnecessary Set-Cookie headers that push the response past Vercel's
-// ~64KB response-header size limit on production.
-const MAX_SHARD = 5;
-
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function redirectTarget(req: NextRequest): string {
-  const raw = req.nextUrl.searchParams.get("redirect");
-  if (raw && /^\/[A-Za-z0-9_\-?=&./#%]*$/.test(raw)) return raw;
-  return "/clear-session?done=1";
-}
-
-function cookieNames(): string[] {
-  const out: string[] = [];
-  for (const base of BASE_FAMILIES) {
-    out.push(base);
-    for (let i = 0; i <= MAX_SHARD; i++) out.push(`${base}.${i}`);
-  }
-  return out;
-}
-
 export async function GET(req: NextRequest) {
-  const target = redirectTarget(req);
-
-  const fwdProto = (req.headers.get("x-forwarded-proto") ?? "").split(",")[0]?.trim().toLowerCase() ?? "";
-  const secure: boolean =
-    fwdProto === "https" ||
-    req.nextUrl.protocol === "https:" ||
-    process.env.NODE_ENV === "production";
-
-  let res: NextResponse;
   try {
-    // Positional redirect arg. Next.js 14 edge/node crossover paths had bugs
-    // with the object-form `{status: 302}` init; positional is safe.
-    res = NextResponse.redirect(new URL(target, req.nextUrl).toString(), 302);
-  } catch {
-    return new Response("", {
-      status: 302,
-      headers: {
-        Location: target,
-        "Clear-Site-Data": '"cookies", "storage"',
-      },
-    });
-  }
+    // --- 1. Resolve redirect target -------------------------------------------------
+    const target: string = (() => {
+      try {
+        const raw = req.nextUrl.searchParams.get("redirect");
+        if (raw && /^\/[A-Za-z0-9_\-?=&./#%]*$/.test(raw)) return raw;
+      } catch {
+        // ignore — malformed URL from edge, fall through to default
+      }
+      return "/clear-session?done=1";
+    })();
 
-  const allNames = cookieNames();
-  for (const name of allNames) {
+    // --- 2. Build the redirect response ---------------------------------------------
+    //    Positional (url, 302) form is the only Next.js 14 redirect signature that
+    //    works reliably across node / edge / middleware runtimes; object form crashes.
+    let res: NextResponse;
     try {
-      res.cookies.set(name, "", {
-        path: "/",
-        expires: new Date(0),
-        maxAge: 0,
-        httpOnly: true,
-        sameSite: "lax",
-        secure,
+      res = NextResponse.redirect(new URL(target, req.nextUrl).toString(), 302);
+    } catch {
+      return new Response("", {
+        status: 302,
+        headers: {
+          Location: target,
+          "Clear-Site-Data": '"cookies", "storage"',
+        },
+      });
+    }
+
+    // --- 3. Secure flag --------------------------------------------------------------
+    const fwdProto =
+      ((req.headers.get("x-forwarded-proto") ?? "").split(",")[0] || "").trim().toLowerCase();
+    const secure: boolean =
+      fwdProto === "https" ||
+      (() => {
+        try {
+          return req.nextUrl.protocol === "https:";
+        } catch {
+          return false;
+        }
+      })() ||
+      process.env.NODE_ENV === "production";
+
+    // --- 4. Per-family 1970-expiry writes (fallback only) ---------------------------
+    //    Exactly 1 write per base family name. No permutations. No shard loops.
+    //    This produces ~21 Set-Cookie headers (~3KB total) on every call.
+    for (const name of BASE_FAMILIES) {
+      try {
+        res.cookies.set(name, "", {
+          path: "/",
+          expires: new Date(0),
+          maxAge: 0,
+          httpOnly: true,
+          sameSite: "lax",
+          secure,
+        });
+      } catch {
+        // one bad cookie name / runtime option mismatch — skip, keep going.
+      }
+    }
+
+    // --- 5. Clear-Site-Data: the real cleanup. ---------------------------------------
+    try {
+      res.headers.set("Clear-Site-Data", '"cookies", "storage"');
+    } catch {
+      // ignore — Set-Cookie fallbacks above still cover old webviews
+    }
+
+    return res;
+  } catch {
+    // Final last-ditch: something very unexpected (URL parsing, header
+    // immutability, cookies object throw). Respond with a plain Node Response
+    // — no NextResponse APIs at all.
+    try {
+      return new Response("", {
+        status: 302,
+        headers: {
+          Location: "/clear-session?done=1",
+          "Clear-Site-Data": '"cookies", "storage"',
+        },
       });
     } catch {
-      // reserved name / bad options — skip one cookie, keep going
+      return new Response("", { status: 302, headers: { Location: "/clear-session?done=1" } });
     }
   }
-
-  try {
-    res.headers.set("Clear-Site-Data", '"cookies", "storage"');
-  } catch {
-    // ignore
-  }
-
-  return res;
 }
