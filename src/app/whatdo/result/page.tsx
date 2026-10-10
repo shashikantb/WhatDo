@@ -9,6 +9,7 @@ import {
   CARD_W,
   CARD_H,
   type ShareCardResultSnapshot,
+  type ShareCardDrawExtra,
 } from "@/lib/whatdo/share-canvas";
 import type { WhatDoCardTemplate } from "@/lib/whatdo/ai-prompt";
 import { CARD_TEMPLATES } from "@/lib/whatdo/ai-prompt";
@@ -29,6 +30,8 @@ import {
   Share2,
   Sparkles,
   Trophy,
+  Upload,
+  UserRound,
   Users,
   Wand2,
 } from "lucide-react";
@@ -37,6 +40,7 @@ import { useLoginModal } from "@/components/auth/LoginModal";
 import { ProgressBar } from "@/components/design-system/ProgressBar";
 import { loadAvatarImage } from "@/lib/whatdo/share-canvas";
 import { useToast } from "@/components/design-system/Toaster";
+import { Modal } from "@/components/design-system/Modal";
 
 function usePersistedWhatdoArgs() {
   const params = useSearchParams();
@@ -111,24 +115,46 @@ export default function WhatDoResultPage() {
 
   const trackClick = trpc.whatdo.trackShareClick.useMutation();
   const aiImageMut = trpc.whatdo.generateAIImage.useMutation();
+  const presignSelfie = trpc.media.requestPresignedUpload.useMutation();
+  const confirmSelfie = trpc.media.confirmUpload.useMutation();
+  const updateProfileMut = trpc.auth.updateProfile.useMutation();
   const [aiImageResult, setAiImageResult] = React.useState<{
     publicUrl: string;
     fileKey: string;
     enhancedPrompt: string;
     sizeBytes: number;
+    usedImg2Img?: boolean;
   } | null>(null);
-  const [aiStage, setAiStage] = React.useState<null | "starting" | "prompt" | "rendering" | "uploading" | "done">(null);
+  const [aiStage, setAiStage] = React.useState<null | "starting" | "prompt" | "rendering" | "compositing" | "uploading" | "done">(null);
+  const [compositedPortraitUrl, setCompositedPortraitUrl] = React.useState<string | null>(null);
+  const [compositedPortraitBlob, setCompositedPortraitBlob] = React.useState<Blob | null>(null);
+  const [selfieExplicitlyUploaded, setSelfieExplicitlyUploaded] = React.useState<boolean>(false);
+  const [showSelfieUploadModal, setShowSelfieUploadModal] = React.useState(false);
+  const [selfieUploadState, setSelfieUploadState] = React.useState<"idle" | "compressing" | "presigning" | "uploading" | "saving" | "done" | "error">("idle");
+  const [selfiePreview, setSelfiePreview] = React.useState<string | null>(null);
+  const [selfieCdnUrl, setSelfieCdnUrl] = React.useState<string | null>(null);
+  const [selfieFileKey, setSelfieFileKey] = React.useState<string | null>(null);
+  const selfieFileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const pendingStartAfterUploadRef = React.useRef(false);
+
+  const CDN_HOST_MARKERS = ["r2.dev", "cloudflare", "whatdo.co", "r2.cloudflarestorage"];
 
   const downloadAIImage = async () => {
-    if (!aiImageResult?.publicUrl) return;
+    const useComposited = compositedPortraitBlob && compositedPortraitUrl;
     try {
-      const resp = await fetch(aiImageResult.publicUrl, { cache: "no-store" });
-      if (!resp.ok) throw new Error("Fetch");
-      const blob = await resp.blob();
+      let blob: Blob;
+      if (useComposited) {
+        blob = compositedPortraitBlob!;
+      } else {
+        if (!aiImageResult?.publicUrl) return;
+        const resp = await fetch(aiImageResult.publicUrl, { cache: "no-store" });
+        if (!resp.ok) throw new Error("Fetch");
+        blob = await resp.blob();
+      }
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `whatdo-${snapshot?.archetype ?? "identity"}-ai.png`;
+      a.download = `my-whatdo-${snapshot?.archetype ?? "identity"}-portrait.png`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -139,12 +165,18 @@ export default function WhatDoResultPage() {
   };
 
   const shareAIImage = async () => {
-    if (!aiImageResult?.publicUrl) return;
+    const useComposited = compositedPortraitBlob && compositedPortraitUrl;
     try {
-      const resp = await fetch(aiImageResult.publicUrl, { cache: "no-store" });
-      if (!resp.ok) throw new Error("Fetch");
-      const blob = await resp.blob();
-      const f = new File([blob], `whatdo-${snapshot?.archetype ?? "identity"}-ai.png`, { type: blob.type || "image/png" });
+      let blob: Blob;
+      if (useComposited) {
+        blob = compositedPortraitBlob!;
+      } else {
+        if (!aiImageResult?.publicUrl) return;
+        const resp = await fetch(aiImageResult.publicUrl, { cache: "no-store" });
+        if (!resp.ok) throw new Error("Fetch");
+        blob = await resp.blob();
+      }
+      const f = new File([blob], `my-whatdo-${snapshot?.archetype ?? "identity"}-portrait.png`, { type: blob.type || "image/png" });
       const shareData: ShareData & { files?: File[] } = {
         title: "My WhatDo Type",
         text: `I got ${snapshot?.archetype ?? "my WhatDo identity"} on WhatDo — take the quiz and see yours! ${shareUrl ?? ""}`,
@@ -156,7 +188,6 @@ export default function WhatDoResultPage() {
         toast.show("Shared to WhatsApp/Instagram ✓", "success");
         return;
       }
-      // Mobile fallback: try navigator.share even if canShare is unknown
       if (typeof navigator.share === "function") {
         try {
           await navigator.share(shareData);
@@ -164,10 +195,9 @@ export default function WhatDoResultPage() {
           return;
         } catch {}
       }
-      // Desktop: copy URL + show prompt
       try {
         await navigator.clipboard.writeText(
-          `My WhatDo Type: ${snapshot?.archetype ?? ""} — ${shareUrl ?? aiImageResult.publicUrl}`,
+          `My WhatDo Type: ${snapshot?.archetype ?? ""} — ${shareUrl ?? (useComposited ? window.location.href : aiImageResult!.publicUrl)}`,
         );
         toast.show("Link copied. Download PNG + paste to WhatsApp/Instagram.", "info");
       } catch {
@@ -179,37 +209,321 @@ export default function WhatDoResultPage() {
     }
   };
 
+  async function compressImageToMaxBytes(
+    file: File,
+    opts: { maxSide: number; maxBytes: number; mime: string; quality: number },
+  ): Promise<{ blob: Blob; dataUrlPreview: string }> {
+    const { maxSide, maxBytes, mime, quality } = opts;
+    const bitmap = await createImageBitmap(file);
+    let { width, height } = bitmap;
+    const scale = Math.min(1, maxSide / Math.max(width, height));
+    width = Math.max(1, Math.round(width * scale));
+    height = Math.max(1, Math.round(height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas not supported");
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    try {
+      bitmap.close();
+    } catch {}
+    let finalBlob: Blob | null = null;
+    let curQuality = quality;
+    for (let i = 0; i < 6; i += 1) {
+      const b: Blob = await new Promise((resolve, reject) => {
+        canvas.toBlob(
+          (bb) => (bb ? resolve(bb) : reject(new Error("toBlob null"))),
+          mime,
+          curQuality,
+        );
+      });
+      finalBlob = b;
+      if (b.size <= maxBytes || curQuality <= 0.45) break;
+      curQuality = Math.max(0.45, curQuality - 0.08);
+    }
+    if (!finalBlob) throw new Error("Image compression failed");
+    const dataUrlPreview = canvas.toDataURL(mime, Math.max(0.6, curQuality));
+    return { blob: finalBlob, dataUrlPreview };
+  }
+
+  function loadHtmlImage(src: string, opts?: { crossOrigin?: string }): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      if (opts?.crossOrigin) img.crossOrigin = opts.crossOrigin;
+      img.referrerPolicy = "no-referrer";
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error(`img load failed: ${src.slice(0, 80)}`));
+      img.src = src;
+    });
+  }
+
+  async function runCompositePortraitPipeline(
+    aiBgPublicUrl: string,
+    self: { avatarImg: HTMLImageElement | null; selfieCdnUrl: string | null; snapshot: ShareCardResultSnapshot | null; templateIdx: number; shareToken: string | null },
+  ): Promise<{ url: string; blob: Blob }> {
+    if (!self.snapshot) throw new Error("Snapshot not ready");
+    const aiBgImg = await loadHtmlImage(aiBgPublicUrl, { crossOrigin: "anonymous" });
+    let selfieImg: HTMLImageElement | null = self.avatarImg;
+    if (!selfieImg && self.selfieCdnUrl) {
+      try { selfieImg = await loadAvatarImage(self.selfieCdnUrl); } catch {}
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = CARD_W;
+    canvas.height = CARD_H;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("2D canvas not supported");
+    const tpl = CARD_TEMPLATES[self.templateIdx] as WhatDoCardTemplate;
+    const extra: ShareCardDrawExtra = {
+      backgroundImage: aiBgImg,
+      skipBgTemplate: true,
+      layoutMode: "portrait",
+      hideTopIdentityBlock: true,
+    };
+    if (selfieImg) {
+      extra.selfieImageOverride = selfieImg;
+    }
+    drawShareCard(ctx, tpl, { ...self.snapshot, shareToken: self.shareToken }, extra);
+    const blob: Blob = await new Promise((resolve, reject) => {
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/png", 0.95);
+    });
+    const url = URL.createObjectURL(blob);
+    return { url, blob };
+  }
+
+  const onPickSelfie = () => {
+    if (selfieUploadState === "compressing" || selfieUploadState === "presigning" || selfieUploadState === "uploading") return;
+    selfieFileInputRef.current?.click();
+  };
+
+  const onSelfieFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.show("Unsupported file: Please upload a JPG, PNG, or WebP photo.", "danger");
+      return;
+    }
+    if (file.size > 12 * 1024 * 1024) {
+      toast.show("File too large: Please choose an image under 12MB.", "danger");
+      return;
+    }
+    try {
+      setSelfieUploadState("compressing");
+      const mime = "image/jpeg";
+      const compressed = await compressImageToMaxBytes(file, {
+        maxSide: 512,
+        maxBytes: 256 * 1024,
+        mime,
+        quality: 0.86,
+      });
+      setSelfiePreview(compressed.dataUrlPreview);
+      setSelfieUploadState("idle");
+    } catch (err) {
+      setSelfieUploadState("error");
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.show("Could not process image: " + (msg || "unknown error"), "danger");
+    }
+  };
+
+  const onConfirmSelfieUpload = async () => {
+    if (!selfiePreview) {
+      toast.show("Pick a photo first.", "info");
+      return;
+    }
+    try {
+      if (!selfiePreview.startsWith("data:")) {
+        setSelfieCdnUrl(selfiePreview);
+        setSelfieExplicitlyUploaded(true);
+        if (avatarImg) {
+          // already loaded (was a preview from existing URL)
+        } else {
+          const img = await loadAvatarImage(selfiePreview);
+          setAvatarImg(img);
+        }
+        setShowSelfieUploadModal(false);
+        setSelfieUploadState("done");
+        if (pendingStartAfterUploadRef.current) {
+          pendingStartAfterUploadRef.current = false;
+          void startGenAIImage();
+        }
+        return;
+      }
+      const mime = "image/jpeg";
+      const res = await fetch(selfiePreview);
+      const previewBlob = await res.blob();
+      setSelfieUploadState("presigning");
+      const presign = await presignSelfie.mutateAsync({
+        type: "image",
+        contentType: mime,
+        fileSize: previewBlob.size,
+        fileName: `selfie_${Date.now()}.jpg`,
+      });
+      setSelfieUploadState("uploading");
+      const resp = await fetch(presign.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": mime },
+        body: previewBlob,
+      });
+      if (!resp.ok) throw new Error(`Upload HTTP ${resp.status}`);
+      await confirmSelfie.mutateAsync({ fileKey: presign.fileKey });
+      const finalCdnUrl = presign.publicUrl || presign.fileKey;
+
+      setSelfieUploadState("saving");
+      if (isLoggedIn && finalCdnUrl && /^https?:\/\//i.test(finalCdnUrl)) {
+        try {
+          await updateProfileMut.mutateAsync({ avatarUrl: finalCdnUrl });
+        } catch (profileErr: any) {
+          const m = (profileErr?.message || String(profileErr || "")).toLowerCase();
+          if (m.includes("username") || m.includes("displayname")) {
+            try {
+              const usernameNow = (me.data?.username as string | null) || (user?.username as string | null);
+              const displayNow = (me.data?.displayName as string | null) || (user?.name as string | null) || (user?.displayName as string | null);
+              const patch: any = { avatarUrl: finalCdnUrl };
+              if (usernameNow && /^[a-zA-Z0-9_]{3,20}$/.test(usernameNow)) patch.username = usernameNow;
+              if (displayNow && String(displayNow).length <= 50) patch.displayName = displayNow;
+              await updateProfileMut.mutateAsync(patch);
+            } catch {}
+          }
+        }
+        try {
+          await utils.auth.me.invalidate();
+          await new Promise((r) => setTimeout(r, 150));
+        } catch {}
+      }
+
+      setSelfieCdnUrl(finalCdnUrl);
+      setSelfieFileKey(presign.fileKey);
+      setSelfieExplicitlyUploaded(true);
+      setAvatarImg(await loadAvatarImage(finalCdnUrl));
+      setSelfieUploadState("done");
+      setShowSelfieUploadModal(false);
+      toast.show("Selfie saved to your profile — generating your AI portrait now.", "success");
+      if (pendingStartAfterUploadRef.current) {
+        pendingStartAfterUploadRef.current = false;
+        void startGenAIImage();
+      }
+    } catch (err) {
+      setSelfieUploadState("error");
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("Storage not configured") && selfiePreview) {
+        try {
+          const img = await loadAvatarImage(selfiePreview);
+          setAvatarImg(img);
+          setSelfieCdnUrl(selfiePreview);
+          setSelfieExplicitlyUploaded(true);
+          setShowSelfieUploadModal(false);
+          setSelfieUploadState("done");
+          if (pendingStartAfterUploadRef.current) {
+            pendingStartAfterUploadRef.current = false;
+            void startGenAIImage();
+          }
+          return;
+        } catch {}
+      }
+      toast.show("Upload failed: " + (msg || "please try again."), "danger");
+    }
+  };
+
+  const isLikelyRealUploadedAvatarUrl = (url: string | null | undefined): boolean => {
+    if (!url) return false;
+    if (typeof url !== "string") return false;
+    if (url.startsWith("data:image/")) return true;
+    if (!/^https?:\/\//i.test(url)) return false;
+    const lower = url.toLowerCase();
+    if (lower.includes("gravatar.com")) return false;
+    if (/seed=|initials|svg\?|dicebear|ui-avatars|avatar\.placeholder|api\.dicebear|lo\.cal|placeholder/i.test(lower)) return false;
+    return CDN_HOST_MARKERS.some((m) => lower.includes(m));
+  };
+
   const startGenAIImage = async () => {
     if (!identity.data?.id && !shareToken) {
       toast.show("Still loading your result — try again in 2 seconds.", "info");
       return;
     }
+    const existingRealAvatar = isLikelyRealUploadedAvatarUrl(
+      me.data?.avatarUrl ?? user?.avatarUrl ?? user?.image ?? snapshot?.avatarUrl ?? null,
+    );
+    const hasAnySelfie = Boolean(
+      selfieExplicitlyUploaded ||
+      selfieCdnUrl ||
+      (avatarImg && (selfieExplicitlyUploaded || existingRealAvatar)),
+    );
+    if (!hasAnySelfie) {
+      pendingStartAfterUploadRef.current = true;
+      setShowSelfieUploadModal(true);
+      return;
+    }
     setAiStage("starting");
     setAiImageResult(null);
+    setCompositedPortraitUrl(null);
+    setCompositedPortraitBlob(null);
     const stageTimers: NodeJS.Timeout[] = [];
     try {
       await new Promise((r) => setTimeout(r, 150));
       setAiStage("prompt");
       stageTimers.push(setTimeout(() => setAiStage("rendering"), 2200));
-      stageTimers.push(setTimeout(() => setAiStage("uploading"), 10000));
+      stageTimers.push(setTimeout(() => setAiStage("compositing"), 14000));
+      const fallbackAvatarUrl: string | null =
+        (me.data?.avatarUrl as string | null) ||
+        (user?.avatarUrl as string | null) ||
+        (user?.image as string | null) ||
+        (snapshot?.avatarUrl as string | null) ||
+        null;
+      const selfiePassCdn = selfieCdnUrl ?? (existingRealAvatar ? fallbackAvatarUrl : null);
+      const selfiePassFileKey = selfieFileKey ?? undefined;
       const out = await aiImageMut.mutateAsync({
         identityId: identity.data?.id ?? undefined,
         shareToken: shareToken ?? undefined,
         template: (CARD_TEMPLATES[templateIdx] as WhatDoCardTemplate) ?? "BRIGHT_HERO",
         useShortPrompt: true,
+        selfieCdnUrl: selfiePassCdn ?? undefined,
+        selfieFileKey: selfiePassFileKey,
       });
       stageTimers.forEach(clearTimeout);
       if (!out?.publicUrl) throw new Error("Missing image URL");
-      setAiStage("uploading");
-      await new Promise((r) => setTimeout(r, 400));
+      setAiStage("compositing");
       setAiImageResult({
         publicUrl: out.publicUrl,
         fileKey: out.fileKey,
         enhancedPrompt: out.enhancedPrompt,
         sizeBytes: out.sizeBytes,
+        usedImg2Img: out.usedImg2Img,
       });
+      let compositeSucceeded = false;
+      try {
+        const composite = await runCompositePortraitPipeline(out.publicUrl, {
+          avatarImg,
+          selfieCdnUrl,
+          snapshot,
+          templateIdx,
+          shareToken,
+        });
+        setCompositedPortraitBlob(composite.blob);
+        setCompositedPortraitUrl(composite.url);
+        compositeSucceeded = true;
+      } catch (compErr: any) {
+        const m = (compErr?.message || String(compErr || "")).toLowerCase();
+        if (m.includes("tainted") || m.includes("cross-origin") || m.includes("cors")) {
+          toast.show("CDN blocked card branding overlay. Using raw AI render; retry in 30s for the branded portrait.", "warning");
+        } else if (m.includes("avatar") || m.includes("selfie") || m.includes("img load failed")) {
+          toast.show("Selfie image couldn't load for composite. Using raw AI render; regenerate to retry.", "warning");
+        } else {
+          toast.show("Branded overlay skipped: " + (String(compErr?.message || compErr).slice(0, 70) || "retrying may help"), "warning");
+        }
+        compositeSucceeded = false;
+      }
+      await new Promise((r) => setTimeout(r, compositeSucceeded ? 180 : 400));
       setAiStage("done");
-      toast.show("AI image ready — share it everywhere!", "success");
+      if (out.usedImg2Img && compositeSucceeded) {
+        toast.show("Face-matched branded portrait ready — share to WhatsApp/Instagram!", "success");
+      } else if (compositeSucceeded) {
+        toast.show("Branded WhatDo portrait ready — tap Share/Download.", "success");
+      } else if (out.usedImg2Img) {
+        toast.show("Face-matched AI render ready. Overlay skipped but share works.", "success");
+      } else {
+        toast.show("AI portrait ready — Share or tap Regenerate for a face-matched version.", "info");
+      }
     } catch (e: any) {
       stageTimers.forEach(clearTimeout);
       setAiStage(null);
@@ -224,7 +538,7 @@ export default function WhatDoResultPage() {
         m.includes("not enabled yet") ||
         m.includes("not configured") ||
         m.includes("disabled") ||
-        m.includes("set ") && (m.includes("token") || m.includes("env")) ||
+        (m.includes("set ") && (m.includes("token") || m.includes("env"))) ||
         m.includes("dash.cloudflare.com")
       ) {
         toast.show(
@@ -885,17 +1199,21 @@ export default function WhatDoResultPage() {
           <div className="space-y-3.5">
             <div className="relative aspect-[9/16] w-full max-w-[260px] mx-auto rounded-2xl border-2 border-white/15 bg-black shadow-2xl shadow-black/60 overflow-hidden">
               <img
-                src={aiImageResult.publicUrl}
+                src={compositedPortraitUrl ?? aiImageResult.publicUrl}
                 alt={`${snapshot?.archetype ?? "WhatDo"} AI portrait`}
                 className="h-full w-full object-cover block"
                 onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).style.opacity = "0.3";
+                  if (!compositedPortraitUrl || e.currentTarget.src === compositedPortraitUrl) {
+                    (e.currentTarget as HTMLImageElement).style.opacity = "0.3";
+                  }
                 }}
               />
               <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/50 to-transparent" />
               <div className="pointer-events-none absolute bottom-2 left-2 right-2 flex items-end justify-between">
                 <div className="rounded-full bg-black/50 backdrop-blur px-2 py-0.5 border border-white/15">
                   <p className="text-[9px] font-black uppercase tracking-widest text-white/90">
+                    {aiImageResult.usedImg2Img ? "Face-matched" : (compositedPortraitUrl ? "Branded card" : "AI render")}
+                    {" · "}
                     {aiImageResult.sizeBytes ? `${(aiImageResult.sizeBytes / 1024).toFixed(0)} KB` : ""}
                   </p>
                 </div>
@@ -1105,6 +1423,140 @@ export default function WhatDoResultPage() {
         </Button>
       </div>
     </div>
+
+    <input
+      ref={selfieFileInputRef}
+      type="file"
+      accept="image/*"
+      className="hidden"
+      onChange={onSelfieFile}
+    />
+
+    <Modal
+      open={showSelfieUploadModal}
+      onClose={() => {
+        if (selfieUploadState === "compressing" || selfieUploadState === "presigning" || selfieUploadState === "uploading" || selfieUploadState === "saving") return;
+        pendingStartAfterUploadRef.current = false;
+        setShowSelfieUploadModal(false);
+      }}
+      size="sm"
+      title="Upload a selfie"
+      description="We'll use your photo to generate an AI portrait that looks like you. Face-aware rendering + branded WhatDo card."
+      footer={
+        <div className="flex w-full items-center gap-2">
+          <Button
+            size="lg"
+            variant="outline"
+            onClick={() => {
+              if (selfieUploadState === "compressing" || selfieUploadState === "presigning" || selfieUploadState === "uploading" || selfieUploadState === "saving") return;
+              pendingStartAfterUploadRef.current = false;
+              setShowSelfieUploadModal(false);
+            }}
+            className="flex-1 rounded-full"
+            disabled={selfieUploadState === "compressing" || selfieUploadState === "presigning" || selfieUploadState === "uploading" || selfieUploadState === "saving"}
+          >
+            Cancel
+          </Button>
+          <Button
+            size="lg"
+            onClick={onConfirmSelfieUpload}
+            className="flex-1 rounded-full bg-gradient-to-r from-fuchsia-500 via-violet-500 to-indigo-500 text-white font-black border-0 shadow-xl shadow-black/30 hover:from-fuchsia-500/95 hover:via-violet-500/95 hover:to-indigo-500/95"
+            disabled={
+              !selfiePreview ||
+              selfieUploadState === "compressing" ||
+              selfieUploadState === "presigning" ||
+              selfieUploadState === "uploading" ||
+              selfieUploadState === "saving"
+            }
+          >
+            {selfieUploadState === "compressing" && "Compressing…"}
+            {selfieUploadState === "presigning" && "Preparing upload…"}
+            {selfieUploadState === "uploading" && "Uploading…"}
+            {selfieUploadState === "saving" && (isLoggedIn ? "Saving to profile…" : "Preparing…")}
+            {selfieUploadState === "done" && "Saved ✓"}
+            {selfieUploadState === "error" && "Retry"}
+            {(selfieUploadState === "idle" || selfieUploadState === "done") && selfiePreview ? "Save & Generate →" : "Pick a photo"}
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        <button
+          type="button"
+          onClick={onPickSelfie}
+          className="group relative block w-full aspect-square rounded-3xl border-2 border-dashed border-white/15 bg-gradient-to-br from-fuchsia-500/10 via-violet-500/10 to-indigo-500/10 hover:border-white/25 hover:from-fuchsia-500/15 hover:via-violet-500/15 hover:to-indigo-500/15 transition-all overflow-hidden"
+        >
+          {selfiePreview ? (
+            <img
+              src={selfiePreview}
+              alt="Selfie preview"
+              className="absolute inset-0 h-full w-full object-cover rounded-[22px] p-1.5"
+            />
+          ) : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
+              <div className="h-16 w-16 rounded-full bg-gradient-to-br from-fuchsia-500/25 via-violet-500/25 to-indigo-500/25 border border-white/15 flex items-center justify-center group-hover:scale-[1.03] transition-transform">
+                {me.data?.avatarUrl || snapshot?.avatarUrl ? (
+                  <UserRound className="h-7 w-7 text-white/85" />
+                ) : (
+                  <Upload className="h-7 w-7 text-white/85" />
+                )}
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-black text-white/90 leading-tight">
+                  {me.data?.avatarUrl || snapshot?.avatarUrl ? "Use profile avatar or pick new" : "Tap to pick a selfie"}
+                </p>
+                <p className="text-[11.5px] font-semibold text-white/60 leading-relaxed">
+                  Clear face photo works best · JPG/PNG under 12MB · Auto-compressed
+                </p>
+              </div>
+            </div>
+          )}
+          {selfiePreview && (
+            <div className="pointer-events-none absolute top-3 right-3">
+              <div className="rounded-full bg-black/55 backdrop-blur px-2.5 py-1 border border-white/15">
+                <p className="text-[10px] font-black uppercase tracking-widest text-white/90">
+                  Tap to change
+                </p>
+              </div>
+            </div>
+          )}
+        </button>
+
+        {(me.data?.avatarUrl || snapshot?.avatarUrl) && (
+          <button
+            type="button"
+            onClick={async () => {
+              const url = (me.data?.avatarUrl || snapshot?.avatarUrl)!;
+              setSelfiePreview(url);
+              setSelfieUploadState("idle");
+            }}
+            className="w-full flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 text-white/85 py-3 px-4 transition-colors"
+          >
+            <UserRound className="h-4 w-4" />
+            <p className="text-[12px] font-bold tracking-wide">Use my existing profile avatar</p>
+          </button>
+        )}
+
+        {selfieUploadState === "error" && (
+          <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-3">
+            <p className="text-[11.5px] font-semibold text-rose-200 leading-relaxed">
+              That didn't work. Try another photo or keep it under 12MB.
+            </p>
+          </div>
+        )}
+
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 space-y-1.5">
+          <p className="text-[10.5px] font-black uppercase tracking-[0.12em] text-white/55">
+            What happens next
+          </p>
+          <ol className="space-y-1 text-[11.5px] font-semibold text-white/70 leading-relaxed">
+            <li>1️⃣ Selfie + identity prompt → Cloudflare Workers AI img2img</li>
+            <li>2️⃣ Client-side canvas overlays WhatDo branding + your avatar + signal bars</li>
+            <li>3️⃣ One-tap share to WhatsApp Status / Instagram Stories</li>
+          </ol>
+        </div>
+      </div>
+    </Modal>
   </main>
   );
 }

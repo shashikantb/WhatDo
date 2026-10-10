@@ -793,6 +793,8 @@ export const whatdoRouter = createTRPCRouter({
           ])
           .default("FUTURISTIC_AI"),
         useShortPrompt: z.boolean().default(true),
+        selfieCdnUrl: z.string().optional(),
+        selfieFileKey: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -946,7 +948,8 @@ export const whatdoRouter = createTRPCRouter({
       if (aiInput && typeof aiInput.personalShareUrl === "string" && !/whatdo\.(co\.in|app)/i.test(aiInput.personalShareUrl)) {
         aiInput.personalShareUrl = personalShareUrl;
       }
-      let generated = generateAIPrompts(aiInput);
+      const hasSelfieRef = Boolean(input.selfieCdnUrl || input.selfieFileKey);
+      let generated = generateAIPrompts(aiInput, { hasSelfieReference: hasSelfieRef, mode: hasSelfieRef ? "sceneOnly" : "burnIn" });
       let validated = validateAIPrompt(generated);
       if (!validated.valid) {
         const patchShare = personalShareUrl || "https://whatdo.co.in";
@@ -961,6 +964,9 @@ export const whatdoRouter = createTRPCRouter({
             + (generated.shortImagePrompt.includes("whatdo.co.") || generated.shortImagePrompt.includes("whatdo.app") ? "" : `\n\nBurn footer URL: ${patchShare}`)
             + (generated.shortImagePrompt.includes("1080×1920") || generated.shortImagePrompt.includes("9:16") ? "" : `\n\nCanvas size: 1080×1920 9:16 vertical.`)
             + (/WHAT'S YOUR WHATDO TYPE\?/i.test(generated.shortImagePrompt) ? "" : `\n\n⑤ CTA pill -> "WHAT'S YOUR WHATDO TYPE?".`),
+          renderScenePrompt: generated.renderScenePrompt
+            + (/HARD CONSTRAINT/.test(generated.renderScenePrompt) ? "" : `\n\n[HARD CONSTRAINT: NO FACES / NO TEXT. Scene-only 9:16 render with empty head zone (x=60..520, y=340..940).]`)
+            + (generated.renderScenePrompt.includes("1080") && generated.renderScenePrompt.includes("1920") ? "" : `\n\n[LAYOUT 1080×1920 9:16 vertical.]`),
         };
         validated = validateAIPrompt(generated);
       }
@@ -970,11 +976,16 @@ export const whatdoRouter = createTRPCRouter({
           message: "Prompt validation failed: " + (validated.issues?.[0] ?? "forbidden"),
         });
       }
-      const prompt = input.useShortPrompt ? generated.shortImagePrompt : generated.imagePrompt;
+      const prompt = hasSelfieRef
+        ? generated.renderScenePrompt
+        : (input.useShortPrompt ? generated.shortImagePrompt : generated.imagePrompt);
       const gen = await generateAIImage(prompt, {
         userId,
         identityId: input.identityId,
         shareToken: input.shareToken,
+        selfieRef: { cdnUrl: input.selfieCdnUrl ?? null, fileKey: input.selfieFileKey ?? null },
+        hasSelfieReference: hasSelfieRef,
+        promptMode: hasSelfieRef ? "sceneOnly" : "burnIn",
       });
       try {
         await ctx.prisma.analyticsEvent.create({
@@ -1000,6 +1011,8 @@ export const whatdoRouter = createTRPCRouter({
         contentType: gen.contentType,
         enhancedPrompt: gen.enhancedPrompt,
         template: generated.template,
+        usedImg2Img: gen.usedImg2Img,
+        shortImagePrompt: generated.shortImagePrompt,
       };
     }),
 

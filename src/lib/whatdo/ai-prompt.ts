@@ -60,6 +60,7 @@ export interface AIPromptIdentityInput {
 export interface GeneratedAIPrompt {
   imagePrompt: string;
   shortImagePrompt: string;
+  renderScenePrompt: string;
   shareCaption: string;
   signalSummary: string;
   warnings: string[];
@@ -381,12 +382,21 @@ function sanitizePromptText(raw: string | null | undefined): string {
     .replace(/\bresearch-proven\b/gi, "reader-tested");
 }
 
-export function generateAIPrompts(input: AIPromptIdentityInput): GeneratedAIPrompt {
+export type PromptRenderMode = "burnIn" | "sceneOnly";
+export function generateAIPrompts(
+  input: AIPromptIdentityInput,
+  opts: {
+    mode?: PromptRenderMode;
+    hasSelfieReference?: boolean;
+  } = {},
+): GeneratedAIPrompt {
   const template = pickOrDefaultTemplate(input);
   const style = TEMPLATE_STYLES[template];
   const def = getArchetypeDefinition(input.archetype);
   const viz = ARCHETYPE_VISUAL_PROPS[input.archetype];
   const warnings: string[] = [];
+  const mode: PromptRenderMode = opts.mode ?? "burnIn";
+  const hasSelfieReference = Boolean(opts.hasSelfieReference);
   if (input.agreementScorePct === null) {
     warnings.push(INSUFFICIENT_DATA);
   }
@@ -607,8 +617,8 @@ Find yours → ${input.personalShareUrl ?? "https://whatdo.co.in"}`.trimEnd();
     .filter(Boolean)
     .join(" · ");
 
-  // SHORT image-gen mode prompt (<=1300 chars, read by DALL-E / Midjourney / Ideogram)
-  // Critically: places SELFIE CENTER-LEFT (55% canvas) + overlays BURNED IN TEXT in the 45% NEGATIVE SPACE, NOT "composited on scene"
+  // SHORT image-gen mode prompt (<=1300 chars, read by ChatGPT / Midjourney / Ideogram Copy-Paste button)
+  // This one instructs BURNED-IN overlays — used ONLY for the user-facing "Copy AI IMAGE PROMPT" manual button.
   const top3 = tops3.map((t) => `${t.meta.icon}${t.meta.label.replace(/\s+/g, "")}${t.score}`).join(" ");
   const shortPropsLine = viz.signatureObjects.slice(0, 3).join(" + ");
   const shortAccessLine = viz.accessories.slice(0, 2).join(", ");
@@ -645,9 +655,32 @@ BURNED-IN, FULL-OPACITY TYPOGRAPHY — render as pixels on canvas, never behind 
 
 ${whoStr} Reference photo face/hair/identity unchanged. ${signatureTraitsBlock} Typography uses: ${viz.typographyKeyword}. Proportion: text+URL overlays = visible 40% of canvas, selfie 55%.`;
 
+  // SCENE-ONLY prompt variant — sent to Workers AI T2I / img2img endpoints. Explicitly forbids text + faces.
+  // Coordinates for EMPTY HEAD ZONE: x=60..520, y=340..940 (center cx=290, cy=640, r=300) match share-canvas.ts portraitAvatarCx/Cy/Radius exactly.
+  const identityPrefix = hasSelfieReference
+    ? "[VISUAL REFERENCE IMAGE PROVIDED as img2img init. MATCH the reference person's approximate skin tone, hair color/style, approximate age, gender presentation, and body type/build when rendering wardrobe + body + scene color temperature. DO NOT change their race or apparent ethnicity.]"
+    : "[NO VISUAL REFERENCE — render neutral generically-dressed body silhouette with a blank head zone.]";
+  const stripPlurals = (s: string) => s
+    .replace(/\b(?:decisive|confident|curious|creative)[-\s](?:women|men|people|leaders|thinkers)\b/gi, "clothed figure silhouette")
+    .replace(/\b(?:woman|women|man|men|girl|boy|lady|gentleman|guy|crowd|group|multiple faces|collage|grid)\b/gi, "anonymous clothed silhouette")
+    .replace(/\b(?:subject|subjects|person|persons|people|faces|heads)\b/gi, "clothed figure");
+  const sceneClean = stripPlurals(String(viz.scene));
+  const wardrobeClean = stripPlurals(String(viz.wardrobe));
+  const poseClean = stripPlurals(String(viz.poseEnergy));
+  const propsClean = stripPlurals(shortPropsLine);
+  const renderScenePrompt =
+`[HARD CONSTRAINT: RENDER NO HUMAN FACES WHATSOEVER. DO NOT INCLUDE ANY HEADS OR IDENTIFIABLE PERSONS. DO NOT RENDER ANY TEXT, LETTERS, WORDS, NUMBERS, LOGOS, WATERMARKS, OR BURNED-IN BRAND TYPOGRAPHY OF ANY KIND. ANY OUTPUT CONTAINING TEXT OR FACES IS INVALID. FAIL IF YOU CANNOT COMPLY.]
+${identityPrefix}
+[LAYOUT: 1080w×1920h 9:16 vertical. RENDER ONLY the scenic archetype environment. On the LEFT (x=0..600, y=280..1600) paint a SINGLE CLOTHED BODY SILHOUETTE wearing exactly this wardrobe: 「${wardrobeClean}」. The SILHOUETTE IS MISSING ITS HEAD. The EMPTY HEAD ZONE (canvas pixels x=60..520, y=340..940) MUST BE LEFT FULLY EMPTY — paint sky/background/scene-continued there, no face, no hair, no head outline. The body's shoulders/neck must terminate naturally at y≈920 so a circular portrait of radius r=300 centered at (cx=290, cy=640) will perfectly sit as the missing head without overlapping the shoulders.]
+SCENE ENVIRONMENT: 「${sceneClean}」.  LIGHTING: 「${viz.lighting}」.  POSE ENERGY: 「${poseClean}」.  COLOR PALETTE: 「${viz.colorPalette}」.  TEMPLATE MOOD: 「${style.mood}」.  PROPS scattered naturally into the scene (not on the head zone): ${propsClean}.  SIGNATURE ACCESSORIES: ${viz.accessories.slice(0,2).join(", ")}.
+STYLE: cinematic editorial 9:16 vertical composition, 85mm lens f/1.8 shallow bokeh background, ultra-detailed textures, subtle film grain natural, HDR balanced but not blown out. Background scenery fills 100% of canvas behind the body silhouette. The EMPTY HEAD ZONE is background-continued and has the SAME lighting and palette continuity as the rest of the scene.
+[SIGNAL ENERGY (affects pose + color dynamics only): ${top3} ]
+NEGATIVE PROMPT FOR THIS RENDER: faces, heads, portraits, people, persons, crowd, multiple persons, collage, grid, text, letters, words, numbers, logos, watermarks, typography, burned-in captions, deformed body, extra limbs, extra fingers, blurry face, ugly, duplicate, cloned.`;
+
   return {
     imagePrompt,
     shortImagePrompt,
+    renderScenePrompt,
     shareCaption,
     signalSummary,
     warnings,

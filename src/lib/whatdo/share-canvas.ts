@@ -349,17 +349,67 @@ function drawRoundedRect(
   ctx.closePath();
 }
 
+export type ShareCardDrawExtra = {
+  avatarImg?: HTMLImageElement | null;
+  selfieImageOverride?: HTMLImageElement | null;
+  backgroundImage?: HTMLImageElement | null;
+  skipBgTemplate?: boolean;
+  layoutMode?: "standard" | "portrait";
+  hideTopIdentityBlock?: boolean;
+};
+
 export function drawShareCard(
   ctx: CanvasRenderingContext2D,
   template: WhatDoCardTemplate,
   opts: ResultSnapshot,
-  extra?: { avatarImg?: HTMLImageElement | null },
+  extra?: ShareCardDrawExtra,
 ) {
   loadGoogleFont(ctx);
   const w = CARD_W;
   const h = CARD_H;
   const col = textColors(template);
-  bgTemplate(ctx, template, opts);
+
+  if (extra?.backgroundImage) {
+    ctx.save();
+    const bgImg = extra.backgroundImage;
+    const sRatio = bgImg.width / bgImg.height;
+    const tRatio = CARD_W / CARD_H;
+    let dw = CARD_W;
+    let dh = CARD_H;
+    let dx = 0;
+    let dy = 0;
+    if (sRatio > tRatio) {
+      dh = CARD_H;
+      dw = bgImg.width * (CARD_H / bgImg.height);
+      dx = (CARD_W - dw) / 2;
+    } else {
+      dw = CARD_W;
+      dh = bgImg.height * (CARD_W / bgImg.width);
+      dy = (CARD_H - dh) / 2;
+    }
+    ctx.drawImage(bgImg, dx, dy, dw, dh);
+    const vignette = ctx.createRadialGradient(w / 2, h * 0.55, 100, w / 2, h * 0.55, Math.max(w, h));
+    vignette.addColorStop(0, "rgba(0,0,0,0)");
+    vignette.addColorStop(0.62, "rgba(0,0,0,0.12)");
+    vignette.addColorStop(1, "rgba(0,0,0,0.62)");
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, w, h);
+    const bottomReadability = ctx.createLinearGradient(0, 880, 0, h);
+    bottomReadability.addColorStop(0, "rgba(0,0,0,0)");
+    bottomReadability.addColorStop(0.4, "rgba(10,10,20,0.42)");
+    bottomReadability.addColorStop(1, "rgba(10,10,20,0.82)");
+    ctx.fillStyle = bottomReadability;
+    ctx.fillRect(0, 880, w, h - 880);
+    const topReadability = ctx.createLinearGradient(0, 0, 0, 260);
+    topReadability.addColorStop(0, "rgba(10,10,20,0.6)");
+    topReadability.addColorStop(1, "rgba(10,10,20,0)");
+    ctx.fillStyle = topReadability;
+    ctx.fillRect(0, 0, w, 260);
+    ctx.restore();
+  }
+  if (!extra?.skipBgTemplate) {
+    bgTemplate(ctx, template, opts);
+  }
   const arch = getArchetypeDefinition(opts.archetype);
   const label = arch?.label ?? String(opts.archetype).replaceAll("_", " ");
   const tagline = arch?.tagline ?? "";
@@ -368,10 +418,10 @@ export function drawShareCard(
   // Brand corner
   ctx.save();
   ctx.font = "900 40px 'Space Grotesk', system-ui, sans-serif";
-  ctx.fillStyle = col.brand;
+  ctx.fillStyle = extra?.backgroundImage ? "#ffffff" : col.brand;
   ctx.fillText("WHATDO", 90, 130);
   ctx.font = "600 26px 'Space Grotesk', system-ui, sans-serif";
-  ctx.fillStyle = col.secondary;
+  ctx.fillStyle = extra?.backgroundImage ? "rgba(255,255,255,0.85)" : col.secondary;
   ctx.fillText("My WhatDo · Identity Card", 90, 170);
   ctx.restore();
 
@@ -384,18 +434,34 @@ export function drawShareCard(
     accent: col.accent,
     pillText: col.pillText,
   };
-  const avatarCx = 90 + 118;
-  const avatarCy = 300;
-  const avatarRadius = 118;
   const initials = getInitials(opts.displayName, opts.username);
-  drawCircularProfile(ctx, avatarCx, avatarCy, avatarRadius, extra?.avatarImg ?? null, initials, avatarCol);
+  const actualAvatarImg = extra?.selfieImageOverride ?? extra?.avatarImg ?? null;
+
+  const isPortrait = extra?.layoutMode === "portrait";
+  const portraitAvatarCx = 288;
+  const portraitAvatarCy = 640;
+  const portraitAvatarRadius = 300;
+  const standardAvatarCx = 90 + 118;
+  const standardAvatarCy = 300;
+  const standardAvatarRadius = 118;
+  const avatarCx = isPortrait ? portraitAvatarCx : standardAvatarCx;
+  const avatarCy = isPortrait ? portraitAvatarCy : standardAvatarCy;
+  const avatarRadius = isPortrait ? portraitAvatarRadius : standardAvatarRadius;
+
+  const hasSelfieOverride = Boolean(actualAvatarImg);
+  const hideIdentityBlock = Boolean(extra?.hideTopIdentityBlock) && isPortrait && hasSelfieOverride;
+
+  drawCircularProfile(ctx, avatarCx, avatarCy, avatarRadius, actualAvatarImg, initials, avatarCol);
 
   // User info (to the right of the avatar) — displayName first, @username below
   ctx.save();
-  const infoX = avatarCx + avatarRadius + 50;
-  const nameTop = avatarCy - 38;
+  const infoX = isPortrait ? w - 480 : avatarCx + avatarRadius + 50;
+  const nameTop = isPortrait ? 260 : avatarCy - 38;
+  if (isPortrait && hideIdentityBlock) {
+    // no-op
+  } else {
   const nameStr = opts.displayName?.trim() ? opts.displayName.trim() : "WhatDo Friend";
-  ctx.fillStyle = col.primary;
+  ctx.fillStyle = extra?.backgroundImage ? "#ffffff" : col.primary;
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
   ctx.font = "900 64px 'Space Grotesk', system-ui, sans-serif";
@@ -403,33 +469,39 @@ export function drawShareCard(
   for (let i = 0; i < displayLines.length; i++) {
     ctx.fillText(displayLines[i] ?? "", infoX, nameTop + i * 70);
   }
-  ctx.fillStyle = col.secondary;
+  ctx.fillStyle = extra?.backgroundImage ? "rgba(255,255,255,0.78)" : col.secondary;
   ctx.font = "600 34px 'Space Grotesk', system-ui, sans-serif";
   const handleLineY = nameTop + Math.min(displayLines.length, 2) * 70 + 16;
   ctx.fillText(`@${opts.username?.trim() || "friend"}`, infoX, handleLineY);
 
   ctx.font = "500 26px 'Space Grotesk', system-ui, sans-serif";
-  ctx.fillStyle = col.secondary;
+  ctx.fillStyle = extra?.backgroundImage ? "rgba(255,255,255,0.7)" : col.secondary;
   ctx.globalAlpha = 0.7;
   ctx.fillText("answered " + String(opts.totalQuestions) + " WhatDo questions", infoX, handleLineY + 52);
   ctx.globalAlpha = 1;
+  }
 
   // Small @username top-right corner reference keeps the existing symmetry
   ctx.font = "600 30px 'Space Grotesk', system-ui, sans-serif";
-  ctx.fillStyle = col.secondary;
+  ctx.fillStyle = extra?.backgroundImage ? "rgba(255,255,255,0.88)" : col.secondary;
   ctx.textAlign = "right";
   ctx.textBaseline = "alphabetic";
   ctx.fillText(`@${opts.username?.trim() || "friend"}`, w - 90, 130);
   ctx.restore();
 
+  const hasBg = Boolean(extra?.backgroundImage);
+  const tPri = hasBg ? "#ffffff" : col.primary;
+  const tSec = hasBg ? "rgba(255,255,255,0.82)" : col.secondary;
+  const tAcc = hasBg ? "#fbbf24" : col.accent;
+
   // Archetype pill
   ctx.save();
   const pillY = avatarCy + avatarRadius + 70;
   drawRoundedRect(ctx, 90, pillY, 280, 78, 36);
-  ctx.fillStyle = col.pill;
+  ctx.fillStyle = hasBg ? "rgba(255,255,255,0.94)" : col.pill;
   ctx.fill();
   ctx.font = "800 34px 'Space Grotesk', system-ui, sans-serif";
-  ctx.fillStyle = col.pillText;
+  ctx.fillStyle = hasBg ? "#0f172a" : col.pillText;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(`${emoji}  WHATDO TYPE`, 90 + 140, pillY + 39);
@@ -438,7 +510,10 @@ export function drawShareCard(
   // Big label (shifted down since avatar takes the top 220+ px now)
   ctx.save();
   ctx.font = "900 104px 'Space Grotesk', system-ui, sans-serif";
-  ctx.fillStyle = col.primary;
+  ctx.fillStyle = tPri;
+  ctx.shadowColor = "rgba(0,0,0,0.55)";
+  ctx.shadowBlur = hasBg ? 16 : 0;
+  ctx.shadowOffsetY = hasBg ? 4 : 0;
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
   const labelLines = wrapText(ctx, label, w - 180, 3);
@@ -449,26 +524,35 @@ export function drawShareCard(
   }
   // Tagline
   ctx.font = "500 38px 'Space Grotesk', system-ui, sans-serif";
-  ctx.fillStyle = col.secondary;
+  ctx.fillStyle = tSec;
   const tagLines = wrapText(ctx, tagline, w - 180, 2);
   for (const ln of tagLines) {
     ctx.fillText(ln, 90, yy + 18);
     yy += 52;
   }
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
   ctx.restore();
 
   // Stat trio card
   const cardTop = 960;
   ctx.save();
-  ctx.globalAlpha = template === "MINIMAL" || template === "COLORFUL" ? 1 : 0.15;
-  ctx.fillStyle = template === "MINIMAL" ? "#ffffff" : "#ffffff";
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = hasBg ? "rgba(10,10,20,0.68)" : (template === "MINIMAL" ? "#ffffff" : "#ffffff");
   drawRoundedRect(ctx, 90, cardTop, w - 180, 360, 44);
-  if (template === "MINIMAL" || template === "COLORFUL") {
+  ctx.fill();
+  if (hasBg) {
+    ctx.strokeStyle = "rgba(255,255,255,0.14)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  } else if (template === "MINIMAL" || template === "COLORFUL") {
     ctx.strokeStyle = "rgba(15,23,42,0.08)";
     ctx.lineWidth = 2;
     ctx.stroke();
   } else {
+    ctx.globalAlpha = 0.15;
     ctx.fill();
+    ctx.globalAlpha = 1;
     ctx.strokeStyle = "rgba(255,255,255,0.18)";
     ctx.lineWidth = 2;
     drawRoundedRect(ctx, 90, cardTop, w - 180, 360, 44);
@@ -477,7 +561,6 @@ export function drawShareCard(
   ctx.globalAlpha = 1;
   ctx.restore();
 
-  const statCol1 = textColors(template);
   const pctText = (p: number | null, suffix = "%") =>
     p == null ? "—" : `${Math.round(p)}${suffix}`;
   const trio = [
@@ -503,10 +586,10 @@ export function drawShareCard(
     ctx.save();
     ctx.textAlign = "center";
     ctx.font = "700 22px 'Space Grotesk', system-ui, sans-serif";
-    ctx.fillStyle = i === 2 ? statCol1.accent : statCol1.secondary;
+    ctx.fillStyle = i === 2 ? tAcc : tSec;
     ctx.fillText(s.label.toUpperCase(), cx, cardTop + 78);
     ctx.font = "900 66px 'Space Grotesk', system-ui, sans-serif";
-    ctx.fillStyle = i === 2 ? statCol1.primary : statCol1.primary;
+    ctx.fillStyle = tPri;
     const valueLines = wrapText(ctx, s.value, segW - 40, 2);
     let vy = cardTop + 160;
     for (const ln of valueLines) {
@@ -514,7 +597,7 @@ export function drawShareCard(
       vy += 72;
     }
     ctx.font = "500 24px 'Space Grotesk', system-ui, sans-serif";
-    ctx.fillStyle = statCol1.secondary;
+    ctx.fillStyle = tSec;
     ctx.fillText(s.sub, cx, cardTop + 300);
     ctx.restore();
   });
@@ -523,7 +606,7 @@ export function drawShareCard(
   const barTop = 1400;
   ctx.save();
   ctx.font = "800 30px 'Space Grotesk', system-ui, sans-serif";
-  ctx.fillStyle = col.primary;
+  ctx.fillStyle = tPri;
   ctx.fillText("Your 5 core signals", 90, barTop);
   const signalsList = WHATDO_SIGNALS;
   let by = barTop + 40;
@@ -531,20 +614,20 @@ export function drawShareCard(
   for (const s of signalsList) {
     const val = Math.max(0, Math.min(100, opts.signalScores?.[s] ?? 0));
     ctx.font = "700 26px 'Space Grotesk', system-ui, sans-serif";
-    ctx.fillStyle = col.secondary;
+    ctx.fillStyle = tSec;
     const niceLabel = (SIGNAL_META as any)[s]?.label ?? String(s).replaceAll("_", " ");
     ctx.fillText(niceLabel + ` · ${Math.round(val)}`, 90, by + 26);
     ctx.save();
     const railX = w - 90 - barMax;
     drawRoundedRect(ctx, railX, by, barMax, 24, 12);
-    ctx.globalAlpha = 0.15;
-    ctx.fillStyle = col.primary;
+    ctx.globalAlpha = hasBg ? 0.28 : 0.15;
+    ctx.fillStyle = tPri;
     ctx.fill();
     ctx.globalAlpha = 1;
     const fill = Math.max(6, (val / 100) * barMax);
     const grad = ctx.createLinearGradient(railX, 0, railX + barMax, 0);
-    grad.addColorStop(0, col.accent);
-    grad.addColorStop(1, col.primary);
+    grad.addColorStop(0, tAcc);
+    grad.addColorStop(1, tPri);
     ctx.fillStyle = grad;
     drawRoundedRect(ctx, railX, by, fill, 24, 12);
     ctx.fill();
@@ -591,14 +674,14 @@ export function drawShareCard(
     const cw = metrics.width + pad * 2;
     drawRoundedRect(ctx, chipX, chipY, cw, ch, 32);
     ctx.fillStyle = c.accent
-      ? (template === "PREMIUM_DARK" ? "#fde68a" : "#f59e0b")
-      : "rgba(255,255,255,0.85)";
-    ctx.globalAlpha = template === "MINIMAL" || template === "COLORFUL" ? 1 : 0.92;
+      ? (hasBg ? "#fbbf24" : (template === "PREMIUM_DARK" ? "#fde68a" : "#f59e0b"))
+      : (hasBg ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.85)");
+    ctx.globalAlpha = hasBg ? 1 : (template === "MINIMAL" || template === "COLORFUL" ? 1 : 0.92);
     ctx.fill();
     ctx.globalAlpha = 1;
     ctx.fillStyle = c.accent
-      ? "#1c1917"
-      : (template === "MINIMAL" || template === "COLORFUL" ? "#0f172a" : "#0f172a");
+      ? (hasBg ? "#1c1917" : "#1c1917")
+      : (hasBg ? "#0f172a" : (template === "MINIMAL" || template === "COLORFUL" ? "#0f172a" : "#0f172a"));
     ctx.textBaseline = "middle";
     ctx.fillText(c.text, chipX + pad, chipY + ch / 2);
     chipX += cw + 20;
@@ -609,13 +692,13 @@ export function drawShareCard(
   // Footer URL
   ctx.save();
   ctx.font = "700 26px 'Space Grotesk', system-ui, sans-serif";
-  ctx.fillStyle = col.secondary;
+  ctx.fillStyle = tSec;
   ctx.fillText("Take the quiz →", 90, h - 96);
   const host = "whatdo.co.in";
   const shareUrl = `https://${host}/${opts.shareToken ? "?ref=" + opts.shareToken : ""}`;
   ctx.font = "600 24px 'Space Grotesk', system-ui, sans-serif";
   ctx.textAlign = "right";
-  ctx.fillStyle = col.secondary;
+  ctx.fillStyle = tSec;
   ctx.fillText(shareUrl, w - 90, h - 96);
   ctx.restore();
 }
