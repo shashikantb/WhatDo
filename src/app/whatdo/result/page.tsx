@@ -1012,15 +1012,6 @@ export default function WhatDoResultPage() {
     }
   };
 
-  React.useEffect(() => {
-    if (genPrompt.error) {
-      toast.show(
-        "Couldn't build the AI prompt: " + ((genPrompt.error as any)?.message ?? "Please refresh and try again"),
-        "danger",
-      );
-    }
-  }, [genPrompt.error]);
-
   const copyTextFallback = (text: string): boolean => {
     try {
       const ta = document.createElement("textarea");
