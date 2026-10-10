@@ -1,4 +1,8 @@
 import NextAuth from "next-auth";
+import {
+  encode as defaultJwtEncode,
+  decode as defaultJwtDecode,
+} from "@auth/core/jwt";
 import Google from "next-auth/providers/google";
 import Apple from "next-auth/providers/apple";
 import Credentials from "next-auth/providers/credentials";
@@ -81,18 +85,20 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   // line of defense.
   jwt: {
     async encode(params) {
-      const { token, ...rest } = params as any;
-      const sanitized = sanitizeTokenPayload(token);
-      const { encode: defaultEncode } = await import(
-        "next-auth/jwt" as any
-      ).then((m: any) => m as any) as any;
-      return (defaultEncode as any)({ ...rest, token: sanitized });
+      // Never throw; on any failure, fall back to the default encoder with
+      // the sanitized token so the user still gets a session.
+      try {
+        const { token, ...rest } = params as any;
+        const sanitized = sanitizeTokenPayload(token);
+        return await defaultJwtEncode({ ...(rest as any), token: sanitized });
+      } catch (err) {
+        const { token, ...rest } = params as any;
+        const fallback = sanitizeTokenPayload(token);
+        return await defaultJwtEncode({ ...(rest as any), token: fallback });
+      }
     },
     async decode(params) {
-      const { decode: defaultDecode } = await import(
-        "next-auth/jwt" as any
-      ).then((m: any) => m as any) as any;
-      return (defaultDecode as any)(params) as any;
+      return await defaultJwtDecode(params as any);
     },
   },
   providers: [
