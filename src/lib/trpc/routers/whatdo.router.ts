@@ -32,6 +32,7 @@ import { WhatDoArchetype } from "@/lib/whatdo/archetypes";
 import crypto from "crypto";
 import { WHATDO_FUNNEL_EVENT_NAMES } from "@/lib/whatdo/funnel-events";
 import { generateAIImage, hasImageGen } from "@/lib/ai/image-gen";
+import { normalizeCityName } from "@/lib/whatdo/cities";
 export type WhatDoFunnelEventName = (typeof WHATDO_FUNNEL_EVENT_NAMES)[number];
 
 function makeSessionId() {
@@ -185,19 +186,20 @@ export const whatdoRouter = createTRPCRouter({
       const whereUnique = userId
         ? { userId_assessmentQuestionId: { userId, assessmentQuestionId: input.questionId } }
         : { sessionId_assessmentQuestionId: { sessionId: input.sessionId, assessmentQuestionId: input.questionId } };
+      const normalizedCity = normalizeCityName(input.citySnapshot ?? null) ?? undefined;
       try {
         await ctx.prisma.questionResponse.upsert({
           where: whereUnique as any,
           update: {
             selectedOptionId: input.optionId,
-            citySnapshot: input.citySnapshot ?? undefined,
+            citySnapshot: normalizedCity,
           },
           create: {
             userId: userId ?? undefined,
             sessionId: userId ? undefined : input.sessionId,
             assessmentQuestionId: input.questionId,
             selectedOptionId: input.optionId,
-            citySnapshot: input.citySnapshot ?? undefined,
+            citySnapshot: normalizedCity,
           },
         });
         await ctx.prisma.assessmentQuestion.update({
@@ -250,7 +252,7 @@ export const whatdoRouter = createTRPCRouter({
       const user = userId
         ? await ctx.prisma.user.findUnique({ where: { id: userId }, select: { city: true } })
         : null;
-      const citySnapshot = user?.city ?? responses[0]?.citySnapshot ?? null;
+      const citySnapshot = normalizeCityName(user?.city ?? responses[0]?.citySnapshot ?? null);
       const answers: UserAnswer[] = responses.map((r: any) => {
         const optionIndex = Math.max(
           0,
@@ -263,7 +265,7 @@ export const whatdoRouter = createTRPCRouter({
           optionIndex,
           totalOptions: r.question.options.length,
           answeredAt: r.createdAt,
-          userCitySnapshot: r.citySnapshot ?? citySnapshot,
+          userCitySnapshot: normalizeCityName(r.citySnapshot) ?? citySnapshot,
         };
       });
       const source = createPrismaAggregationSource(ctx.prisma);
@@ -310,8 +312,10 @@ export const whatdoRouter = createTRPCRouter({
 
       const whatdoCreateData = {
         whatdoType: result.archetype as string,
-        agreementScorePct: Math.round(result.agreementPct ?? 50),
-        rarityScorePct: Math.round(result.overallRarityPct ?? 50),
+        agreementScorePct:
+          result.agreementPct != null ? Math.round(result.agreementPct) : null,
+        rarityScorePct:
+          result.overallRarityPct != null ? Math.round(result.overallRarityPct) : null,
         majorityMatches: result.majorityMatches,
         contrarianAnswers: result.contrarianAnswers,
         totalQuestions: responses.length,

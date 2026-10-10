@@ -754,8 +754,8 @@ model WhatDoIdentityResult {
   userId                 String?
   sessionId              String?
   whatdoType             String
-  agreementScorePct      Int
-  rarityScorePct         Int
+  agreementScorePct      Int?
+  rarityScorePct         Int?
   majorityMatches        Int
   contrarianAnswers      Int
   totalQuestions         Int
