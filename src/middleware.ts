@@ -110,13 +110,11 @@ function purgeAuthCookies(res: NextResponse, req: NextRequest, opts: { keep?: Se
   const host = (req.headers.get("x-forwarded-host") || req.nextUrl.hostname || "").trim();
   const candidateDomains: string[] = [];
   if (host) candidateDomains.push(host);
-  const parts = host.split(".");
-  if (parts.length >= 2) candidateDomains.push("." + parts.slice(-2).join("."));
+  // NOTE: We intentionally do NOT set domain=.co.in (or other public suffixes) — it's blocked.
+  // Set only the exact host. Browsers auto-match subdomains on an exact host cookie when appropriate.
 
   const namesToRemove = new Set<string>();
   for (const c of allAuthAndAppCookies(req)) namesToRemove.add(c.name);
-
-  // Also remove all possible shards / names even if not present in current req, to be safe
   for (const base of SESSION_FAMILIES) {
     namesToRemove.add(base);
     for (let k = 0; k < 20; k++) namesToRemove.add(`${base}.${k}`);
@@ -128,34 +126,67 @@ function purgeAuthCookies(res: NextResponse, req: NextRequest, opts: { keep?: Se
     if (latest) keepNames.add(latest.name);
   }
 
+  const allPaths = ["/"];
   for (const cn of Array.from(namesToRemove)) {
     if (keepNames.has(cn)) continue;
-    const allPaths = ["/"];
     for (const ph of allPaths) {
-      const commonOpts = {
-        name: cn,
-        value: "",
-        path: ph,
-        httpOnly: true,
-        sameSite: "lax" as const,
-        secure,
-        expires: new Date(0),
-        maxAge: 0,
-      };
-      try { res.cookies.set({ ...commonOpts }); } catch {}
-      try { res.cookies.set({ ...commonOpts, sameSite: "strict" as const }); } catch {}
-      try { res.cookies.set({ ...commonOpts, sameSite: "none" as const }); } catch {}
-      // no httpOnly variant (to cover JS-set whatdo_sess / csrf / callback)
-      try { res.cookies.set({ ...commonOpts, httpOnly: false }); } catch {}
+      // 1) The canonical form: httpOnly + lax + correct secure flag (most common)
+      try {
+        res.cookies.set(cn, "", { path: ph, expires: new Date(0), maxAge: 0, httpOnly: true, sameSite: "lax", secure });
+      } catch {}
+      // 2) Strict samesite variant
+      try {
+        res.cookies.set(cn, "", { path: ph, expires: new Date(0), maxAge: 0, httpOnly: true, sameSite: "strict", secure });
+      } catch {}
+      // 3) SameSite=none (for cross-origin callbacks) only valid with secure=true
+      if (secure) {
+        try {
+          res.cookies.set(cn, "", { path: ph, expires: new Date(0), maxAge: 0, httpOnly: true, sameSite: "none", secure: true });
+        } catch {}
+      }
+      // 4) Non-httpOnly (covers JS-set whatdo_sess, csrf tokens, etc.)
+      try {
+        res.cookies.set(cn, "", { path: ph, expires: new Date(0), maxAge: 0, sameSite: "lax", secure });
+      } catch {}
+      // — domain variants (exact host only; skip wildcard PSL suffixes)
       for (const d of candidateDomains) {
-        try { res.cookies.set({ ...commonOpts, domain: d } as any); } catch {}
-        try { res.cookies.set({ ...commonOpts, httpOnly: false, domain: d } as any); } catch {}
+        try {
+          res.cookies.set(cn, "", { path: ph, expires: new Date(0), maxAge: 0, httpOnly: true, sameSite: "lax", secure, domain: d });
+        } catch {}
+        try {
+          res.cookies.set(cn, "", { path: ph, expires: new Date(0), maxAge: 0, sameSite: "lax", secure, domain: d });
+        } catch {}
+        if (secure) {
+          try {
+            res.cookies.set(cn, "", { path: ph, expires: new Date(0), maxAge: 0, httpOnly: true, sameSite: "none", secure: true, domain: d });
+          } catch {}
+        }
       }
     }
   }
 }
 
 export default function middleware(req: NextRequest) {
+  try {
+    return _middleware(req);
+  } catch (err: any) {
+    // NEVER let a middleware crash surface 500 to the user.
+    // If purge logic misbehaves on Edge, fall through to Next.js.
+    try {
+      const r = NextResponse.next();
+      try {
+        r.headers.set("X-WD-Mw-Fallback", "1");
+        const msg = typeof err?.message === "string" ? err.message.slice(0, 90) : String(err ?? "unknown").slice(0, 90);
+        r.headers.set("X-WD-Mw-Err", encodeURIComponent(msg));
+      } catch {}
+      return r;
+    } catch {
+      return NextResponse.next();
+    }
+  }
+}
+
+function _middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
   // Role resolution — allow middleware to still do auth checks after purge decisions
   const latestSession = keepableSessionCookies(req)[0];
@@ -181,7 +212,7 @@ export default function middleware(req: NextRequest) {
     if (path !== "/clear-session" && !path.startsWith("/api/")) {
       safeRedirectTo.searchParams.set("c", String(relevantCookies.length));
       safeRedirectTo.searchParams.set("b", String(estBytes));
-      const redir = NextResponse.redirect(safeRedirectTo.toString(), { status: 302 });
+      const redir = NextResponse.redirect(safeRedirectTo.toString(), 302);
       purgeAuthCookies(redir, req, { keepLatestOnly: true });
       return redir;
     }
@@ -200,7 +231,7 @@ export default function middleware(req: NextRequest) {
   if (isAdminRoute && !isLoggedIn) {
     const login = new URL("/login", req.nextUrl);
     login.searchParams.set("callbackUrl", req.nextUrl.pathname + req.nextUrl.search);
-    const r = NextResponse.redirect(login);
+    const r = NextResponse.redirect(login.toString(), 302);
     purgeAuthCookies(r, req, { keepLatestOnly: true });
     return r;
   }
@@ -208,13 +239,13 @@ export default function middleware(req: NextRequest) {
   if (isProtectedRoute && !isLoggedIn) {
     const login = new URL("/login", req.nextUrl);
     login.searchParams.set("callbackUrl", req.nextUrl.pathname + req.nextUrl.search);
-    const r = NextResponse.redirect(login);
+    const r = NextResponse.redirect(login.toString(), 302);
     purgeAuthCookies(r, req, { keepLatestOnly: true });
     return r;
   }
 
   if (path === "/login" && isLoggedIn) {
-    const r = NextResponse.redirect(new URL("/feed", req.nextUrl));
+    const r = NextResponse.redirect(new URL("/feed", req.nextUrl).toString(), 302);
     purgeAuthCookies(r, req, { keepLatestOnly: true });
     return r;
   }
@@ -224,14 +255,16 @@ export default function middleware(req: NextRequest) {
     const cleanUrl = new URL(req.nextUrl);
     cleanUrl.searchParams.delete("ref");
     const redirectTo = cleanUrl.toString();
-    const res = NextResponse.redirect(redirectTo);
-    res.cookies.set("whatdo_ref", ref, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 30 * 24 * 60 * 60,
-      path: "/",
-    });
+    const res = NextResponse.redirect(redirectTo, 302);
+    try {
+      res.cookies.set("whatdo_ref", ref, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 30 * 24 * 60 * 60,
+        path: "/",
+      });
+    } catch {}
     purgeAuthCookies(res, req, { keepLatestOnly: true });
     return res;
   }
