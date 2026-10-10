@@ -2,22 +2,68 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const SESSION_COOKIE_NAME = "authjs.session-token";
 export const SESSION_COOKIE_NAME_CS = "authjs.csrf-token";
+export const LEGACY_SESSION_COOKIE_NAME = "next-auth.session-token";
 
-function allSessionCookies(req: NextRequest): { name: string; value: string }[] {
+const SESSION_FAMILIES = [
+  // NextAuth v5 / Auth.js
+  "authjs.session-token",
+  "__Secure-authjs.session-token",
+  "authjs.csrf-token",
+  "__Secure-authjs.csrf-token",
+  "authjs.callback-url",
+  "__Secure-authjs.callback-url",
+  "authjs.state",
+  "__Secure-authjs.state",
+  "authjs.pkce.code_verifier",
+  "__Secure-authjs.pkce.code_verifier",
+  // NextAuth v4 legacy (still present after sign-in-key rotations, cause 494 header bloat)
+  "next-auth.session-token",
+  "__Secure-next-auth.session-token",
+  "next-auth.csrf-token",
+  "__Secure-next-auth.csrf-token",
+  "next-auth.callback-url",
+  "__Secure-next-auth.callback-url",
+  "next-auth.state",
+  "next-auth.pkce.code_verifier",
+  // Our app cookies
+  "whatdo_sess",
+  "whatdo_ref",
+];
+
+function cookieNameMatchesSessionFamily(name: string): boolean {
+  if (!name) return false;
+  for (const base of SESSION_FAMILIES) {
+    if (name === base) return true;
+    // sharded cookie names: authjs.session-token.0, next-auth.session-token.2, etc.
+    if (name.startsWith(base + ".")) {
+      const tail = name.slice(base.length + 1);
+      if (/^\d+$/.test(tail)) return true;
+    }
+  }
+  return false;
+}
+
+function allAuthAndAppCookies(req: NextRequest): { name: string; value: string }[] {
   const out: { name: string; value: string }[] = [];
   try {
     for (const c of req.cookies.getAll()) {
-      if (
-        c.name === SESSION_COOKIE_NAME ||
-        c.name.startsWith(SESSION_COOKIE_NAME + ".") ||
-        c.name === "__Secure-" + SESSION_COOKIE_NAME ||
-        c.name.startsWith("__Secure-" + SESSION_COOKIE_NAME + ".")
-      ) {
+      if (cookieNameMatchesSessionFamily(c.name)) {
         out.push({ name: c.name, value: c.value });
       }
     }
   } catch {}
   return out;
+}
+
+function estimateCookieHeaderBytes(cookies: { name: string; value: string }[]): number {
+  // Cookie header format: "name=value; name2=value2\r\n"
+  let total = 0;
+  for (let i = 0; i < cookies.length; i++) {
+    total += cookies[i].name.length + 1 + cookies[i].value.length;
+    if (i < cookies.length - 1) total += 2; // "; " separator
+  }
+  // Add small slack for other headers / cookies not tracked above
+  return total + 800;
 }
 
 function safeB64UrlDecode(s: string): string {
@@ -38,77 +84,108 @@ function parseJWTPayload(jwt: string): any | null {
   }
 }
 
-function getSessionCookie(req: NextRequest): { name: string; value: string; payload: any } | null {
-  const all = allSessionCookies(req);
-  if (!all.length) return null;
-  let best: { name: string; value: string; payload: any; iat: number } | null = null;
+const KEEPABLE_SESSION_BASES = [
+  "authjs.session-token",
+  "__Secure-authjs.session-token",
+  "next-auth.session-token",
+  "__Secure-next-auth.session-token",
+];
+
+function keepableSessionCookies(req: NextRequest): { name: string; value: string; iat: number }[] {
+  const all = allAuthAndAppCookies(req);
+  const keep: { name: string; value: string; iat: number }[] = [];
   for (const c of all) {
+    const base = c.name.split(".")[0] ?? c.name;
+    if (!KEEPABLE_SESSION_BASES.includes(base) && !KEEPABLE_SESSION_BASES.includes(c.name)) continue;
     const p = parseJWTPayload(c.value);
-    if (!p) continue;
-    const iat = Number(p.iat ?? 0);
-    if (!best || iat > best.iat) best = { name: c.name, value: c.value, payload: p, iat };
+    const iat = p && typeof p.iat === "number" ? p.iat : 0;
+    keep.push({ name: c.name, value: c.value, iat });
   }
-  const first = all[0];
-  if (best) return { name: best.name, value: best.value, payload: best.payload };
-  if (!first) return null;
-  return { name: first.name, value: first.value, payload: null };
+  keep.sort((a, b) => b.iat - a.iat);
+  return keep;
 }
 
-function readSessionRoleFromCookie(req: NextRequest): "ADMIN" | "MODERATOR" | "USER" | null {
-  const s = getSessionCookie(req);
-  if (!s) return null;
-  const r = (s.payload?.r ?? s.payload?.userRole ?? s.payload?.data?.user?.role ?? s.payload?.user?.role) as string | undefined;
-  if (r === "ADMIN" || r === "MODERATOR" || r === "USER") return r;
-  return "USER";
-}
-
-function purgeBloatedCookies(res: NextResponse, req: NextRequest) {
+function purgeAuthCookies(res: NextResponse, req: NextRequest, opts: { keep?: Set<string>; keepLatestOnly?: boolean } = {}) {
   const secure = process.env.NODE_ENV === "production";
-  const proto = secure ? "https://" : "http://";
-  const host = req.headers.get("x-forwarded-host") || req.nextUrl.host;
-  const domain = (req.headers.get("x-forwarded-host") || req.nextUrl.hostname) || undefined;
+  const host = (req.headers.get("x-forwarded-host") || req.nextUrl.hostname || "").trim();
+  const candidateDomains: string[] = [];
+  if (host) candidateDomains.push(host);
+  const parts = host.split(".");
+  if (parts.length >= 2) candidateDomains.push("." + parts.slice(-2).join("."));
 
-  const all = allSessionCookies(req);
-  const keep = getSessionCookie(req);
+  const namesToRemove = new Set<string>();
+  for (const c of allAuthAndAppCookies(req)) namesToRemove.add(c.name);
 
-  for (const c of all) {
-    if (keep && c.name === keep.name) continue;
-    res.cookies.set({
-      name: c.name,
-      value: "",
-      path: "/",
-      httpOnly: true,
-      sameSite: "lax",
-      secure,
-      expires: new Date(0),
-      maxAge: 0,
-      ...(domain && { domain }),
-    } as any);
+  // Also remove all possible shards / names even if not present in current req, to be safe
+  for (const base of SESSION_FAMILIES) {
+    namesToRemove.add(base);
+    for (let k = 0; k < 20; k++) namesToRemove.add(`${base}.${k}`);
   }
 
-  for (const c of req.cookies.getAll()) {
-    if (c.name.startsWith("__Secure-authjs.") && c.name !== keep?.name) {
-      if (all.some((s) => s.name === c.name)) continue;
-      res.cookies.set({
-        name: c.name,
+  let keepNames = new Set<string>(opts.keep ?? []);
+  if (opts.keepLatestOnly) {
+    const latest = keepableSessionCookies(req)[0];
+    if (latest) keepNames.add(latest.name);
+  }
+
+  for (const cn of Array.from(namesToRemove)) {
+    if (keepNames.has(cn)) continue;
+    const allPaths = ["/"];
+    for (const ph of allPaths) {
+      const commonOpts = {
+        name: cn,
         value: "",
-        path: "/",
+        path: ph,
         httpOnly: true,
-        sameSite: "lax",
-        secure: true,
+        sameSite: "lax" as const,
+        secure,
         expires: new Date(0),
         maxAge: 0,
-        ...(domain && { domain }),
-      } as any);
+      };
+      try { res.cookies.set({ ...commonOpts }); } catch {}
+      try { res.cookies.set({ ...commonOpts, sameSite: "strict" as const }); } catch {}
+      try { res.cookies.set({ ...commonOpts, sameSite: "none" as const }); } catch {}
+      // no httpOnly variant (to cover JS-set whatdo_sess / csrf / callback)
+      try { res.cookies.set({ ...commonOpts, httpOnly: false }); } catch {}
+      for (const d of candidateDomains) {
+        try { res.cookies.set({ ...commonOpts, domain: d } as any); } catch {}
+        try { res.cookies.set({ ...commonOpts, httpOnly: false, domain: d } as any); } catch {}
+      }
     }
   }
-  void proto; void host;
 }
 
 export default function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
-  const role = readSessionRoleFromCookie(req);
+  // Role resolution — allow middleware to still do auth checks after purge decisions
+  const latestSession = keepableSessionCookies(req)[0];
+  let role: "ADMIN" | "MODERATOR" | "USER" | null = null;
+  if (latestSession) {
+    const p = parseJWTPayload(latestSession.value);
+    const r = (p?.r ?? p?.role ?? p?.userRole ?? p?.data?.user?.role ?? p?.user?.role) as string | undefined;
+    if (r === "ADMIN" || r === "MODERATOR" || r === "USER") role = r;
+    else role = "USER";
+  }
   const isLoggedIn = role !== null;
+
+  // Aggressive cookie-size guard BEFORE any routing:
+  // If total estimated cookie header size exceeds 6.5KB (Cloudflare hard max is ~8KB),
+  // delete ALL old auth / app cookies, keep only newest valid session shard,
+  // redirect to same path to drop the 494 before it reaches CF.
+  const relevantCookies = allAuthAndAppCookies(req);
+  const estBytes = estimateCookieHeaderBytes(relevantCookies);
+  const tooManyCookies = relevantCookies.length > 3; // more than 3 auth cookies = almost always shard leftovers
+  if (estBytes > 6500 || tooManyCookies) {
+    const safeRedirectTo = new URL(req.nextUrl);
+    // Don't bounce on clear-session page itself (would cause loop)
+    if (path !== "/clear-session" && !path.startsWith("/api/")) {
+      safeRedirectTo.searchParams.set("c", String(relevantCookies.length));
+      safeRedirectTo.searchParams.set("b", String(estBytes));
+      const redir = NextResponse.redirect(safeRedirectTo.toString(), { status: 302 });
+      purgeAuthCookies(redir, req, { keepLatestOnly: true });
+      return redir;
+    }
+  }
 
   const isProtectedRoute =
     path.startsWith("/feed") ||
@@ -124,7 +201,7 @@ export default function middleware(req: NextRequest) {
     const login = new URL("/login", req.nextUrl);
     login.searchParams.set("callbackUrl", req.nextUrl.pathname + req.nextUrl.search);
     const r = NextResponse.redirect(login);
-    purgeBloatedCookies(r, req);
+    purgeAuthCookies(r, req, { keepLatestOnly: true });
     return r;
   }
 
@@ -132,13 +209,13 @@ export default function middleware(req: NextRequest) {
     const login = new URL("/login", req.nextUrl);
     login.searchParams.set("callbackUrl", req.nextUrl.pathname + req.nextUrl.search);
     const r = NextResponse.redirect(login);
-    purgeBloatedCookies(r, req);
+    purgeAuthCookies(r, req, { keepLatestOnly: true });
     return r;
   }
 
   if (path === "/login" && isLoggedIn) {
     const r = NextResponse.redirect(new URL("/feed", req.nextUrl));
-    purgeBloatedCookies(r, req);
+    purgeAuthCookies(r, req, { keepLatestOnly: true });
     return r;
   }
 
@@ -155,15 +232,14 @@ export default function middleware(req: NextRequest) {
       maxAge: 30 * 24 * 60 * 60,
       path: "/",
     });
-    purgeBloatedCookies(res, req);
+    purgeAuthCookies(res, req, { keepLatestOnly: true });
     return res;
   }
 
-  const allCookies = allSessionCookies(req);
-  const needsPurge = allCookies.length > 1 || allCookies.some((c) => c.value.length > 4200);
-  if (needsPurge) {
+  // Lightweight keep-latest pass on every request so shards don't accumulate.
+  if (tooManyCookies) {
     const r = NextResponse.next();
-    purgeBloatedCookies(r, req);
+    purgeAuthCookies(r, req, { keepLatestOnly: true });
     return r;
   }
 
