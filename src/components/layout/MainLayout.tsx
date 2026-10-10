@@ -4,7 +4,6 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import { SidebarNav } from "./SidebarNav";
 import { TopBar } from "./TopBar";
-import { BottomNav } from "./BottomNav";
 import { RightRail } from "./RightRail";
 import { ToastProvider } from "@/components/design-system/Toaster";
 import type { Role } from "@/lib/types";
@@ -59,7 +58,6 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         </main>
 
         <RightRail />
-        <BottomNav />
       </div>
     </ToastProvider>
   );

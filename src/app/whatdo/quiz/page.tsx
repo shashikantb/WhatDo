@@ -117,13 +117,15 @@ export default function WhatDoQuizPage() {
     }
     setCalcBusy(true);
     try {
+      // For authenticated users, migrate any sessionId answers to userId FIRST
+      // (calculateResult's authenticated path queries by userId). Then compute.
+      if (status === "authenticated" && sessionId) {
+        await revealAfter.mutateAsync({ sessionId }).catch(() => {});
+      }
       const r = await calc.mutateAsync({
         sessionId,
         minQuestions: MIN_TO_COMPUTE,
       });
-      if (status === "authenticated" && sessionId) {
-        await revealAfter.mutateAsync({ sessionId }).catch(() => {});
-      }
       if (r.computed && r.identityId) {
         try { window.sessionStorage.setItem("whatdo_last_identity", r.identityId); } catch {}
       }
@@ -149,7 +151,7 @@ export default function WhatDoQuizPage() {
   };
 
   return (
-    <main className="min-h-[100dvh] w-full bg-gradient-to-b from-slate-950 via-indigo-950 to-fuchsia-950 text-white">
+    <main className="min-h-[100dvh] w-full bg-gradient-to-b from-slate-950 via-indigo-950 to-fuchsia-950 text-white pb-20">
       <div className="mx-auto w-full max-w-xl px-4 py-6 md:py-10">
         <div className="flex items-center justify-between">
           <Link

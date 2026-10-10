@@ -7,6 +7,7 @@ import { ToastProvider } from "@/components/design-system/Toaster";
 import { LoginModalProvider } from "@/components/auth/LoginModal";
 import { CookieConsent } from "@/components/shared/CookieConsent";
 import { PageViewTracker } from "@/components/shared/PageViewTracker";
+import { BottomNav } from "@/components/layout/BottomNav";
 import { auth } from "@/auth";
 
 function buildRequestBaseUrl(): string {
@@ -51,6 +52,7 @@ export async function AppProviders({
           <ToastProvider>
             <LoginModalProvider>
               {children}
+              <BottomNav />
               <CookieConsent />
               <PageViewTracker />
             </LoginModalProvider>

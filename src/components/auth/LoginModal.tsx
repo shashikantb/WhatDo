@@ -70,11 +70,16 @@ export const LoginModalProvider: React.FC<LoginModalProviderProps> = ({ children
 
   const handleRevealMerge = async (intent: Exclude<ReturnIntent, null> & { type: "whatdo_reveal" }) => {
     try {
+      // 1. FIRST migrate the anonymous answers from sessionId → userId.
+      //    calculateResult (authenticated path) looks up by userId, so answers
+      //    must be migrated BEFORE we compute, otherwise it finds 0 responses
+      //    and returns INSUFFICIENT_DATA (the "No WhatDo Type yet / retry" bug).
+      await revealAfter.mutateAsync({ sessionId: intent.sessionId }).catch(() => {});
+      // 2. THEN compute the identity. Now responses live on userId.
       const r = await calc.mutateAsync({
         sessionId: intent.sessionId,
         minQuestions: intent.minQuestions,
       });
-      await revealAfter.mutateAsync({ sessionId: intent.sessionId }).catch(() => {});
       if (r?.identityId) {
         try { window.sessionStorage.setItem("whatdo_last_identity", r.identityId); } catch {}
       }

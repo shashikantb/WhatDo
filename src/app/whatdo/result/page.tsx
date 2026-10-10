@@ -101,6 +101,20 @@ export default function WhatDoResultPage() {
     }
   );
   const calc = trpc.whatdo.calculateResult.useMutation({ retry: 2, retryDelay: 250 });
+  const [calcProgress, setCalcProgress] = React.useState(0);
+  // Animate the progress bar from 8 → 92 while a compute is in flight so the
+  // user sees clear activity instead of a frozen bar.
+  React.useEffect(() => {
+    if (!calc.isPending) {
+      setCalcProgress(0);
+      return;
+    }
+    setCalcProgress(8);
+    const id = setInterval(() => {
+      setCalcProgress((p) => (p >= 92 ? 92 : p + Math.max(1, Math.round((92 - p) * 0.12))));
+    }, 320);
+    return () => clearInterval(id);
+  }, [calc.isPending]);
   const utils = trpc.useUtils();
   const genToken = trpc.whatdo.generateShareToken.useMutation({ retry: 2, retryDelay: 300 });
   const genPrompt = trpc.whatdo.generateAIPrompt.useQuery(
@@ -878,9 +892,14 @@ export default function WhatDoResultPage() {
         </p>
         <div className="w-full max-w-[240px] mx-auto">
           <ProgressBar
-            value={calc.isPending ? 65 : 0}
+            value={calc.isPending ? calcProgress : 0}
             className={cn("h-1.5 bg-white/10", !calc.isPending && "opacity-30")}
           />
+          {calc.isPending && (
+            <p className="text-[10.5px] font-bold text-white/45 mt-2 tabular-nums">
+              {calcProgress}% — running archetype classifier…
+            </p>
+          )}
         </div>
         <div className="flex flex-col items-center gap-2 pt-2">
           {(persisted.sessionId || isLoggedIn) ? (

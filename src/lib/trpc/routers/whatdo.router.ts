@@ -232,15 +232,31 @@ export const whatdoRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session?.user?.id ?? null;
-      const whereClause = userId
-        ? { userId }
-        : { sessionId: input.sessionId, userId: null };
-      const responses = await ctx.prisma.questionResponse.findMany({
-        where: whereClause,
-        include: {
-          question: { include: { options: true } },
-        },
-      });
+      let responses: any[];
+      if (userId) {
+        // Authenticated user: prefer responses tied to userId. If there aren't
+        // enough (e.g. answers were submitted anonymously on a sessionId and
+        // revealAfterLogin hasn't migrated them yet), fall back to the
+        // sessionId responses. This makes calculateResult robust to ordering.
+        responses = await ctx.prisma.questionResponse.findMany({
+          where: { userId },
+          include: { question: { include: { options: true } } },
+        });
+        if (responses.length < input.minQuestions && input.sessionId) {
+          const fallback = await ctx.prisma.questionResponse.findMany({
+            where: { sessionId: input.sessionId, userId: null },
+            include: { question: { include: { options: true } } },
+          });
+          if (fallback.length > responses.length) {
+            responses = fallback;
+          }
+        }
+      } else {
+        responses = await ctx.prisma.questionResponse.findMany({
+          where: { sessionId: input.sessionId, userId: null },
+          include: { question: { include: { options: true } } },
+        });
+      }
       if (responses.length < input.minQuestions) {
         return {
           computed: false,

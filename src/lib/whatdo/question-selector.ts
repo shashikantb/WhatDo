@@ -3,12 +3,12 @@ import { QUESTION_TAXONOMIES } from "./signals";
 import type { AssessmentQuestion as PrismaAssessmentQuestion } from "@prisma/client";
 
 export const SELECTION_WEIGHTS = {
-  ENGAGEMENT_POTENTIAL: 0.3,
+  ENGAGEMENT_POTENTIAL: 0.25,
   RELEVANCE: 0.2,
   FRESHNESS: 0.15,
   DIVERSITY: 0.15,
-  LOCALITY: 0.1,
-  HISTORICAL_PERFORMANCE: 0.1,
+  LOCALITY: 0.25,
+  HISTORICAL_PERFORMANCE: 0.0,
 } as const;
 
 export const DEFAULT_CATEGORY_MIX: Record<QuestionTaxonomy, number> = {
@@ -134,15 +134,27 @@ export function computeLocalityScore(
   ctx: QuestionSelectionContext,
 ): number {
   if (!ctx.userCity && !ctx.userRegion && !ctx.userCountry) return 0.3;
-  let score = 0.1;
-  if (ctx.userCountry && q.targetCountry === ctx.userCountry) score += 0.2;
-  if (ctx.userRegion && q.targetRegion === ctx.userRegion) score += 0.25;
-  if (ctx.userCity && q.targetCity === ctx.userCity) score += 0.45;
-  if (
-    q.taxonomy === "LOCAL_CITY" &&
-    (!q.targetCity || q.targetCity === ctx.userCity)
-  ) {
-    score += 0.1;
+  let score = 0.05;
+  if (ctx.userCountry && q.targetCountry === ctx.userCountry) score += 0.15;
+  if (ctx.userRegion && q.targetRegion === ctx.userRegion) score += 0.15;
+
+  // Hard rules for LOCAL_CITY: these questions:
+  //  - if question.targetCity == user's exact city → max out +0.85
+  //  - if user has a city but question targets a DIFFERENT specific city → 0.01 (irrelevant)
+  //  - otherwise (no targetCity on question): +0.05 mild bonus
+  if (q.taxonomy === "LOCAL_CITY") {
+    if (ctx.userCity && q.targetCity === ctx.userCity) {
+      score += 0.85;
+    } else if (ctx.userCity && q.targetCity && q.targetCity !== ctx.userCity) {
+      score = 0.01;
+      return score;
+    } else if (!q.targetCity) {
+      score += 0.05;
+    }
+  } else {
+    // Non-LOCAL_CITY: user->question.city match is a soft bonus +0.25 (not a hard gate).
+    if (ctx.userCity && q.targetCity === ctx.userCity) score += 0.25;
+    if (!q.targetCity && !q.targetRegion && !q.targetCountry) score += 0.05;
   }
   return Math.min(1, Math.max(0, score));
 }
@@ -196,7 +208,7 @@ export function scoreQuestion(
 }
 
 function resolveCategoryMix(
-  ctx: QuestionSelectionContext,
+  ctx: QuestionSelectionContext & { pool?: AssessmentQuestionCandidate[] | null },
 ): Record<QuestionTaxonomy, number> {
   const targetCount = ctx.targetQuestionCount;
   const custom = ctx.categoryMix ?? {};
@@ -204,6 +216,26 @@ function resolveCategoryMix(
   for (const tax of QUESTION_TAXONOMIES) {
     if (custom[tax] !== undefined) {
       result[tax] = custom[tax]!;
+    }
+  }
+  // If user provided a city but LOCAL_CITY category in the *available pool*
+  // has zero questions matching that exact city → drop LOCAL_CITY slot entirely
+  // and re-allocate it to LIFESTYLE (failsafe, non-local category) so the user
+  // never receives a Hyderabad local question just because she typed "Pune".
+  if (ctx.userCity && result.LOCAL_CITY > 0) {
+    const pool = ctx.pool ?? null;
+    const hasMatchingCity = pool
+      ? pool.some(
+          (q) =>
+            q.taxonomy === "LOCAL_CITY" &&
+            q.targetCity != null &&
+            q.targetCity === ctx.userCity,
+        )
+      : true;
+    if (!hasMatchingCity) {
+      const move = result.LOCAL_CITY;
+      result.LOCAL_CITY = 0;
+      result.LIFESTYLE = (result.LIFESTYLE ?? 0) + move;
     }
   }
   const sum = Object.values(result).reduce((a, b) => a + b, 0);
@@ -237,7 +269,7 @@ export function selectQuestionSet(
   pool: AssessmentQuestionCandidate[],
   ctx: QuestionSelectionContext,
 ): SelectedQuestionSet {
-  const categoryMix = resolveCategoryMix(ctx);
+  const categoryMix = resolveCategoryMix({ ...ctx, pool });
   const targetCount = ctx.targetQuestionCount;
   const answered = new Set(ctx.answeredQuestionIds);
   const recentlyAnsweredHours = ctx.recentlyAnsweredWithinHours ?? 168;
@@ -340,6 +372,7 @@ export function pickNextQuestion(
   const mix = resolveCategoryMix({
     ...ctx,
     targetQuestionCount: ctx.targetQuestionCount,
+    pool,
   });
   const filtered = pool.filter(
     (q) => !singleCtx.answeredQuestionIds.has(q.id),

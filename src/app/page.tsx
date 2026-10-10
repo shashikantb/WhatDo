@@ -8,7 +8,6 @@ import { useLoginModal } from "@/components/auth/LoginModal";
 import { Button } from "@/components/design-system/Button";
 import { SkeletonCard } from "@/components/design-system/Skeleton";
 import { ReelsPostCard } from "@/components/feed/ReelsPostCard";
-import { BottomNav } from "@/components/layout/BottomNav";
 import { DailyWhatDoHero } from "@/components/whatdo/DailyWhatDoHero";
 import { trpc } from "@/lib/trpc/client";
 import { Sparkles,
@@ -519,8 +518,7 @@ export default function Home() {
         onVoteSuccess={handleVoteSuccess}
       />
 
-      {/* Bottom navigation (Instagram style) */}
-      <BottomNav />
+      {/* Bottom navigation rendered globally by AppProviders */}
     </main>
   );
 }

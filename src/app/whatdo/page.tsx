@@ -20,8 +20,9 @@ import {
 } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 import { ProgressBar } from "@/components/design-system/ProgressBar";
+import { CITY_NORMALIZATIONS, normalizeCityName } from "@/lib/whatdo/cities";
 
-export { CITY_NORMALIZATIONS, normalizeCityName } from "@/lib/whatdo/cities";
+export { CITY_NORMALIZATIONS, normalizeCityName };
 
 export default function WhatDoLandingPage() {
   const router = useRouter();
@@ -94,7 +95,7 @@ export default function WhatDoLandingPage() {
   };
 
   return (
-    <main className="min-h-[100dvh] w-full bg-gradient-to-br from-slate-950 via-indigo-950 to-fuchsia-950 text-white">
+    <main className="min-h-[100dvh] w-full bg-gradient-to-br from-slate-950 via-indigo-950 to-fuchsia-950 text-white pb-20">
       <div className="mx-auto w-full max-w-2xl px-5 py-10 md:py-16 space-y-10">
         <div className="flex items-center justify-between">
           <Link
