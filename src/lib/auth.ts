@@ -32,17 +32,73 @@ const credentialsSchema = z.object({
 // id_token. Any account linkage / user upsert we want on OAuth sign-in must happen
 // manually inside the events.signIn callback below.
 
+/**
+ * HARD WHITELIST — applied in jwt.encode() as the absolute last step before
+ * encryption. Even if jwt() callback, signIn() events or NextAuth internals
+ * merge 35KB of Google OAuth tokens / Account rows into the token object by
+ * reference, this strips everything back to the 6 keys allowed in the
+ * encoded cookie. Keeps session cookies ~1 shard and prevents 494.
+ */
+function sanitizeTokenPayload(token: any): Record<string, unknown> {
+  const raw = (token && typeof token === "object") ? (token as Record<string, any>) : {};
+  const out: Record<string, unknown> = {};
+  // Preserve JWT bookkeeping (required by @auth/core encode internals after
+  // the iat check + session expiry). These 3 are re-added by jose during
+  // encode too, but forwarding them keeps jti stable if it was set.
+  if (typeof raw.iat === "number") out.iat = raw.iat;
+  if (typeof raw.exp === "number") out.exp = raw.exp;
+  if (typeof raw.jti === "string") out.jti = raw.jti;
+  // Identity: pick canonical id/sub in priority order. If nothing present,
+  // drop it — decode-side returns null = anonymous, which is fine.
+  const sub =
+    (typeof raw.id === "string" && raw.id) ||
+    (typeof raw.sub === "string" && raw.sub) ||
+    null;
+  if (sub) {
+    out.sub = sub;
+    out.id = sub;
+  }
+  // Role: normalized string, default USER.
+  const role =
+    (typeof raw.role === "string" && raw.role) ||
+    (typeof raw.role_name === "string" && raw.role_name) ||
+    "USER";
+  out.role = role;
+  return out;
+}
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   session: { strategy: "jwt" },
   pages: {
     signIn: "/auth/sign-in",
     error: "/auth/error",
   },
+  // FINAL-GATE whitelist: regardless of what jwt() callback or NextAuth
+  // internals produce, we re-sanitize the token right before encryption so
+  // the JWE ciphertext can never exceed ~1 shard. Root cause was OAuth
+  // tokens being dumped wholesale by upstream sign-in paths for linked
+  // accounts (54KB → 14 shards → 494). This encode() override is the last
+  // line of defense.
+  jwt: {
+    async encode(params) {
+      const { token, ...rest } = params as any;
+      const sanitized = sanitizeTokenPayload(token);
+      const { encode: defaultEncode } = await import(
+        "next-auth/jwt" as any
+      ).then((m: any) => m as any) as any;
+      return (defaultEncode as any)({ ...rest, token: sanitized });
+    },
+    async decode(params) {
+      const { decode: defaultDecode } = await import(
+        "next-auth/jwt" as any
+      ).then((m: any) => m as any) as any;
+      return (defaultDecode as any)(params) as any;
+    },
+  },
   providers: [
     Google({
       clientId: process.env.AUTH_GOOGLE_ID,
       clientSecret: process.env.AUTH_GOOGLE_SECRET,
-      allowDangerousEmailAccountLinking: true,
     }),
     Apple({
       clientId: process.env.AUTH_APPLE_ID,
