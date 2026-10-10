@@ -117,6 +117,7 @@ export default function WhatDoResultPage() {
   const aiImageMut = trpc.whatdo.generateAIImage.useMutation();
   const presignSelfie = trpc.media.requestPresignedUpload.useMutation();
   const confirmSelfie = trpc.media.confirmUpload.useMutation();
+  const uploadSelfieB64 = trpc.media.uploadFromBase64.useMutation();
   const updateProfileMut = trpc.auth.updateProfile.useMutation();
   const [aiImageResult, setAiImageResult] = React.useState<{
     publicUrl: string;
@@ -132,6 +133,7 @@ export default function WhatDoResultPage() {
   const [showSelfieUploadModal, setShowSelfieUploadModal] = React.useState(false);
   const [selfieUploadState, setSelfieUploadState] = React.useState<"idle" | "compressing" | "presigning" | "uploading" | "saving" | "done" | "error">("idle");
   const [selfiePreview, setSelfiePreview] = React.useState<string | null>(null);
+  const [selfieCompressedBlob, setSelfieCompressedBlob] = React.useState<Blob | null>(null);
   const [selfieCdnUrl, setSelfieCdnUrl] = React.useState<string | null>(null);
   const [selfieFileKey, setSelfieFileKey] = React.useState<string | null>(null);
   const selfieFileInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -318,6 +320,7 @@ export default function WhatDoResultPage() {
         quality: 0.86,
       });
       setSelfiePreview(compressed.dataUrlPreview);
+      setSelfieCompressedBlob(compressed.blob);
       setSelfieUploadState("idle");
     } catch (err) {
       setSelfieUploadState("error");
@@ -325,6 +328,30 @@ export default function WhatDoResultPage() {
       toast.show("Could not process image: " + (msg || "unknown error"), "danger");
     }
   };
+
+  function dataUrlToBlob(dataUrl: string): Blob {
+    if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:")) {
+      throw new Error("Not a valid data URL");
+    }
+    const commaIdx = dataUrl.indexOf(",");
+    if (commaIdx === -1) throw new Error("Invalid data URL: missing comma");
+    const header = dataUrl.slice(0, commaIdx);
+    const body = dataUrl.slice(commaIdx + 1);
+    const mimeMatch = header.match(/data:([a-zA-Z0-9]+\/[a-zA-Z0-9+._-]+)(;base64)?/);
+    const mime = mimeMatch?.[1] ?? "image/jpeg";
+    const isBase64 = /;base64(;|$)/i.test(header);
+    let binary: Uint8Array;
+    if (isBase64) {
+      if (typeof atob !== "function") throw new Error("atob not available");
+      // Use the decodeURIComponent(escape(...)) pattern to support Unicode-safe base64 decoding
+      const decodedB64 = atob(body);
+      binary = new Uint8Array(decodedB64.length);
+      for (let i = 0; i < decodedB64.length; i++) binary[i] = decodedB64.charCodeAt(i);
+    } else {
+      binary = new TextEncoder().encode(decodeURIComponent(body));
+    }
+    return new Blob([binary], { type: mime });
+  }
 
   const onConfirmSelfieUpload = async () => {
     if (!selfiePreview) {
@@ -349,28 +376,106 @@ export default function WhatDoResultPage() {
         }
         return;
       }
+
       const mime = "image/jpeg";
-      const res = await fetch(selfiePreview);
-      const previewBlob = await res.blob();
-      setSelfieUploadState("presigning");
-      const presign = await presignSelfie.mutateAsync({
-        type: "image",
-        contentType: mime,
-        fileSize: previewBlob.size,
-        fileName: `selfie_${Date.now()}.jpg`,
+      let previewBlob: Blob;
+      if (selfieCompressedBlob && selfieCompressedBlob.type === mime && selfieCompressedBlob.size > 2000) {
+        previewBlob = selfieCompressedBlob;
+      } else {
+        previewBlob = dataUrlToBlob(selfiePreview);
+        // double-check under our 256KB target
+        if (previewBlob.size > 256 * 1024 * 1.1) {
+          const re = await compressImageToMaxBytes(previewBlob, {
+            maxSide: 512,
+            maxBytes: 256 * 1024,
+            mime,
+            quality: 0.86,
+          });
+          previewBlob = re.blob;
+        }
+      }
+
+      let finalCdnUrl = "";
+      let finalFileKey = "";
+
+      // Strategy 1: presign + direct browser PUT to R2 (works when bucket CORS allows).
+      // Strategy 2 (fallback): server-side base64 proxy upload (never blocked by CORS).
+      const attempts: Array<{ label: string; fn: () => Promise<{ publicUrl: string; fileKey: string }> }> = [];
+      attempts.push({
+        label: "presign",
+        fn: async () => {
+          setSelfieUploadState("presigning");
+          const presign = await presignSelfie.mutateAsync({
+            type: "image",
+            contentType: mime,
+            fileSize: previewBlob.size,
+            fileName: `selfie_${Date.now()}.jpg`,
+          });
+          setSelfieUploadState("uploading");
+          const resp = await fetch(presign.uploadUrl, {
+            method: "PUT",
+            headers: { "Content-Type": mime },
+            body: previewBlob,
+            mode: "cors",
+            credentials: "omit",
+          });
+          if (!resp.ok) {
+            const bodyText = await resp.text().catch(() => "");
+            throw new Error(`Upload HTTP ${resp.status} ${bodyText}`.trim());
+          }
+          try {
+            await confirmSelfie.mutateAsync({ fileKey: presign.fileKey });
+          } catch {
+            // soft-fail: upload is already in R2, proceeding is the goal
+          }
+          return { publicUrl: presign.publicUrl || presign.fileKey, fileKey: presign.fileKey };
+        },
       });
-      setSelfieUploadState("uploading");
-      const resp = await fetch(presign.uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": mime },
-        body: previewBlob,
+      attempts.push({
+        label: "serverProxy",
+        fn: async () => {
+          setSelfieUploadState("uploading");
+          // Convert blob to base64 string (size check already done; blob ~<256KB)
+          const reader = new FileReader();
+          const readPromise = new Promise<string>((resolve, reject) => {
+            reader.onerror = () => reject(new Error("FileReader failed"));
+            reader.onload = () => resolve(String(reader.result ?? ""));
+            reader.readAsDataURL(previewBlob);
+          });
+          const dataUrl = await readPromise;
+          const uploadResp = await uploadSelfieB64.mutateAsync({
+            type: "image",
+            contentType: mime,
+            base64Body: dataUrl,
+            fileName: `selfie_${Date.now()}.jpg`,
+          });
+          return { publicUrl: uploadResp.publicUrl || uploadResp.fileKey, fileKey: uploadResp.fileKey };
+        },
       });
-      if (!resp.ok) throw new Error(`Upload HTTP ${resp.status}`);
-      await confirmSelfie.mutateAsync({ fileKey: presign.fileKey });
-      const finalCdnUrl = presign.publicUrl || presign.fileKey;
+
+      let lastErr: unknown = null;
+      for (const attempt of attempts) {
+        try {
+          const result = await attempt.fn();
+          finalCdnUrl = result.publicUrl;
+          finalFileKey = result.fileKey;
+          lastErr = null;
+          break;
+        } catch (e) {
+          lastErr = e;
+          // Continue to next attempt
+          continue;
+        }
+      }
+      if (lastErr != null) {
+        throw lastErr;
+      }
+      if (!finalCdnUrl) {
+        throw new Error("Upload finished but no public URL returned");
+      }
 
       setSelfieUploadState("saving");
-      if (isLoggedIn && finalCdnUrl && /^https?:\/\//i.test(finalCdnUrl)) {
+      if (isLoggedIn && /^https?:\/\//i.test(finalCdnUrl)) {
         try {
           await updateProfileMut.mutateAsync({ avatarUrl: finalCdnUrl });
         } catch (profileErr: any) {
@@ -393,7 +498,7 @@ export default function WhatDoResultPage() {
       }
 
       setSelfieCdnUrl(finalCdnUrl);
-      setSelfieFileKey(presign.fileKey);
+      setSelfieFileKey(finalFileKey);
       setSelfieExplicitlyUploaded(true);
       setAvatarImg(await loadAvatarImage(finalCdnUrl));
       setSelfieUploadState("done");
@@ -405,23 +510,33 @@ export default function WhatDoResultPage() {
       }
     } catch (err) {
       setSelfieUploadState("error");
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("Storage not configured") && selfiePreview) {
-        try {
-          const img = await loadAvatarImage(selfiePreview);
-          setAvatarImg(img);
-          setSelfieCdnUrl(selfiePreview);
-          setSelfieExplicitlyUploaded(true);
-          setShowSelfieUploadModal(false);
-          setSelfieUploadState("done");
-          if (pendingStartAfterUploadRef.current) {
-            pendingStartAfterUploadRef.current = false;
-            void startGenAIImage();
-          }
-          return;
-        } catch {}
+      let title = "Upload failed";
+      let detail = "please try again.";
+      if (err instanceof Error) {
+        const m = err.message || "";
+        if (m.toLowerCase().includes("storage not configured")) {
+          title = "Storage not ready";
+          detail = "This will be enabled shortly on this device.";
+        } else if (m.toLowerCase().includes("unauthorized") || m.toLowerCase().includes("401")) {
+          title = "Session expired";
+          detail = "Refresh the page and try again.";
+        } else if (m.toLowerCase().includes("too many") || m.toLowerCase().includes("rate limit") || m.toLowerCase().includes("429")) {
+          title = "Too many uploads";
+          detail = "Wait 30 seconds, then try again.";
+        } else if (m.toLowerCase().includes("failed to fetch") || m.toLowerCase().includes("cors") || m.toLowerCase().includes("networkerror")) {
+          title = "Network error";
+          detail = "Check your connection, then try again.";
+        } else if (m.toLowerCase().includes("payload too large") || m.toLowerCase().includes("upload http 413")) {
+          title = "Photo too large";
+          detail = "Pick a smaller photo or keep it under 12MB.";
+        } else if (m.toLowerCase().includes("upload http 403")) {
+          title = "Upload blocked";
+          detail = "Server rejected this upload. Pick another photo.";
+        } else if (m) {
+          detail = m;
+        }
       }
-      toast.show("Upload failed: " + (msg || "please try again."), "danger");
+      toast.show(`${title}: ${detail}`, "danger");
     }
   };
 

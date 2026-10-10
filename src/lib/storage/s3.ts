@@ -144,6 +144,47 @@ export async function getSignedUploadUrl(params: {
   };
 }
 
+export async function putObjectFromBase64(params: {
+  type: UploadMediaType;
+  contentType: string;
+  base64Body: string;
+  fileName: string;
+  userId?: string;
+}): Promise<PresignedUploadResult> {
+  if (!hasR2Config || !R2_BUCKET_NAME) {
+    throw new Error("Storage not configured");
+  }
+  const timestamp = Date.now();
+  const randomSuffix = Math.random().toString(36).slice(2, 10);
+  const ext = getExtension(params.fileName, params.contentType);
+  const safeName = sanitizeBasename(params.fileName);
+  const prefix = params.userId
+    ? `uploads/user_${params.userId}/${params.type}`
+    : `uploads/${params.type}`;
+  const fileKey = `${prefix}/${timestamp}_${randomSuffix}_${safeName}${ext ? `.${ext}` : ""}`;
+  const cleanedBase64 = params.base64Body.includes(",")
+    ? params.base64Body.slice(params.base64Body.indexOf(",") + 1)
+    : params.base64Body;
+  const binaryString =
+    typeof atob === "function"
+      ? atob(cleanedBase64)
+      : Buffer.from(cleanedBase64, "base64").toString("binary");
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+  const client = getS3Client();
+  if (!client) throw new Error("Storage client unavailable");
+  const cmd = new PutObjectCommand({
+    Bucket: R2_BUCKET_NAME,
+    Key: fileKey,
+    ContentType: params.contentType || "application/octet-stream",
+    Body: Buffer.from(bytes) as any,
+    ContentLength: bytes.length,
+  });
+  await client.send(cmd);
+  const publicUrl = R2_PUBLIC_BUCKET_URL ? `${R2_PUBLIC_BUCKET_URL}/${fileKey}` : "";
+  return { uploadUrl: "", publicUrl, fileKey };
+}
+
 export async function deleteObject(fileKey: string): Promise<void> {
   const s3 = getS3Client();
   if (!s3 || !R2_BUCKET_NAME) return;
