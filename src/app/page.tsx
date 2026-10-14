@@ -22,12 +22,14 @@ import { Sparkles,
   Bookmark,
   ChevronDown,
   Clock,
+  Siren,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { UserAvatar } from "@/components/shared/UserAvatar";
 import { cn } from "@/lib/utils";
 import { PullToRefresh } from "@/components/feed/PullToRefresh";
 import { ReelsViewerModal } from "@/components/feed/ReelsViewerModal";
+import { useToast } from "@/components/design-system/Toaster";
 
 function ReelsSkeleton() {
   return (
@@ -54,6 +56,7 @@ export default function Home() {
   const [viewerOpen, setViewerOpen] = React.useState(false);
   const [viewerInitialIndex, setViewerInitialIndex] = React.useState(0);
   const user = session?.user as any;
+  const toast = useToast();
 
   React.useEffect(() => {
     setIsHydrated(true);
@@ -76,6 +79,26 @@ export default function Home() {
     router.push("/feed");
     router.refresh();
   }, [router]);
+
+  const sos = trpc.family.sos.useMutation({
+    onSuccess: (data) => {
+      toast.show(`SOS sent to ${data.notified} family member(s)!`, "danger");
+    },
+    onError: (err) => {
+      if (err.message?.includes("No family members")) {
+        toast.show("Add family members first to use SOS", "warning");
+        router.push("/family");
+      } else {
+        toast.show(err.message || "Failed to send SOS", "danger");
+      }
+    },
+  });
+
+  const handleSOS = () => {
+    if (!isAuthenticated) return;
+    if (!window.confirm("Send an SOS alert with your current location to all family members?")) return;
+    sos.mutate({});
+  };
 
   const trendingQuery = trpc.feed.getTrending.useQuery(
     { timeRange: "7d", limit: 30 },
@@ -280,6 +303,18 @@ export default function Home() {
               >
                 <Search className="h-4 w-4" />
               </button>
+              {isAuthenticated && (
+                <button
+                  type="button"
+                  onClick={handleSOS}
+                  disabled={sos.isPending}
+                  className="h-9 w-9 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-red-400 flex items-center justify-center hover:bg-red-500/20 transition-colors"
+                  aria-label="Send SOS alert to family"
+                  title="SOS - Alert family with your location"
+                >
+                  <Siren className="h-4 w-4" />
+                </button>
+              )}
               {!isAuthenticated ? (
                 <Button
                   size="sm"
