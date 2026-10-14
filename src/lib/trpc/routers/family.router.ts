@@ -114,8 +114,8 @@ export const familyRouter = createTRPCRouter({
         },
         take: input.limit,
         include: {
-          user1: { select: { ...USER_SELECT_PUBLIC, latitude: true, longitude: true } },
-          user2: { select: { ...USER_SELECT_PUBLIC, latitude: true, longitude: true } },
+          user1: { select: { ...USER_SELECT_PUBLIC, latitude: true, longitude: true, lastLocationUpdatedAt: true } },
+          user2: { select: { ...USER_SELECT_PUBLIC, latitude: true, longitude: true, lastLocationUpdatedAt: true } },
         },
       });
       return rels.map((r) => {

@@ -34,6 +34,20 @@ const FamilyMap = dynamic(() => import("@/components/family/FamilyMap"), {
 
 type Tab = "members" | "requests" | "posts" | "map";
 
+function formatLastSeen(ts: Date | string | null | undefined): string {
+  if (!ts) return "Unknown";
+  const date = typeof ts === "string" ? new Date(ts) : ts;
+  const diffMs = Date.now() - date.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return "Just now";
+  if (diffMin < 60) return `${diffMin} min ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr} hr ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 7) return `${diffDay} day${diffDay > 1 ? "s" : ""} ago`;
+  return date.toLocaleDateString();
+}
+
 const TABS: { key: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { key: "members", label: "Members", icon: Users },
   { key: "requests", label: "Requests", icon: Mail },
@@ -283,6 +297,30 @@ export const FamilyPageClient: React.FC = () => {
                               {m.shareMyLocationToThem ? "On" : "Off"}
                             </span>
                           </div>
+                          {m.shareTheirLocationToMe && m.member.latitude != null && m.member.longitude != null ? (
+                            <a
+                              href={`https://www.google.com/maps/search/?api=1&query=${m.member.latitude},${m.member.longitude}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 mt-1.5 text-xs text-primary hover:underline"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MapPin className="h-3 w-3 shrink-0" />
+                              <span className="truncate">
+                                {m.member.latitude.toFixed(4)}, {m.member.longitude.toFixed(4)}
+                              </span>
+                            </a>
+                          ) : (
+                            <p className="flex items-center gap-1 mt-1.5 text-xs text-muted-foreground">
+                              <MapPin className="h-3 w-3 shrink-0" />
+                              Location not shared
+                            </p>
+                          )}
+                          {m.shareTheirLocationToMe && m.member.latitude != null && (
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              Updated {formatLastSeen(m.member.lastLocationUpdatedAt as any)}
+                            </p>
+                          )}
                         </div>
                         <button
                           type="button"
