@@ -199,6 +199,14 @@ export const LocalPulseMap: React.FC<LocalPulseMapProps> = ({
                     <Users className="h-3 w-3" />
                     Family
                   </p>
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${loc.latitude},${loc.longitude}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-primary hover:underline block"
+                  >
+                    {loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)}
+                  </a>
                   {loc.lastLocationUpdatedAt && (
                     <p className="text-xs text-muted-foreground">
                       Updated {formatLastSeen(loc.lastLocationUpdatedAt)}

@@ -23,6 +23,7 @@ import { Sparkles,
   ChevronDown,
   Clock,
   Siren,
+  Bell,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { UserAvatar } from "@/components/shared/UserAvatar";
@@ -30,6 +31,7 @@ import { cn } from "@/lib/utils";
 import { PullToRefresh } from "@/components/feed/PullToRefresh";
 import { ReelsViewerModal } from "@/components/feed/ReelsViewerModal";
 import { useToast } from "@/components/design-system/Toaster";
+import { Badge } from "@/components/design-system/Badge";
 
 function ReelsSkeleton() {
   return (
@@ -107,6 +109,13 @@ export default function Home() {
       refetchOnMount: true,
     },
   );
+
+  const { data: unreadCount } = trpc.notifications.unreadCount.useQuery(undefined, {
+    enabled: isAuthenticated,
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
+    staleTime: 5000,
+  });
 
   const forYouQuery = trpc.feed.getForYou.useInfiniteQuery(
     { limit: 20 },
@@ -304,16 +313,31 @@ export default function Home() {
                 <Search className="h-4 w-4" />
               </button>
               {isAuthenticated && (
-                <button
-                  type="button"
-                  onClick={handleSOS}
-                  disabled={sos.isPending}
-                  className="h-9 w-9 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-red-400 flex items-center justify-center hover:bg-red-500/20 transition-colors"
-                  aria-label="Send SOS alert to family"
-                  title="SOS - Alert family with your location"
-                >
-                  <Siren className="h-4 w-4" />
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => router.push("/notifications")}
+                    className="relative h-9 w-9 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-white flex items-center justify-center hover:bg-white/20 transition-colors"
+                    aria-label="Notifications"
+                  >
+                    <Bell className="h-4 w-4" />
+                    {unreadCount != null && unreadCount > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
+                        {unreadCount > 99 ? "99+" : unreadCount}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSOS}
+                    disabled={sos.isPending}
+                    className="h-9 w-9 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-red-400 flex items-center justify-center hover:bg-red-500/20 transition-colors"
+                    aria-label="Send SOS alert to family"
+                    title="SOS - Alert family with your location"
+                  >
+                    <Siren className="h-4 w-4" />
+                  </button>
+                </>
               )}
               {!isAuthenticated ? (
                 <Button
