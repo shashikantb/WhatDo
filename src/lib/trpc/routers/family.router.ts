@@ -253,14 +253,28 @@ export const familyRouter = createTRPCRouter({
 
   // SOS alert: notify approved family members with the user's current location.
   sos: protectedProcedure
-    .input(z.object({ message: z.string().max(500).optional() }))
+    .input(z.object({
+      message: z.string().max(500).optional(),
+      latitude: z.number(),
+      longitude: z.number(),
+    }))
     .mutation(async ({ ctx, input }) => {
       const me = ctx.session.user.id;
       const user = await ctx.prisma.user.findUnique({
         where: { id: me },
-        select: { id: true, latitude: true, longitude: true, displayName: true, username: true },
+        select: { id: true, displayName: true, username: true },
       });
       if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "User not found." });
+
+      // Persist the fresh location captured at SOS time so family sees the latest.
+      await ctx.prisma.user.update({
+        where: { id: me },
+        data: {
+          latitude: input.latitude,
+          longitude: input.longitude,
+          lastLocationUpdatedAt: new Date(),
+        },
+      });
 
       const rels = await ctx.prisma.familyRelationship.findMany({
         where: {
@@ -277,8 +291,8 @@ export const familyRouter = createTRPCRouter({
       const alert = await ctx.prisma.sosAlert.create({
         data: {
           senderId: me,
-          latitude: user.latitude,
-          longitude: user.longitude,
+          latitude: input.latitude,
+          longitude: input.longitude,
           message: input.message,
           recipientCount: familyIds.length,
           recipients: { create: familyIds.map((fid) => ({ recipientId: fid })) },
@@ -296,8 +310,8 @@ export const familyRouter = createTRPCRouter({
                 type: "SOS",
                 payload: {
                   alertId: alert.id,
-                  latitude: user.latitude,
-                  longitude: user.longitude,
+                  latitude: input.latitude,
+                  longitude: input.longitude,
                   message: input.message ?? null,
                   senderName: user.displayName || user.username || "A family member",
                 },

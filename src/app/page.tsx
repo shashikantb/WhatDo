@@ -27,11 +27,12 @@ import { Sparkles,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { UserAvatar } from "@/components/shared/UserAvatar";
-import { cn } from "@/lib/utils";
+import { cn, getCurrentPosition } from "@/lib/utils";
 import { PullToRefresh } from "@/components/feed/PullToRefresh";
 import { ReelsViewerModal } from "@/components/feed/ReelsViewerModal";
 import { useToast } from "@/components/design-system/Toaster";
 import { Badge } from "@/components/design-system/Badge";
+import { useLocationTracker } from "@/hooks/useLocationTracker";
 
 function ReelsSkeleton() {
   return (
@@ -47,6 +48,8 @@ export default function Home() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const { openLogin } = useLoginModal();
+  // Keep location fresh for family / SOS (Home doesn't use MainLayout).
+  useLocationTracker();
   const utils = trpc.useUtils();
   const isAuthenticated = status === "authenticated";
   const reelsRef = React.useRef<HTMLDivElement | null>(null);
@@ -96,10 +99,20 @@ export default function Home() {
     },
   });
 
-  const handleSOS = () => {
-    if (!isAuthenticated) return;
+  const [sosSending, setSosSending] = React.useState(false);
+
+  const handleSOS = async () => {
+    if (!isAuthenticated || sosSending) return;
     if (!window.confirm("Send an SOS alert with your current location to all family members?")) return;
-    sos.mutate({});
+    setSosSending(true);
+    try {
+      const { latitude, longitude } = await getCurrentPosition();
+      sos.mutate({ latitude, longitude });
+    } catch {
+      toast.show("Could not get your location. Please enable location access.", "danger");
+    } finally {
+      setSosSending(false);
+    }
   };
 
   const trendingQuery = trpc.feed.getTrending.useQuery(
@@ -330,8 +343,8 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={handleSOS}
-                    disabled={sos.isPending}
-                    className="h-9 w-9 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-red-400 flex items-center justify-center hover:bg-red-500/20 transition-colors"
+                    disabled={sos.isPending || sosSending}
+                    className="h-9 w-9 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-red-400 flex items-center justify-center hover:bg-red-500/20 transition-colors disabled:opacity-50"
                     aria-label="Send SOS alert to family"
                     title="SOS - Alert family with your location"
                   >

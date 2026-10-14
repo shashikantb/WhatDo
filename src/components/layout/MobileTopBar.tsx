@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc/client";
 import { Badge } from "@/components/design-system/Badge";
 import { useToast } from "@/components/design-system/Toaster";
+import { getCurrentPosition } from "@/lib/utils";
 
 export const MobileTopBar: React.FC = () => {
   const router = useRouter();
@@ -37,10 +38,20 @@ export const MobileTopBar: React.FC = () => {
     },
   });
 
-  const handleSOS = () => {
-    if (!isAuthed) return;
+  const [sending, setSending] = React.useState(false);
+
+  const handleSOS = async () => {
+    if (!isAuthed || sending) return;
     if (!window.confirm("Send an SOS alert with your current location to all family members?")) return;
-    sos.mutate({});
+    setSending(true);
+    try {
+      const { latitude, longitude } = await getCurrentPosition();
+      sos.mutate({ latitude, longitude });
+    } catch {
+      toast.show("Could not get your location. Please enable location access.", "danger");
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -68,8 +79,8 @@ export const MobileTopBar: React.FC = () => {
             <button
               type="button"
               onClick={handleSOS}
-              disabled={sos.isPending}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-danger hover:bg-danger/10 transition-colors"
+              disabled={sos.isPending || sending}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-danger hover:bg-danger/10 transition-colors disabled:opacity-50"
               aria-label="Send SOS alert to family"
               title="SOS - Alert family with your location"
             >

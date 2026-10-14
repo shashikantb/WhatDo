@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { cn } from "@/lib/utils";
+import { cn, getCurrentPosition } from "@/lib/utils";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { UserAvatar } from "@/components/shared/UserAvatar";
 import { Badge } from "@/components/design-system/Badge";
@@ -75,10 +75,20 @@ export const TopBar: React.FC<TopBarProps> = ({
     },
   });
 
-  const handleSOS = () => {
-    if (!isAuthenticated) return;
+  const [sending, setSending] = React.useState(false);
+
+  const handleSOS = async () => {
+    if (!isAuthenticated || sending) return;
     if (!window.confirm("Send an SOS alert with your current location to all family members?")) return;
-    sos.mutate({});
+    setSending(true);
+    try {
+      const { latitude, longitude } = await getCurrentPosition();
+      sos.mutate({ latitude, longitude });
+    } catch {
+      toast.show("Could not get your location. Please enable location access.", "danger");
+    } finally {
+      setSending(false);
+    }
   };
 
   React.useEffect(() => {
@@ -128,8 +138,8 @@ export const TopBar: React.FC<TopBarProps> = ({
           <button
             type="button"
             onClick={handleSOS}
-            disabled={sos.isPending}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-danger hover:bg-danger/10 transition-colors"
+            disabled={sos.isPending || sending}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-danger hover:bg-danger/10 transition-colors disabled:opacity-50"
             aria-label="Send SOS alert to family"
             title="SOS - Alert family with your location"
           >

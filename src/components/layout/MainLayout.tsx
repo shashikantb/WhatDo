@@ -7,6 +7,7 @@ import { TopBar } from "./TopBar";
 import { RightRail } from "./RightRail";
 import { MobileTopBar } from "./MobileTopBar";
 import { ToastProvider } from "@/components/design-system/Toaster";
+import { useLocationTracker } from "@/hooks/useLocationTracker";
 import type { Role } from "@/lib/types";
 
 export interface MainLayoutProps {
@@ -31,6 +32,9 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   className,
   onLogout,
 }) => {
+  // Keep the user's location fresh for family / SOS features.
+  useLocationTracker();
+
   return (
     <ToastProvider>
       <div className="min-h-screen bg-background">

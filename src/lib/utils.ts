@@ -173,3 +173,21 @@ export function purgeStaleAuthCookies(): number {
   } catch {}
   return deleted;
 }
+
+/**
+ * Promise wrapper around navigator.geolocation.getCurrentPosition.
+ * Resolves with { latitude, longitude } or rejects on error/denial.
+ */
+export function getCurrentPosition(options?: PositionOptions): Promise<{ latitude: number; longitude: number }> {
+  return new Promise((resolve, reject) => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      reject(new Error("Geolocation is not supported by this browser."));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+      (err) => reject(err),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0, ...options },
+    );
+  });
+}

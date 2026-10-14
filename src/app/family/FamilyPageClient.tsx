@@ -20,7 +20,7 @@ import {
   Check,
   X,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, getCurrentPosition } from "@/lib/utils";
 
 // Leaflet map must be client-only (it references `window`).
 const FamilyMap = dynamic(() => import("@/components/family/FamilyMap"), {
@@ -139,12 +139,18 @@ export const FamilyPageClient: React.FC = () => {
   };
 
   const handleSos = async () => {
-    if (!confirm("Send an SOS alert to your family members?")) return;
+    if (!confirm("Send an SOS alert with your current location to your family members?")) return;
     try {
-      const res = await sos.mutateAsync({});
+      const { latitude, longitude } = await getCurrentPosition();
+      const res = await sos.mutateAsync({ latitude, longitude });
       toast.show(`SOS alert sent to ${res.notified} family member(s)!`, "danger");
+      utils.family.listMembers.invalidate();
     } catch (e: any) {
-      toast.show(e?.message || "Failed to send SOS", "danger");
+      if (e?.code === 1 || e?.message?.includes("location") || e?.message?.includes("denied")) {
+        toast.show("Could not get your location. Please enable location access.", "danger");
+      } else {
+        toast.show(e?.message || "Failed to send SOS", "danger");
+      }
     }
   };
 
