@@ -238,8 +238,10 @@ function NotificationItem({
   }, [notification.id, isRead, onMarkRead]);
 
   const handleClick = () => {
-    if (notification.type === "FAMILY_REQUEST" || notification.type === "SOS") {
-      router.push("/family");
+    if (notification.type === "SOS") {
+      router.push("/family?tab=map");
+    } else if (notification.type === "FAMILY_REQUEST") {
+      router.push("/family?tab=requests");
     } else if (notification.post?.id) {
       router.push(`/post/${notification.post.id}`);
     } else if (notification.actor?.username) {

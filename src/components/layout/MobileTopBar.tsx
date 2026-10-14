@@ -2,16 +2,19 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Bell, Users, Search } from "lucide-react";
+import { Bell, Users, Search, Siren } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc/client";
 import { Badge } from "@/components/design-system/Badge";
-import { cn } from "@/lib/utils";
+import { useToast } from "@/components/design-system/Toaster";
 
 export const MobileTopBar: React.FC = () => {
+  const router = useRouter();
   const { status } = useSession();
   const isAuthed = status === "authenticated";
   const sessionSettled = status !== "loading";
+  const toast = useToast();
 
   const { data: unreadCount } = trpc.notifications.unreadCount.useQuery(undefined, {
     enabled: sessionSettled && isAuthed,
@@ -19,6 +22,26 @@ export const MobileTopBar: React.FC = () => {
     refetchOnWindowFocus: true,
     staleTime: 5000,
   });
+
+  const sos = trpc.family.sos.useMutation({
+    onSuccess: (data) => {
+      toast.show(`SOS sent to ${data.notified} family member(s)!`, "danger");
+    },
+    onError: (err) => {
+      if (err.message?.includes("No family members")) {
+        toast.show("Add family members first to use SOS", "warning");
+        router.push("/family");
+      } else {
+        toast.show(err.message || "Failed to send SOS", "danger");
+      }
+    },
+  });
+
+  const handleSOS = () => {
+    if (!isAuthed) return;
+    if (!window.confirm("Send an SOS alert with your current location to all family members?")) return;
+    sos.mutate({});
+  };
 
   return (
     <header className="md:hidden sticky top-0 z-30 h-14 flex items-center justify-between px-4 border-b border-border bg-card/80 backdrop-blur-md">
@@ -42,6 +65,16 @@ export const MobileTopBar: React.FC = () => {
 
         {isAuthed && (
           <>
+            <button
+              type="button"
+              onClick={handleSOS}
+              disabled={sos.isPending}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-danger hover:bg-danger/10 transition-colors"
+              aria-label="Send SOS alert to family"
+              title="SOS - Alert family with your location"
+            >
+              <Siren className="h-5 w-5" />
+            </button>
             <Link
               href="/family"
               className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"

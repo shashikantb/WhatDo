@@ -10,6 +10,7 @@ import {
   Bookmark,
   ChevronDown,
   Users,
+  Siren,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -19,6 +20,7 @@ import { UserAvatar } from "@/components/shared/UserAvatar";
 import { Badge } from "@/components/design-system/Badge";
 import { SearchBar } from "@/components/search/SearchBar";
 import { trpc } from "@/lib/trpc/client";
+import { useToast } from "@/components/design-system/Toaster";
 import type { Role } from "@/lib/types";
 
 export interface TopBarProps {
@@ -49,6 +51,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   const sessionSettled = status !== "loading";
   const [menuOpen, setMenuOpen] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
+  const toast = useToast();
 
   const { data: liveUnread } = trpc.notifications.unreadCount.useQuery(undefined, {
     enabled: sessionSettled && isAuthenticated,
@@ -57,6 +60,26 @@ export const TopBar: React.FC<TopBarProps> = ({
     staleTime: 5000,
   });
   const effectiveCount = typeof liveUnread === "number" ? liveUnread : notificationCount;
+
+  const sos = trpc.family.sos.useMutation({
+    onSuccess: (data) => {
+      toast.show(`SOS sent to ${data.notified} family member(s)!`, "danger");
+    },
+    onError: (err) => {
+      if (err.message?.includes("No family members")) {
+        toast.show("Add family members first to use SOS", "warning");
+        router.push("/family");
+      } else {
+        toast.show(err.message || "Failed to send SOS", "danger");
+      }
+    },
+  });
+
+  const handleSOS = () => {
+    if (!isAuthenticated) return;
+    if (!window.confirm("Send an SOS alert with your current location to all family members?")) return;
+    sos.mutate({});
+  };
 
   React.useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -100,6 +123,19 @@ export const TopBar: React.FC<TopBarProps> = ({
 
       <div className="flex items-center gap-2">
         <ThemeToggle />
+
+        {isAuthenticated && (
+          <button
+            type="button"
+            onClick={handleSOS}
+            disabled={sos.isPending}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-danger hover:bg-danger/10 transition-colors"
+            aria-label="Send SOS alert to family"
+            title="SOS - Alert family with your location"
+          >
+            <Siren className="h-5 w-5" />
+          </button>
+        )}
 
         <Link
           href="/notifications"

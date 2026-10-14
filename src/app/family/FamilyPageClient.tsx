@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { AppShell } from "@/components/layout/AppShell";
 import { Card, CardContent } from "@/components/design-system/Card";
@@ -41,7 +42,9 @@ const TABS: { key: Tab; label: string; icon: React.ComponentType<{ className?: s
 ];
 
 export const FamilyPageClient: React.FC = () => {
-  const [tab, setTab] = React.useState<Tab>("members");
+  const searchParams = useSearchParams();
+  const initialTab = (searchParams.get("tab") as Tab) || "members";
+  const [tab, setTab] = React.useState<Tab>(initialTab);
   const toast = useToast();
   const utils = trpc.useUtils();
 
