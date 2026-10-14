@@ -108,6 +108,12 @@ export const postsRouter = createTRPCRouter({
           .default([]),
         expiresAt: z.coerce.date().optional(),
         anonymous: z.boolean().default(false),
+        // LocalPulse location + family fields
+        latitude: z.number().min(-90).max(90).optional(),
+        longitude: z.number().min(-180).max(180).optional(),
+        city: z.string().max(100).optional(),
+        isFamilyPost: z.boolean().default(false),
+        hideLocation: z.boolean().default(false),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -203,6 +209,11 @@ export const postsRouter = createTRPCRouter({
           allowComments: input.allowComments,
           status,
           expiresAt: input.expiresAt,
+          latitude: input.latitude,
+          longitude: input.longitude,
+          city: input.city,
+          isFamilyPost: input.isFamilyPost,
+          hideLocation: input.hideLocation,
           options: {
             create: input.options.map((o, idx) => ({
               label: o.label,

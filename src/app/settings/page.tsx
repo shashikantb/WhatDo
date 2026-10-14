@@ -29,6 +29,7 @@ import {
   AlertTriangle,
   LogOut,
   Loader2,
+  Store,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { signOut } from "next-auth/react";
@@ -584,6 +585,19 @@ export default function SettingsPage() {
                   >
                     Save changes
                   </Button>
+                </div>
+                <div className="pt-2 border-t border-border mt-2">
+                  <button
+                    type="button"
+                    onClick={() => router.push("/account/business")}
+                    className="flex items-center justify-between w-full text-left py-2 hover:bg-muted/50 rounded-lg px-2 -mx-2"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Store className="h-4 w-4 text-emerald-500" />
+                      <span className="text-sm font-medium">Business Account</span>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  </button>
                 </div>
               </SettingSection>
 

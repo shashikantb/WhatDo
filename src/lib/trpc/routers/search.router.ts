@@ -45,6 +45,7 @@ export const searchRouter = createTRPCRouter({
         results.posts = await ctx.prisma.post.findMany({
           where: {
             status: "PUBLISHED",
+            isFamilyPost: false,
             OR: [
               { question: { search: q } },
               { question: { contains: q, mode: "insensitive" } },

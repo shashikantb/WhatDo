@@ -103,6 +103,12 @@ export const createPostSchema = z.object({
     .optional()
     .transform((v) => (v === null || v === "" ? undefined : (v as Date | undefined))),
   anonymous: z.boolean().default(false),
+  // LocalPulse location + family fields
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  city: z.string().max(100).optional(),
+  isFamilyPost: z.boolean().default(false),
+  hideLocation: z.boolean().default(false),
 });
 
 export type CreatePostInput = z.infer<typeof createPostSchema>;

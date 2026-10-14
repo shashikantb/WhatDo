@@ -134,5 +134,9 @@ export const USER_SELECT_PUBLIC = {
   predictionsMade: true,
   createdAt: true,
   bio: true,
+  isBusiness: true,
+  businessName: true,
+  businessCategory: true,
+  businessDescription: true,
 } as const;
 

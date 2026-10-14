@@ -13,6 +13,10 @@ import {
   Loader2,
   Vote,
   Trophy,
+  Users,
+  UserCheck,
+  Siren,
+  Calendar,
 } from "lucide-react";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import { AppShell } from "@/components/layout/AppShell";
@@ -87,6 +91,26 @@ function getNotificationIcon(type: string) {
         Icon: Trophy,
         cls: "text-warning bg-warning/10 border-warning/15",
       };
+    case "FAMILY_REQUEST":
+      return {
+        Icon: Users,
+        cls: "text-blue-500 bg-blue-500/10 border-blue-500/15",
+      };
+    case "FAMILY_REQUEST_ACCEPTED":
+      return {
+        Icon: UserCheck,
+        cls: "text-success bg-success/10 border-success/15",
+      };
+    case "SOS":
+      return {
+        Icon: Siren,
+        cls: "text-danger bg-danger/10 border-danger/15",
+      };
+    case "APPOINTMENT_BOOKED":
+      return {
+        Icon: Calendar,
+        cls: "text-violet-500 bg-violet-500/10 border-violet-500/15",
+      };
     default:
       return {
         Icon: Bell,
@@ -152,6 +176,30 @@ function getNotificationDescription(
           A prediction you made has resolved!{truncPost}
         </>
       );
+    case "FAMILY_REQUEST":
+      return (
+        <>
+          {boldActor} sent you a family request
+        </>
+      );
+    case "FAMILY_REQUEST_ACCEPTED":
+      return (
+        <>
+          {boldActor} accepted your family request
+        </>
+      );
+    case "SOS":
+      return (
+        <>
+          {boldActor} needs your help! Tap to see their location.
+        </>
+      );
+    case "APPOINTMENT_BOOKED":
+      return (
+        <>
+          {boldActor} booked an appointment with you
+        </>
+      );
     default:
       return (
         <>
@@ -190,7 +238,9 @@ function NotificationItem({
   }, [notification.id, isRead, onMarkRead]);
 
   const handleClick = () => {
-    if (notification.post?.id) {
+    if (notification.type === "FAMILY_REQUEST" || notification.type === "SOS") {
+      router.push("/family");
+    } else if (notification.post?.id) {
       router.push(`/post/${notification.post.id}`);
     } else if (notification.actor?.username) {
       router.push(`/profile/${notification.actor.username}`);

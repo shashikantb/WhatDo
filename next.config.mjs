@@ -6,6 +6,7 @@ const nextConfig = {
   reactStrictMode: true,
   compress: true,
   generateEtags: true,
+  staticPageGenerationTimeout: 300,
   typescript: {
     ignoreBuildErrors: true,
   },

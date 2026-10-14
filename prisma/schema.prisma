@@ -97,6 +97,10 @@ enum NotificationType {
   PREDICTION_RESOLVED
   TRENDING
   MODERATION
+  FAMILY_REQUEST
+  FAMILY_REQUEST_ACCEPTED
+  SOS
+  APPOINTMENT_BOOKED
 }
 
 enum ModerationAction {
@@ -147,6 +151,13 @@ model User {
   city                    String?
   region                  String?
   country                 String?
+  latitude                Float?
+  longitude               Float?
+  lastLocationUpdatedAt   DateTime?
+  isBusiness              Boolean           @default(false)
+  businessName            String?
+  businessCategory        String?
+  businessDescription     String?            @db.Text
   ageGroup                String?
   lastAssessmentSessionId String?
   createdAt               DateTime          @default(now())
@@ -185,6 +196,16 @@ model User {
   whatdoIdentities        WhatDoIdentityResult[]
   referralShares          ReferralShareEvent[]
   funnelEvents            AnalyticsFunnelEvent[]
+  familyRelationshipsAsUser1 FamilyRelationship[] @relation("FamilyUser1")
+  familyRelationshipsAsUser2 FamilyRelationship[] @relation("FamilyUser2")
+  familyRelationshipsAsRequester FamilyRelationship[] @relation("FamilyRequester")
+  businessServices        BusinessService[]
+  businessHours           BusinessHour[]
+  businessResources       BusinessResource[]
+  appointmentsAsBusiness  Appointment[]     @relation("AppointmentBusiness")
+  appointmentsAsCustomer  Appointment[]     @relation("AppointmentCustomer")
+  sentSosAlerts           SosAlert[]        @relation("SosSender")
+  receivedSosAlerts       SosAlertRecipient[] @relation("SosRecipient")
 }
 
 model Account {
@@ -281,6 +302,11 @@ model Post {
   predictedOutcome      String?
   predictionResolvedAt  DateTime?
   predictionCorrect     Boolean?
+  latitude              Float?
+  longitude             Float?
+  city                  String?
+  isFamilyPost          Boolean           @default(false)
+  hideLocation          Boolean           @default(false)
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
   moderatedBy           String?
@@ -812,4 +838,140 @@ model AnalyticsFunnelEvent {
 
   @@index([event, createdAt])
   @@index([userId, event])
+}
+
+// ============================================================
+// LocalPulse integration: family, business, SOS, appointments
+// ============================================================
+
+model FamilyRelationship {
+  id                  String    @id @default(cuid())
+  userId1             String
+  userId2             String
+  requesterId         String
+  status              FamilyRelationshipStatus @default(PENDING)
+  shareLocation1to2   Boolean   @default(false)
+  shareLocation2to1   Boolean   @default(false)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  user1               User      @relation("FamilyUser1", fields: [userId1], references: [id], onDelete: Cascade)
+  user2               User      @relation("FamilyUser2", fields: [userId2], references: [id], onDelete: Cascade)
+  requester           User      @relation("FamilyRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+
+  @@unique([userId1, userId2])
+  @@index([userId1])
+  @@index([userId2])
+  @@index([status])
+}
+
+enum FamilyRelationshipStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model BusinessService {
+  id              String   @id @default(cuid())
+  userId          String
+  name            String
+  description     String?  @db.Text
+  price           Decimal  @default(0) @db.Decimal(10, 2)
+  durationMinutes Int      @default(30)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appointments    Appointment[]
+
+  @@index([userId])
+}
+
+model BusinessHour {
+  id          String   @id @default(cuid())
+  userId      String
+  dayOfWeek   Int      // 0=Sunday ... 6=Saturday
+  startTime   String?  // "HH:mm"
+  endTime     String?  // "HH:mm"
+  isClosed    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dayOfWeek])
+  @@index([userId])
+}
+
+model BusinessResource {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@index([userId])
+}
+
+model Appointment {
+  id            String             @id @default(cuid())
+  customerId    String
+  businessId    String
+  serviceId     String
+  resourceId    String?
+  startTime     DateTime
+  endTime       DateTime
+  status        AppointmentStatus  @default(CONFIRMED)
+  notes         String?            @db.Text
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  customer      User               @relation("AppointmentCustomer", fields: [customerId], references: [id], onDelete: Cascade)
+  business      User               @relation("AppointmentBusiness", fields: [businessId], references: [id], onDelete: Cascade)
+  service       BusinessService    @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  resource      BusinessResource?  @relation(fields: [resourceId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, startTime])
+  @@index([customerId, startTime])
+  @@index([resourceId, startTime])
+}
+
+enum AppointmentStatus {
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+model SosAlert {
+  id              String   @id @default(cuid())
+  senderId        String
+  latitude        Float
+  longitude       Float
+  message         String?  @db.Text
+  recipientCount  Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  sender          User     @relation("SosSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipients      SosAlertRecipient[]
+
+  @@index([senderId, createdAt])
+}
+
+model SosAlertRecipient {
+  id           String   @id @default(cuid())
+  sosAlertId   String
+  recipientId  String
+  notifiedAt   DateTime @default(now())
+
+  sosAlert     SosAlert @relation(fields: [sosAlertId], references: [id], onDelete: Cascade)
+  recipient    User     @relation("SosRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([sosAlertId])
+  @@index([recipientId])
 }

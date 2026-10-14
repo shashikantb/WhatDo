@@ -19,7 +19,7 @@ export const usersRouter = createTRPCRouter({
       const [postsCount, votesCount, followersCount, followingCount] =
         await Promise.all([
           ctx.prisma.post.count({
-            where: { creatorId: user.id, status: "PUBLISHED" },
+            where: { creatorId: user.id, status: "PUBLISHED", isFamilyPost: false },
           }),
           ctx.prisma.vote.count({ where: { userId: user.id } }),
           ctx.prisma.follow.count({ where: { followingId: user.id } }),
@@ -68,6 +68,7 @@ export const usersRouter = createTRPCRouter({
         where: {
           creatorId: user.id,
           status: { in: ["PUBLISHED", "PENDING_MODERATION"] },
+          isFamilyPost: false,
         },
         orderBy: { createdAt: "desc" },
         take: input.limit + 1,
@@ -238,5 +239,31 @@ export const usersRouter = createTRPCRouter({
         },
       });
       return users;
+    }),
+
+  updateLocation: protectedProcedure
+    .input(
+      z.object({
+        latitude: z.number().min(-90).max(90),
+        longitude: z.number().min(-180).max(180),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const user = await ctx.prisma.user.update({
+        where: { id: ctx.session.user.id },
+        data: {
+          latitude: input.latitude,
+          longitude: input.longitude,
+          lastLocationUpdatedAt: new Date(),
+        },
+        select: {
+          id: true,
+          latitude: true,
+          longitude: true,
+          lastLocationUpdatedAt: true,
+          city: true,
+        },
+      });
+      return user;
     }),
 });

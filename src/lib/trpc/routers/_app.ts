@@ -15,6 +15,9 @@ import { mediaRouter } from "./media.router";
 import { adsRouter } from "./ads.router";
 import { whatdoRouter } from "./whatdo.router";
 import { adminQuestionsRouter } from "./admin-questions.router";
+import { familyRouter } from "./family.router";
+import { businessRouter } from "./business.router";
+import { appointmentsRouter } from "./appointments.router";
 
 export const appRouter = createTRPCRouter({
   auth: authRouter,
@@ -33,6 +36,9 @@ export const appRouter = createTRPCRouter({
   ads: adsRouter,
   whatdo: whatdoRouter,
   adminQuestions: adminQuestionsRouter,
+  family: familyRouter,
+  business: businessRouter,
+  appointments: appointmentsRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -13,6 +13,8 @@ import {
   Check as CheckIcon,
   X as XIcon,
   Award,
+  Users,
+  Store,
 } from "lucide-react";
 import { cn, formatNumber, formatRelativeTime } from "@/lib/utils";
 import { AppShell } from "@/components/layout/AppShell";
@@ -32,6 +34,7 @@ import { useLoginModal } from "@/components/auth/LoginModal";
 import { Feed } from "@/components/feed/Feed";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { CATEGORIES } from "@/lib/constants";
+import { BookAppointmentModal } from "@/components/business/BookAppointmentModal";
 
 export interface PublicUserWithStats {
   id: string;
@@ -53,6 +56,10 @@ export interface PublicUserWithStats {
   followingCount: number;
   following: boolean;
   isSelf: boolean;
+  isBusiness: boolean;
+  businessName: string | null;
+  businessCategory: string | null;
+  businessDescription: string | null;
 }
 
 export interface ProfilePageClientProps {
@@ -285,6 +292,7 @@ export const ProfilePageClient: React.FC<ProfilePageClientProps> = ({
   const [following, setFollowing] = React.useState(user.following);
   const [followersVisible, setFollowersVisible] = React.useState(false);
   const [followingVisible, setFollowingVisible] = React.useState(false);
+  const [bookingOpen, setBookingOpen] = React.useState(false);
 
   const isAuthenticated = status === "authenticated";
   const isSelf = user.isSelf;
@@ -316,6 +324,26 @@ export const ProfilePageClient: React.FC<ProfilePageClientProps> = ({
     onError: () => {
       show("Action failed", "danger");
     },
+  });
+
+  // Family relationship status + actions
+  const familyStatus = trpc.family.getRelationshipStatus.useQuery(
+    { targetUserId: user.id },
+    { enabled: isAuthenticated && !isSelf }
+  );
+  const sendFamilyRequest = trpc.family.sendRequest.useMutation({
+    onSuccess: () => {
+      show("Family request sent!", "success");
+      void familyStatus.refetch();
+    },
+    onError: (e: any) => show(e?.message || "Failed to send request", "danger"),
+  });
+  const cancelFamilyRequest = trpc.family.cancelRequest.useMutation({
+    onSuccess: () => {
+      show("Request cancelled.", "success");
+      void familyStatus.refetch();
+    },
+    onError: (e: any) => show(e?.message || "Failed to cancel", "danger"),
   });
 
   const opinionsQuery = trpc.users.getOpinions.useInfiniteQuery(
@@ -418,14 +446,43 @@ export const ProfilePageClient: React.FC<ProfilePageClientProps> = ({
                   Edit Profile
                 </Button>
               ) : (
-                <Button
-                  variant={following ? "outline" : "primary"}
-                  size="sm"
-                  onClick={handleFollow}
-                  loading={followMutation.isPending}
-                >
-                  {following ? "Following" : "Follow"}
-                </Button>
+                <>
+                  <Button
+                    variant={following ? "outline" : "primary"}
+                    size="sm"
+                    onClick={handleFollow}
+                    loading={followMutation.isPending}
+                  >
+                    {following ? "Following" : "Follow"}
+                  </Button>
+                  {isAuthenticated && familyStatus.data !== "approved" && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      leftIcon={<Users className="h-4 w-4" />}
+                      onClick={() =>
+                        familyStatus.data === "pending_from_me"
+                          ? cancelFamilyRequest.mutate({ targetUserId: user.id })
+                          : sendFamilyRequest.mutate({ targetUserId: user.id })
+                      }
+                      loading={sendFamilyRequest.isPending || cancelFamilyRequest.isPending}
+                    >
+                      {familyStatus.data === "pending_from_me"
+                        ? "Pending"
+                        : "Add to Family"}
+                    </Button>
+                  )}
+                  {isAuthenticated && familyStatus.data === "approved" && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      leftIcon={<Users className="h-4 w-4" />}
+                      onClick={() => router.push("/family")}
+                    >
+                      Family
+                    </Button>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -461,6 +518,33 @@ export const ProfilePageClient: React.FC<ProfilePageClientProps> = ({
               <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
                 {user.bio}
               </p>
+            )}
+
+            {user.isBusiness && (user.businessName || user.businessCategory || user.businessDescription) && (
+              <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Store className="h-4 w-4 text-emerald-500" />
+                  <span className="font-semibold text-sm">
+                    {user.businessName || displayName}
+                  </span>
+                  {user.businessCategory && (
+                    <Badge variant="info" size="sm">{user.businessCategory}</Badge>
+                  )}
+                </div>
+                {user.businessDescription && (
+                  <p className="text-xs text-muted-foreground leading-relaxed">{user.businessDescription}</p>
+                )}
+                {!isSelf && isAuthenticated && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setBookingOpen(true)}
+                    className="w-full"
+                  >
+                    Book Appointment
+                  </Button>
+                )}
+              </div>
             )}
 
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
@@ -742,6 +826,13 @@ export const ProfilePageClient: React.FC<ProfilePageClientProps> = ({
           onClose={() => setFollowingVisible(false)}
         />
       )}
+      <BookAppointmentModal
+        open={bookingOpen}
+        onClose={() => setBookingOpen(false)}
+        businessId={user.id}
+        businessUsername={username.replace(/^@/, "")}
+        businessName={user.businessName ?? displayName}
+      />
     </AppShell>
   );
 };

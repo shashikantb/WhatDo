@@ -12,6 +12,7 @@ import {
   feedScoreWeighted,
 } from "../../utils/scoring";
 import type { Prisma } from "@prisma/client";
+import { nearbyPosts } from "../../db/queries/geo.queries";
 
 const PostSort = z.enum(["hot", "new", "top", "rising"]);
 const TrendingRange = z.enum(["1h", "24h", "7d"]);
@@ -128,6 +129,7 @@ export const feedRouter = createTRPCRouter({
       const posts = await ctx.prisma.post.findMany({
         where: {
           status: { in: ["PUBLISHED"] },
+          isFamilyPost: false,
           creatorId: { notIn: blockedUserIds },
           NOT: votedPostIds.length ? { id: { in: votedPostIds } } : undefined,
         },
@@ -239,6 +241,7 @@ export const feedRouter = createTRPCRouter({
         where: {
           creatorId: { in: followingIds },
           status: "PUBLISHED",
+          isFamilyPost: false,
         },
         orderBy: { createdAt: "desc" },
         take: input.limit + 1,
@@ -292,6 +295,7 @@ export const feedRouter = createTRPCRouter({
       const items = await ctx.prisma.post.findMany({
         where: {
           status: "PUBLISHED",
+          isFamilyPost: false,
           createdAt: { gte: createdAtGte },
         },
         orderBy: [{ trendingScore: "desc" as const }, { voteCount: "desc" as const }],
@@ -319,7 +323,7 @@ export const feedRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const items = await ctx.prisma.post.findMany({
-        where: { status: "PUBLISHED" },
+        where: { status: "PUBLISHED", isFamilyPost: false },
         orderBy: { createdAt: "desc" },
         take: input.limit + 1,
         cursor: input.cursor ? { id: input.cursor } : undefined,
@@ -377,7 +381,7 @@ export const feedRouter = createTRPCRouter({
       else orderBy.push({ trendingScore: "desc" }, { createdAt: "desc" });
 
       const items = await ctx.prisma.post.findMany({
-        where: { status: "PUBLISHED", categoryId },
+        where: { status: "PUBLISHED", isFamilyPost: false, categoryId },
         orderBy,
         take: input.limit + 1,
         cursor: input.cursor ? { id: input.cursor } : undefined,
@@ -400,5 +404,79 @@ export const feedRouter = createTRPCRouter({
         nextCursor = formatted[formatted.length - 1]?.id;
       }
       return { items: formatted, nextCursor, hasMore };
+    }),
+
+  // Family feed: posts marked isFamilyPost from approved family members.
+  getFamily: protectedProcedure
+    .input(
+      z.object({
+        cursor: z.string().cuid().optional(),
+        limit: z.number().int().min(1).max(100).default(20),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const me = ctx.session.user.id;
+      const familyRels = await ctx.prisma.familyRelationship.findMany({
+        where: {
+          status: "APPROVED",
+          OR: [{ userId1: me }, { userId2: me }],
+        },
+        select: { userId1: true, userId2: true },
+      });
+      const familyIds = familyRels.map((r) => (r.userId1 === me ? r.userId2 : r.userId1));
+      if (familyIds.length === 0) {
+        return { items: [], nextCursor: undefined, hasMore: false };
+      }
+
+      const items = await ctx.prisma.post.findMany({
+        where: {
+          status: "PUBLISHED",
+          isFamilyPost: true,
+          creatorId: { in: familyIds },
+        },
+        orderBy: { createdAt: "desc" },
+        take: input.limit + 1,
+        cursor: input.cursor ? { id: input.cursor } : undefined,
+        skip: input.cursor ? 1 : 0,
+        include: postBasicInclude,
+      });
+      const enriched = await enrichPostsWithViewerState(ctx, items);
+      let nextCursor: string | undefined = undefined;
+      let hasMore = false;
+      const formatted = enriched.map((p) => ({
+        ...p,
+        voteCount: p._count.votes,
+        commentCount: p._count.comments,
+        likeCount: p._count.likes,
+        saveCount: p._count.savedPosts,
+      }));
+      if (formatted.length > input.limit) {
+        hasMore = true;
+        formatted.pop();
+        nextCursor = formatted[formatted.length - 1]?.id;
+      }
+      return { items: formatted, nextCursor, hasMore };
+    }),
+
+  // Nearby feed: posts within radiusKm of a center, ordered by distance.
+  nearby: publicProcedure
+    .input(
+      z.object({
+        centerLat: z.number().min(-90).max(90),
+        centerLng: z.number().min(-180).max(180),
+        radiusKm: z.number().min(0.1).max(500).default(25),
+        cursor: z.string().cuid().optional(),
+        limit: z.number().int().min(1).max(100).default(20),
+      }),
+    )
+    .query(async ({ input }) => {
+      return nearbyPosts({
+        centerLat: input.centerLat,
+        centerLng: input.centerLng,
+        radiusKm: input.radiusKm,
+        limit: input.limit,
+        cursor: input.cursor,
+        excludeFamilyPosts: true,
+      });
     }),
 });

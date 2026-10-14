@@ -26,6 +26,8 @@ import {
   AlertCircle,
   CheckCircle2,
   Trash2,
+  MapPin,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc/client";
@@ -45,6 +47,7 @@ import {
 } from "./OpinionTypePicker";
 import { OptionsEditor, type PostOptionInput } from "./OptionsEditor";
 import { PostPreview, type PreviewDraftState } from "./PostPreview";
+import { useGeolocation } from "@/hooks/useGeolocation";
 
 type ZodPostType = z.infer<typeof PostTypeEnum>;
 
@@ -177,6 +180,11 @@ export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
       media: [] as PostMediaInput[],
       expiresAt: undefined as Date | undefined,
       anonymous: false,
+      isFamilyPost: false,
+      hideLocation: false,
+      latitude: undefined as number | undefined,
+      longitude: undefined as number | undefined,
+      city: undefined as string | undefined,
     },
   });
 
@@ -233,6 +241,21 @@ export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
   const watchedAnonymous = watch("isAnonymous") ?? false;
   const watchedAllowComments = watch("allowComments") ?? true;
   const watchedExpiresAt = watch("expiresAt") as Date | undefined;
+  const watchedHideLocation = watch("hideLocation") ?? false;
+
+  // Auto-attach the user's current location unless they choose to hide it.
+  const geo = useGeolocation({ immediate: true, persistToServer: true });
+  React.useEffect(() => {
+    if (watchedHideLocation) {
+      setValue("latitude", undefined, { shouldDirty: false });
+      setValue("longitude", undefined, { shouldDirty: false });
+      return;
+    }
+    if (geo.latitude != null && geo.longitude != null) {
+      setValue("latitude", geo.latitude, { shouldDirty: false });
+      setValue("longitude", geo.longitude, { shouldDirty: false });
+    }
+  }, [geo.latitude, geo.longitude, watchedHideLocation, setValue]);
 
   const [durationChoice, setDurationChoice] = React.useState<string>("");
   const [tagInput, setTagInput] = React.useState("");
@@ -862,6 +885,58 @@ export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
                   </div>
                   <Controller
                     name="allowComments"
+                    control={control}
+                    render={({ field }) => (
+                      <ToggleSwitch
+                        checked={!!field.value}
+                        onChange={field.onChange}
+                      />
+                    )}
+                  />
+                </div>
+
+                <div className="flex items-start justify-between gap-4 rounded-xl border border-border p-4 bg-card">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center flex-shrink-0">
+                      <Users className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <p className="text-sm font-semibold text-foreground">
+                        Family post
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Only visible to your approved family members.
+                      </p>
+                    </div>
+                  </div>
+                  <Controller
+                    name="isFamilyPost"
+                    control={control}
+                    render={({ field }) => (
+                      <ToggleSwitch
+                        checked={!!field.value}
+                        onChange={field.onChange}
+                      />
+                    )}
+                  />
+                </div>
+
+                <div className="flex items-start justify-between gap-4 rounded-xl border border-border p-4 bg-card">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center flex-shrink-0">
+                      <MapPin className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <p className="text-sm font-semibold text-foreground">
+                        Hide my location
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Don&apos;t attach your location to this post.
+                      </p>
+                    </div>
+                  </div>
+                  <Controller
+                    name="hideLocation"
                     control={control}
                     render={({ field }) => (
                       <ToggleSwitch

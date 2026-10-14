@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Home, Flame, Plus, Search, User, LogIn } from "lucide-react";
+import { Home, Plus, Search, User, LogIn, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Modal } from "@/components/design-system/Modal";
 import { CreatePostFlow } from "@/components/post-creator/CreatePostFlow";
@@ -20,6 +20,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: "Home", href: "/", icon: Home },
+  { label: "Nearby", href: "/nearby", icon: MapPin },
   { label: "Ask", href: "/ask", icon: Plus, isCenterButton: true },
   { label: "Discover", href: "/discover", icon: Search },
   { label: "Profile", href: "/profile/me", icon: User },
