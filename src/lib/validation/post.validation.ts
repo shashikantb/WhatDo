@@ -10,6 +10,7 @@ export const PostTypeEnum = z.enum([
   "PRICE",
   "DECISION",
   "PREDICTION",
+  "SHORT",
 ]);
 
 export const PostMediaTypeEnum = z.enum(["IMAGE", "VIDEO", "GIF", "LINK"]);
@@ -80,36 +81,48 @@ export const PostMediaSchema = z.object({
   sortOrder: z.number().int().default(0),
 });
 
-export const createPostSchema = z.object({
-  question: z
-    .string()
-    .min(10, "Question must be at least 10 characters")
-    .max(500, "Question must be 500 characters or less"),
-  type: PostTypeEnum,
-  categoryId: z.string().optional(),
-  isAnonymous: z.boolean().default(false),
-  allowComments: z.boolean().default(true),
-  tags: z
-    .array(z.string().max(30, "Tag must be 30 characters or less"))
-    .max(10, "Maximum 10 tags allowed")
-    .default([]),
-  options: z
-    .array(PostOptionSchema)
-    .min(2, "At least 2 options are required")
-    .max(10, "Maximum 10 options allowed"),
-  media: z.array(PostMediaSchema).max(10, "Maximum 10 media files allowed").default([]),
-  expiresAt: z
-    .union([z.coerce.date(), z.string().length(0), z.null()])
-    .optional()
-    .transform((v) => (v === null || v === "" ? undefined : (v as Date | undefined))),
-  anonymous: z.boolean().default(false),
-  // LocalPulse location + family fields
-  latitude: z.number().min(-90).max(90).optional(),
-  longitude: z.number().min(-180).max(180).optional(),
-  city: z.string().max(100).optional(),
-  isFamilyPost: z.boolean().default(false),
-  hideLocation: z.boolean().default(false),
-});
+export const createPostSchema = z
+  .object({
+    question: z
+      .string()
+      .min(10, "Question must be at least 10 characters")
+      .max(500, "Question must be 500 characters or less"),
+    type: PostTypeEnum,
+    categoryId: z.string().optional(),
+    isAnonymous: z.boolean().default(false),
+    allowComments: z.boolean().default(true),
+    tags: z
+      .array(z.string().max(30, "Tag must be 30 characters or less"))
+      .max(10, "Maximum 10 tags allowed")
+      .default([]),
+    options: z
+      .array(PostOptionSchema)
+      .max(10, "Maximum 10 options allowed"),
+    media: z.array(PostMediaSchema).max(10, "Maximum 10 media files allowed").default([]),
+    expiresAt: z
+      .union([z.coerce.date(), z.string().length(0), z.null()])
+      .optional()
+      .transform((v) => (v === null || v === "" ? undefined : (v as Date | undefined))),
+    anonymous: z.boolean().default(false),
+    // LocalPulse location + family fields
+    latitude: z.number().min(-90).max(90).optional(),
+    longitude: z.number().min(-180).max(180).optional(),
+    city: z.string().max(100).optional(),
+    isFamilyPost: z.boolean().default(false),
+    hideLocation: z.boolean().default(false),
+  })
+  .superRefine((data, ctx) => {
+    // SHORT posts don't need voting options; all other types require at least 2
+    if (data.type !== "SHORT") {
+      if (!data.options || data.options.length < 2) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["options"],
+          message: "At least 2 options are required",
+        });
+      }
+    }
+  });
 
 export type CreatePostInput = z.infer<typeof createPostSchema>;
 
@@ -169,6 +182,8 @@ export function getDefaultOptionsForType(type: z.infer<typeof PostTypeEnum>) {
         { label: "Yes", value: "yes", sortOrder: 0 },
         { label: "No", value: "no", sortOrder: 1 },
       ];
+    case "SHORT":
+      return [];
     default:
       return [
         { label: "Option 1", value: "1", sortOrder: 0 },

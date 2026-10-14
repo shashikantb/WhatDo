@@ -129,7 +129,7 @@ export const BottomNav: React.FC = () => {
         open={askModalOpen}
         onClose={() => setAskModalOpen(false)}
         title="Create New Post"
-        description="Ask a question, share a poll, or get opinions from the community."
+        description="Ask a question, share a poll, or post a short/reel."
         size="full"
       >
         <div className="space-y-2">

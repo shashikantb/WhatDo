@@ -279,6 +279,10 @@ export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
     let min = 2;
     let max = 10;
     switch (safeType) {
+      case "SHORT":
+        min = 0;
+        max = 0;
+        break;
       case "YES_NO":
       case "A_VS_B":
       case "PREDICTION":
@@ -528,9 +532,12 @@ export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
   const sectionQuestionValid =
     watchedQuestion.length >= 10 && watchedQuestion.length <= 500;
   const sectionOptionsValid =
-    watchedOptions.length >= 2 &&
-    watchedOptions.every((o) => o.label && o.label.length <= 60);
+    watchedType === "SHORT" ||
+    (watchedOptions.length >= 2 &&
+      watchedOptions.every((o) => o.label && o.label.length <= 60));
   const sectionTagsValid = watchedTags.length <= 10;
+  const sectionShortMediaValid =
+    watchedType !== "SHORT" || watchedMedia.length >= 1;
 
   const previewDraft: PreviewDraftState = {
     question: watchedQuestion,
@@ -592,7 +599,7 @@ export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
             </Section>
 
             <Section
-              title="Your Question"
+              title={watchedType === "SHORT" ? "Caption" : "Your Question"}
               icon={<HelpCircle className="h-5 w-5" />}
               badge={
                 <span
@@ -620,11 +627,17 @@ export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
                     <Textarea
                       {...field}
                       rows={4}
-                      placeholder="What do you want to ask people?"
+                      placeholder={
+                        watchedType === "SHORT"
+                          ? "Write a caption for your short..."
+                          : "What do you want to ask people?"
+                      }
                       variant={errors.question ? "error" : "default"}
                       helperText={
                         errors.question?.message ||
-                        "Minimum 10 characters. Ask something that invites opinions."
+                        (watchedType === "SHORT"
+                          ? "Minimum 10 characters."
+                          : "Minimum 10 characters. Ask something that invites opinions.")
                       }
                     />
                   </div>
@@ -661,6 +674,7 @@ export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
               />
             </Section>
 
+            {watchedType !== "SHORT" && (
             <Section
               title="Options"
               icon={<ListFilter className="h-5 w-5" />}
@@ -703,6 +717,7 @@ export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
                 )}
               />
             </Section>
+            )}
 
             <Section
               title="Category"
@@ -998,6 +1013,7 @@ export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
                           !!watchedType &&
                           sectionOptionsValid &&
                           sectionTagsValid &&
+                          sectionShortMediaValid &&
                           watchedMedia.length <= 10
                           ? "bg-success/15 text-success"
                           : "bg-muted text-muted-foreground"
@@ -1007,6 +1023,7 @@ export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
                       !!watchedType &&
                       sectionOptionsValid &&
                       sectionTagsValid &&
+                      sectionShortMediaValid &&
                       watchedMedia.length <= 10 ? (
                         <CheckCircle2 className="h-5 w-5" />
                       ) : (
@@ -1017,17 +1034,25 @@ export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
 
                   <ul className="space-y-1.5 text-xs">
                     <ChecklistRow
-                      label="Question (10–500 chars)"
+                      label={watchedType === "SHORT" ? "Caption (10–500 chars)" : "Question (10–500 chars)"}
                       done={sectionQuestionValid}
                     />
                     <ChecklistRow
                       label="Opinion type selected"
                       done={!!watchedType}
                     />
-                    <ChecklistRow
-                      label={`Valid options (${watchedOptions.length})`}
-                      done={sectionOptionsValid}
-                    />
+                    {watchedType !== "SHORT" && (
+                      <ChecklistRow
+                        label={`Valid options (${watchedOptions.length})`}
+                        done={sectionOptionsValid}
+                      />
+                    )}
+                    {watchedType === "SHORT" && (
+                      <ChecklistRow
+                        label="Add at least 1 photo/video"
+                        done={sectionShortMediaValid}
+                      />
+                    )}
                     <ChecklistRow
                       label="Tags ≤ 10"
                       done={sectionTagsValid}
@@ -1073,6 +1098,7 @@ export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
                         !watchedType ||
                         !sectionOptionsValid ||
                         !sectionTagsValid ||
+                        !sectionShortMediaValid ||
                         watchedMedia.length > 10
                       }
                     >

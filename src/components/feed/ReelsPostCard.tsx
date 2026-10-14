@@ -626,7 +626,8 @@ export const ReelsPostCard: React.FC<ReelsPostCardProps> = ({
 
         {/* BOTTOM BLOCK: vote UI + tags + creator info */}
         <div className="px-4 pr-20 shrink-0 min-h-0 flex flex-col justify-end space-y-2">
-          {/* Vote buttons */}
+          {/* Vote buttons - hidden for SHORT posts */}
+          {optionShapes.length > 0 && (
           <div className="space-y-1.5">
             <VoteButtons
               postId={postId}
@@ -643,6 +644,7 @@ export const ReelsPostCard: React.FC<ReelsPostCardProps> = ({
               className="bg-black/35 backdrop-blur-md rounded-2xl p-2 border border-white/10 shadow-2xl"
             />
           </div>
+          )}
 
           {/* Vote results */}
           {showResults && resultOptions.length > 0 && (

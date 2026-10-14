@@ -26,6 +26,7 @@ const PostTypeEnum = z.enum([
   "PRICE",
   "DECISION",
   "PREDICTION",
+  "SHORT",
 ]);
 
 const PostMediaTypeEnum = z.enum(["IMAGE", "VIDEO", "GIF", "LINK"]);
@@ -71,50 +72,59 @@ export const postsRouter = createTRPCRouter({
   create: protectedProcedure
     .use(rateLimitPostMiddleware)
     .input(
-      z.object({
-        question: z.string().min(10).max(500),
-        type: PostTypeEnum,
-        categoryId: z.string().cuid().optional(),
-        isAnonymous: z.boolean().default(false),
-        allowComments: z.boolean().default(true),
-        tags: z.array(z.string().max(30)).max(10).default([]),
-        options: z
-          .array(
-            z.object({
-              label: z.string().max(60),
-              value: z.string().max(60),
-              imageUrl: z.string().url().optional(),
-              sortOrder: z.number().int(),
-            }),
-          )
-          .min(2)
-          .max(10),
-        media: z
-          .array(
-            z.object({
-              type: PostMediaTypeEnum,
-              url: z.string(),
-              thumbnailUrl: z.string().optional(),
-              posterUrl: z.string().optional(),
-              mimeType: z.string().optional(),
-              width: z.number().int().optional(),
-              height: z.number().int().optional(),
-              duration: z.number().int().optional(),
-              fileSize: z.number().int().optional(),
-              sortOrder: z.number().int().default(0),
-            }),
-          )
-          .max(10)
-          .default([]),
-        expiresAt: z.coerce.date().optional(),
-        anonymous: z.boolean().default(false),
-        // LocalPulse location + family fields
-        latitude: z.number().min(-90).max(90).optional(),
-        longitude: z.number().min(-180).max(180).optional(),
-        city: z.string().max(100).optional(),
-        isFamilyPost: z.boolean().default(false),
-        hideLocation: z.boolean().default(false),
-      }),
+      z
+        .object({
+          question: z.string().min(10).max(500),
+          type: PostTypeEnum,
+          categoryId: z.string().cuid().optional(),
+          isAnonymous: z.boolean().default(false),
+          allowComments: z.boolean().default(true),
+          tags: z.array(z.string().max(30)).max(10).default([]),
+          options: z
+            .array(
+              z.object({
+                label: z.string().max(60),
+                value: z.string().max(60),
+                imageUrl: z.string().url().optional(),
+                sortOrder: z.number().int(),
+              }),
+            )
+            .max(10),
+          media: z
+            .array(
+              z.object({
+                type: PostMediaTypeEnum,
+                url: z.string(),
+                thumbnailUrl: z.string().optional(),
+                posterUrl: z.string().optional(),
+                mimeType: z.string().optional(),
+                width: z.number().int().optional(),
+                height: z.number().int().optional(),
+                duration: z.number().int().optional(),
+                fileSize: z.number().int().optional(),
+                sortOrder: z.number().int().default(0),
+              }),
+            )
+            .max(10)
+            .default([]),
+          expiresAt: z.coerce.date().optional(),
+          anonymous: z.boolean().default(false),
+          // LocalPulse location + family fields
+          latitude: z.number().min(-90).max(90).optional(),
+          longitude: z.number().min(-180).max(180).optional(),
+          city: z.string().max(100).optional(),
+          isFamilyPost: z.boolean().default(false),
+          hideLocation: z.boolean().default(false),
+        })
+        .superRefine((data, ctx) => {
+          if (data.type !== "SHORT" && (!data.options || data.options.length < 2)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["options"],
+              message: "At least 2 options are required",
+            });
+          }
+        }),
     )
     .mutation(async ({ ctx, input }) => {
       const session = ctx.session!;

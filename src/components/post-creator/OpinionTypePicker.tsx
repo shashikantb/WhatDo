@@ -12,6 +12,7 @@ import {
   Scale,
   Target,
   CheckCircle2,
+  Film,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/design-system/Badge";
@@ -25,7 +26,8 @@ export type OpinionTypeValue =
   | "POLL"
   | "PRICE"
   | "DECISION"
-  | "PREDICTION";
+  | "PREDICTION"
+  | "SHORT";
 
 export interface OpinionTypeDefinition {
   value: OpinionTypeValue;
@@ -88,6 +90,12 @@ export const OPINION_TYPES: OpinionTypeDefinition[] = [
     label: "Prediction",
     description: "Predict a future Yes/No outcome",
     icon: Target,
+  },
+  {
+    value: "SHORT",
+    label: "Short / Reel",
+    description: "Share a photo or video short with a caption",
+    icon: Film,
   },
 ];
 

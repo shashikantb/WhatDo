@@ -8,6 +8,7 @@ export const POST_TYPES = [
   "PRICE",
   "DECISION",
   "PREDICTION",
+  "SHORT",
 ] as const;
 export const ROLES = ["USER", "MODERATOR", "ADMIN", "SUPER_ADMIN"] as const;
 export const POST_STATUS = ["DRAFT", "PENDING_MODERATION", "PUBLISHED", "CLOSED", "HIDDEN", "REMOVED"] as const;
