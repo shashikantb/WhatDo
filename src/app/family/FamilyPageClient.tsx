@@ -18,7 +18,6 @@ import {
   Siren,
   Check,
   X,
-  Share2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -242,44 +241,69 @@ export const FamilyPageClient: React.FC = () => {
                 </CardContent>
               </Card>
             ) : (
-              membersQuery.data?.map((m) => (
-                <Card key={m.relationshipId}>
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-3">
-                      <Link href={`/profile/${m.member.username}`}>
-                        <Avatar
-                          avatarUrl={m.member.avatarUrl}
-                          displayName={m.member.displayName}
-                          username={m.member.username}
-                          size="md"
-                        />
-                      </Link>
-                      <div className="flex-1 min-w-0">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between px-1">
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                    Family Members
+                  </h3>
+                  <span className="text-xs text-muted-foreground">
+                    {membersQuery.data?.length} member{membersQuery.data?.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+                {membersQuery.data?.map((m) => (
+                  <Card key={m.relationshipId}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
                         <Link href={`/profile/${m.member.username}`}>
-                          <p className="text-sm font-medium truncate hover:underline">
-                            {m.member.displayName || m.member.username}
-                          </p>
+                          <Avatar
+                            avatarUrl={m.member.avatarUrl}
+                            displayName={m.member.displayName}
+                            username={m.member.username}
+                            size="md"
+                          />
                         </Link>
-                        <p className="text-xs text-muted-foreground">@{m.member.username}</p>
+                        <div className="flex-1 min-w-0">
+                          <Link href={`/profile/${m.member.username}`}>
+                            <p className="text-sm font-medium truncate hover:underline">
+                              {m.member.displayName || m.member.username}
+                            </p>
+                          </Link>
+                          <p className="text-xs text-muted-foreground">@{m.member.username}</p>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <span className="text-xs text-muted-foreground">Location sharing</span>
+                            <span
+                              className={cn(
+                                "text-xs font-medium",
+                                m.shareMyLocationToThem ? "text-success" : "text-muted-foreground"
+                              )}
+                            >
+                              {m.shareMyLocationToThem ? "On" : "Off"}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={m.shareMyLocationToThem}
+                          onClick={() => handleToggleShare(m.member.id, !m.shareMyLocationToThem)}
+                          className={cn(
+                            "relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:ring-offset-2",
+                            m.shareMyLocationToThem ? "bg-success" : "bg-muted"
+                          )}
+                          title={m.shareMyLocationToThem ? "Sharing location with them" : "Not sharing location"}
+                        >
+                          <span
+                            className={cn(
+                              "inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200",
+                              m.shareMyLocationToThem ? "translate-x-6" : "translate-x-1"
+                            )}
+                          />
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleToggleShare(m.member.id, !m.shareMyLocationToThem)}
-                        className={cn(
-                          "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
-                          m.shareMyLocationToThem
-                            ? "bg-success/15 text-success"
-                            : "bg-muted text-muted-foreground"
-                        )}
-                        title={m.shareMyLocationToThem ? "Sharing location with them" : "Not sharing location"}
-                      >
-                        <Share2 className="h-3 w-3" />
-                        {m.shareMyLocationToThem ? "Sharing" : "Share"}
-                      </button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             )}
           </div>
         )}
