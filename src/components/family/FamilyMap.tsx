@@ -13,10 +13,25 @@ interface FamilyLocation {
   avatarUrl: string | null;
   latitude: number;
   longitude: number;
+  lastLocationUpdatedAt: Date | string | null;
 }
 
 interface FamilyMapProps {
   locations: FamilyLocation[];
+}
+
+function formatLastSeen(ts: Date | string | null): string {
+  if (!ts) return "Unknown";
+  const date = typeof ts === "string" ? new Date(ts) : ts;
+  const diffMs = Date.now() - date.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return "Just now";
+  if (diffMin < 60) return `${diffMin} min ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr} hr ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 7) return `${diffDay} day${diffDay > 1 ? "s" : ""} ago`;
+  return date.toLocaleDateString();
 }
 
 // Fix default marker icon paths for Leaflet (bundler compatibility).
@@ -63,6 +78,9 @@ export const FamilyMap: React.FC<FamilyMapProps> = ({ locations }) => {
                   <p className="text-sm font-medium">{loc.displayName || loc.username}</p>
                   <p className="text-xs text-muted-foreground">
                     {loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Updated {formatLastSeen(loc.lastLocationUpdatedAt)}
                   </p>
                 </div>
               </div>

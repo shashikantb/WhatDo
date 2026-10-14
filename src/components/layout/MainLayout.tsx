@@ -6,6 +6,7 @@ import { SidebarNav } from "./SidebarNav";
 import { TopBar } from "./TopBar";
 import { RightRail } from "./RightRail";
 import { MobileTopBar } from "./MobileTopBar";
+import { FloatingSOS } from "./FloatingSOS";
 import { ToastProvider } from "@/components/design-system/Toaster";
 import type { Role } from "@/lib/types";
 
@@ -60,6 +61,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         </main>
 
         <RightRail />
+        <FloatingSOS />
       </div>
     </ToastProvider>
   );

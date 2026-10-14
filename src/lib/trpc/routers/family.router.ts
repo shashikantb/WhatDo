@@ -184,8 +184,8 @@ export const familyRouter = createTRPCRouter({
           OR: [{ userId1: me }, { userId2: me }],
         },
         include: {
-          user1: { select: { id: true, username: true, displayName: true, avatarUrl: true, latitude: true, longitude: true } },
-          user2: { select: { id: true, username: true, displayName: true, avatarUrl: true, latitude: true, longitude: true } },
+          user1: { select: { id: true, username: true, displayName: true, avatarUrl: true, latitude: true, longitude: true, lastLocationUpdatedAt: true } },
+          user2: { select: { id: true, username: true, displayName: true, avatarUrl: true, latitude: true, longitude: true, lastLocationUpdatedAt: true } },
         },
       });
       return rels
@@ -202,6 +202,7 @@ export const familyRouter = createTRPCRouter({
             avatarUrl: member.avatarUrl,
             latitude: member.latitude,
             longitude: member.longitude,
+            lastLocationUpdatedAt: member.lastLocationUpdatedAt,
           };
         })
         .filter((x): x is NonNullable<typeof x> => x !== null);
@@ -279,7 +280,7 @@ export const familyRouter = createTRPCRouter({
           latitude: user.latitude,
           longitude: user.longitude,
           message: input.message,
-          status: "ACTIVE",
+          recipientCount: familyIds.length,
           recipients: { create: familyIds.map((fid) => ({ recipientId: fid })) },
         },
       });

@@ -35,6 +35,7 @@ interface FamilyLocation {
   avatarUrl: string | null;
   latitude: number;
   longitude: number;
+  lastLocationUpdatedAt?: Date | string | null;
 }
 
 interface LocalPulseMapProps {
@@ -70,6 +71,20 @@ function formatDistance(km: number): string {
   if (km < 1) return `${Math.round(km * 1000)} m`;
   if (km < 10) return `${km.toFixed(1)} km`;
   return `${Math.round(km)} km`;
+}
+
+function formatLastSeen(ts: Date | string | null | undefined): string {
+  if (!ts) return "";
+  const date = typeof ts === "string" ? new Date(ts) : ts;
+  const diffMs = Date.now() - date.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return "Just now";
+  if (diffMin < 60) return `${diffMin} min ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr} hr ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 7) return `${diffDay} day${diffDay > 1 ? "s" : ""} ago`;
+  return date.toLocaleDateString();
 }
 
 export const LocalPulseMap: React.FC<LocalPulseMapProps> = ({
@@ -184,6 +199,11 @@ export const LocalPulseMap: React.FC<LocalPulseMapProps> = ({
                     <Users className="h-3 w-3" />
                     Family
                   </p>
+                  {loc.lastLocationUpdatedAt && (
+                    <p className="text-xs text-muted-foreground">
+                      Updated {formatLastSeen(loc.lastLocationUpdatedAt)}
+                    </p>
+                  )}
                 </div>
               </div>
             </Popup>
