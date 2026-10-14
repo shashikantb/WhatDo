@@ -4,11 +4,10 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Home, Plus, Search, User, LogIn, MapPin } from "lucide-react";
+import { Home, Plus, User, LogIn, MessageCircleQuestion, Film, ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Modal } from "@/components/design-system/Modal";
 import { CreatePostFlow } from "@/components/post-creator/CreatePostFlow";
-import { MessageCircleQuestion } from "lucide-react";
 import { useLoginModal } from "@/components/auth/LoginModal";
 
 interface NavItem {
@@ -20,9 +19,9 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: "Home", href: "/", icon: Home },
-  { label: "Nearby", href: "/nearby", icon: MapPin },
+  { label: "WhatDo", href: "/feed", icon: MessageCircleQuestion },
   { label: "Ask", href: "/ask", icon: Plus, isCenterButton: true },
-  { label: "Discover", href: "/discover", icon: Search },
+  { label: "LocalPulse", href: "/nearby", icon: Film },
   { label: "Profile", href: "/profile/me", icon: User },
 ];
 
@@ -33,12 +32,18 @@ export const BottomNav: React.FC = () => {
   const { openLogin } = useLoginModal();
   const isAuthenticated = status === "authenticated";
   const [askModalOpen, setAskModalOpen] = React.useState(false);
+  const [postMode, setPostMode] = React.useState<"voting" | "reel" | null>(null);
 
   const isActive = (href: string) => {
     if (href === "/profile/me") {
       return pathname?.startsWith("/profile");
     }
     return pathname === href || pathname?.startsWith(href + "/");
+  };
+
+  const handleCloseModal = () => {
+    setAskModalOpen(false);
+    setPostMode(null);
   };
 
   return (
@@ -58,7 +63,10 @@ export const BottomNav: React.FC = () => {
                 <button
                   key={item.href}
                   type="button"
-                  onClick={() => setAskModalOpen(true)}
+                  onClick={() => {
+                    setPostMode(null);
+                    setAskModalOpen(true);
+                  }}
                   className={cn(
                     "relative -mt-6 flex flex-col items-center justify-center",
                     "h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/25",
@@ -127,26 +135,81 @@ export const BottomNav: React.FC = () => {
 
       <Modal
         open={askModalOpen}
-        onClose={() => setAskModalOpen(false)}
-        title="Create New Post"
-        description="Ask a question, share a poll, or post a short/reel."
+        onClose={handleCloseModal}
+        title={postMode ? (postMode === "voting" ? "WhatDo Voting Post" : "LocalPulse Reel / Post") : "Create New Post"}
+        description={postMode ? undefined : "Choose what you want to share"}
         size="full"
       >
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-primary/15 flex items-center justify-center">
-              <MessageCircleQuestion className="h-4 w-4 text-primary" />
+        {postMode === null ? (
+          <div className="space-y-4 p-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <button
+                type="button"
+                onClick={() => setPostMode("voting")}
+                className="group text-left p-6 rounded-2xl border-2 border-border bg-card hover:border-primary/50 hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5"
+              >
+                <div className="flex flex-col items-center text-center gap-3">
+                  <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/15 transition-colors">
+                    <MessageCircleQuestion className="h-8 w-8 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-lg text-foreground">WhatDo Voting Post</h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Ask a question, poll, or opinion
+                    </p>
+                  </div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPostMode("reel")}
+                className="group text-left p-6 rounded-2xl border-2 border-border bg-card hover:border-primary/50 hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5"
+              >
+                <div className="flex flex-col items-center text-center gap-3">
+                  <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/15 transition-colors">
+                    <Film className="h-8 w-8 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-lg text-foreground">LocalPulse Reel / Post</h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Share a photo or video with a caption
+                    </p>
+                  </div>
+                </div>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => setPostMode(null)}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-1"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Back to post type
+            </button>
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-primary/15 flex items-center justify-center">
+              {postMode === "voting" ? (
+                <MessageCircleQuestion className="h-4 w-4 text-primary" />
+              ) : (
+                <Film className="h-4 w-4 text-primary" />
+              )}
             </div>
             <p className="text-xs text-muted-foreground">
               Your draft will auto-save locally as you type.
             </p>
           </div>
           <CreatePostFlow
+            mode={postMode}
             onPublished={() => {
-              setAskModalOpen(false);
+              handleCloseModal();
             }}
           />
         </div>
+        )}
       </Modal>
     </>
   );

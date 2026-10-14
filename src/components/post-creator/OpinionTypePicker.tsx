@@ -102,15 +102,20 @@ export const OPINION_TYPES: OpinionTypeDefinition[] = [
 export interface OpinionTypePickerProps {
   value: OpinionTypeValue | null;
   onChange: (value: OpinionTypeValue) => void;
+  excludeTypes?: OpinionTypeValue[];
 }
 
 export const OpinionTypePicker: React.FC<OpinionTypePickerProps> = ({
   value,
   onChange,
+  excludeTypes,
 }) => {
+  const types = excludeTypes
+    ? OPINION_TYPES.filter((t) => !excludeTypes.includes(t.value))
+    : OPINION_TYPES;
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
-      {OPINION_TYPES.map((type) => {
+      {types.map((type) => {
         const Icon = type.icon;
         const selected = value === type.value;
         return (

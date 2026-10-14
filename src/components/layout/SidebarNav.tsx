@@ -14,6 +14,7 @@ import {
   Settings,
   Shield,
   Bookmark,
+  Film,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/design-system/Badge";
@@ -63,6 +64,8 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
 
   const navItems: NavItemConfig[] = [
     { label: "Home", href: "/feed", icon: Home },
+    { label: "WhatDo", href: "/", icon: MessageCircleQuestion },
+    { label: "LocalPulse", href: "/nearby", icon: Film },
     { label: "Discover", href: "/discover", icon: Search },
     { label: "Ask People", href: "/ask", icon: MessageCircleQuestion },
     {
@@ -81,7 +84,10 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
       return pathname?.startsWith("/profile");
     }
     if (href === "/feed") {
-      return pathname === "/feed" || pathname === "/";
+      return pathname === "/feed";
+    }
+    if (href === "/") {
+      return pathname === "/";
     }
     return pathname === href || pathname?.startsWith(href + "/");
   };

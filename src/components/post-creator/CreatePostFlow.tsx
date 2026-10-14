@@ -149,12 +149,15 @@ const Section: React.FC<SectionProps> = ({
 export interface CreatePostFlowProps {
   onPublished?: (postId: string, postSlug?: string) => void;
   defaultType?: OpinionTypeValue;
+  mode?: "voting" | "reel";
 }
 
 export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
   onPublished,
-  defaultType = "YES_NO",
+  defaultType,
+  mode = "voting",
 }) => {
+  const resolvedDefault = defaultType ?? (mode === "reel" ? "SHORT" : "YES_NO");
   const router = useRouter();
   const { data: session } = useSession();
   const toast = useToast();
@@ -171,12 +174,12 @@ export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
     reValidateMode: "onChange",
     defaultValues: {
       question: "",
-      type: defaultType as ZodPostType,
+      type: resolvedDefault as ZodPostType,
       categoryId: undefined as string | undefined,
       isAnonymous: false,
       allowComments: true,
       tags: [] as string[],
-      options: getDefaultOptionsForType(defaultType),
+      options: getDefaultOptionsForType(resolvedDefault),
       media: [] as PostMediaInput[],
       expiresAt: undefined as Date | undefined,
       anonymous: false,
@@ -645,6 +648,7 @@ export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
               />
             </Section>
 
+            {mode !== "reel" && (
             <Section
               title="Opinion Type"
               icon={<Sparkles className="h-5 w-5" />}
@@ -669,10 +673,12 @@ export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
                   <OpinionTypePicker
                     value={watchedType ?? null}
                     onChange={handleTypeChange}
+                    excludeTypes={mode === "voting" ? ["SHORT"] : undefined}
                   />
                 )}
               />
             </Section>
+            )}
 
             {watchedType !== "SHORT" && (
             <Section
@@ -1037,10 +1043,12 @@ export const CreatePostFlow: React.FC<CreatePostFlowProps> = ({
                       label={watchedType === "SHORT" ? "Caption (10–500 chars)" : "Question (10–500 chars)"}
                       done={sectionQuestionValid}
                     />
+                    {mode !== "reel" && (
                     <ChecklistRow
                       label="Opinion type selected"
                       done={!!watchedType}
                     />
+                    )}
                     {watchedType !== "SHORT" && (
                       <ChecklistRow
                         label={`Valid options (${watchedOptions.length})`}
