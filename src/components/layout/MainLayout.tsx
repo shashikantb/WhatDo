@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { SidebarNav } from "./SidebarNav";
 import { TopBar } from "./TopBar";
 import { RightRail } from "./RightRail";
+import { MobileTopBar } from "./MobileTopBar";
 import { ToastProvider } from "@/components/design-system/Toaster";
 import type { Role } from "@/lib/types";
 
@@ -34,6 +35,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     <ToastProvider>
       <div className="min-h-screen bg-background">
         <SidebarNav user={user} notificationCount={notificationCount} />
+        <MobileTopBar />
 
         <main
           className={cn(

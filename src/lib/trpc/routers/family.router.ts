@@ -289,7 +289,18 @@ export const familyRouter = createTRPCRouter({
         familyIds.map((fid) =>
           ctx.prisma.notification
             .create({
-              data: { recipientId: fid, actorId: me, type: "SOS" },
+              data: {
+                recipientId: fid,
+                actorId: me,
+                type: "SOS",
+                payload: {
+                  alertId: alert.id,
+                  latitude: user.latitude,
+                  longitude: user.longitude,
+                  message: input.message ?? null,
+                  senderName: user.displayName || user.username || "A family member",
+                },
+              },
             })
             .catch(() => null),
         ),

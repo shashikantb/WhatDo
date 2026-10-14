@@ -15,6 +15,7 @@ import {
   Shield,
   Bookmark,
   Film,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/design-system/Badge";
@@ -68,6 +69,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
     { label: "LocalPulse", href: "/nearby", icon: Film },
     { label: "Discover", href: "/discover", icon: Search },
     { label: "Ask People", href: "/ask", icon: MessageCircleQuestion },
+    { label: "Family", href: "/family", icon: Users },
     {
       label: "Notifications",
       href: "/notifications",

@@ -9,6 +9,7 @@ import {
   User as UserIcon,
   Bookmark,
   ChevronDown,
+  Users,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -155,6 +156,14 @@ export const TopBar: React.FC<TopBarProps> = ({
                 >
                   <UserIcon className="h-4 w-4 text-muted-foreground" />
                   <span>Profile</span>
+                </Link>
+                <Link
+                  href="/family"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-2.5 w-full rounded-md px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+                >
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                  <span>Family</span>
                 </Link>
                 <Link
                   href="/saved"
