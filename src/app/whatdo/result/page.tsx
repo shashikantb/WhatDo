@@ -1184,47 +1184,96 @@ export default function WhatDoResultPage() {
           </p>
         </header>
 
-        <section className="space-y-3">
-          <div className="flex items-center justify-between text-[11px] font-bold text-white/70 px-1">
-          <span>Pick a card style</span>
-          <div className="inline-flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setTemplateIdx((i) => (i - 1 + CARD_TEMPLATES.length) % CARD_TEMPLATES.length)}
-              className="h-7 w-7 rounded-full bg-white/10 border border-white/15 hover:bg-white/15 flex items-center justify-center"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-            </button>
-            <span className="px-2 min-w-[84px] text-center">
-              {String(CARD_TEMPLATES[templateIdx] as WhatDoCardTemplate)}
-            </span>
-            <button
-              type="button"
-              onClick={() => setTemplateIdx((i) => (i + 1) % CARD_TEMPLATES.length)}
-              className="h-7 w-7 rounded-full bg-white/10 border border-white/15 hover:bg-white/15 flex items-center justify-center"
-            >
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
+      {/* AI image prompt — copy & generate your portrait via ChatGPT / Gemini */}
+      {(genPrompt.data?.shortPrompt || genPrompt.data?.prompt) && (
+        <section className="rounded-3xl bg-white/5 border border-white/10 p-4 space-y-3">
+          <div className="flex items-start gap-2.5">
+            <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-fuchsia-500 to-indigo-500 flex items-center justify-center shrink-0">
+              <Sparkles className="h-4 w-4 text-white" />
+            </div>
+            <div className="space-y-1 min-w-0">
+              <p className="text-sm font-black text-white leading-tight">
+                Generate your AI portrait with this prompt
+              </p>
+              <p className="text-[11.5px] text-white/70 leading-relaxed">
+                We wrote a ready-to-use prompt based on your result.
+                Tap <span className="font-bold text-white">Copy</span>, open ChatGPT or Gemini,
+                paste the prompt <span className="font-bold text-white">as plain text</span>,
+                then upload one of your selfies in the same message and hit Send.
+              </p>
+            </div>
           </div>
-        </div>
-        <div className="grid grid-cols-6 gap-2">
-          {(CARD_TEMPLATES as readonly string[]).map((t, i) => (
+
+          <div className="flex items-center gap-1 rounded-full bg-black/20 p-1 border border-white/10 overflow-x-auto">
             <button
-              key={t}
               type="button"
-              onClick={() => setTemplateIdx(i)}
-              className={cn(
-                "h-10 rounded-xl text-[10px] font-black tracking-widest transition-all border",
-                i === templateIdx
-                  ? "bg-white text-black border-white shadow scale-[1.02]"
-                  : "bg-white/5 border-white/10 text-white/70 hover:bg-white/10",
-              )}
+              onClick={() => setPromptTab("short")}
+              className={`rounded-full px-3 py-1 text-[11.5px] font-black transition-all whitespace-nowrap ${
+                promptTab === "short"
+                  ? "bg-gradient-to-r from-fuchsia-500 to-indigo-500 text-white shadow-md shadow-fuchsia-900/40"
+                  : "text-white/65 hover:text-white"
+              }`}
             >
-              {t.split("_")[0]}
+              ✏️ Short prompt
             </button>
-          ))}
-        </div>
-      </section>
+            <button
+              type="button"
+              onClick={() => setPromptTab("long")}
+              className={`rounded-full px-3 py-1 text-[11.5px] font-black transition-all whitespace-nowrap ${
+                promptTab === "long"
+                  ? "bg-white/15 text-white"
+                  : "text-white/65 hover:text-white"
+              }`}
+            >
+              📋 Full breakdown
+            </button>
+            <div className="ml-auto flex items-center gap-1 pl-1">
+              {promptTab === "short" ? (
+                <button
+                  type="button"
+                  onClick={copyAIPrompt}
+                  className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-white/20 whitespace-nowrap"
+                >
+                  {copied === "prompt" ? <><Check className="h-3 w-3 inline mr-1 text-emerald-300" /> Copied</> : <><Copy className="h-3 w-3 inline mr-1" /> Copy</>}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={copyAIPromptLong}
+                  className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-white/20 whitespace-nowrap"
+                >
+                  {copied === "prompt-long" ? <><Check className="h-3 w-3 inline mr-1 text-emerald-300" /> Copied</> : <><Copy className="h-3 w-3 inline mr-1" /> Copy</>}
+                </button>
+              )}
+            </div>
+          </div>
+
+          <textarea
+            readOnly
+            rows={promptTab === "short" ? 10 : 18}
+            spellCheck={false}
+            className="w-full rounded-2xl border border-white/10 bg-black/30 p-3.5 text-[12px] leading-relaxed text-white/90 font-mono resize-y focus:outline-none focus:ring-2 focus:ring-fuchsia-400/40 selection:bg-fuchsia-500/30"
+            value={promptTab === "short" ? (genPrompt.data.shortPrompt || genPrompt.data.prompt || "") : (genPrompt.data.prompt || "")}
+            onFocus={(e) => e.currentTarget.select()}
+          />
+
+          <div className="rounded-2xl bg-gradient-to-br from-fuchsia-500/10 to-indigo-500/10 border border-white/10 p-3 space-y-1.5">
+            <p className="text-[11px] font-black text-white/85 uppercase tracking-wider flex items-center gap-1">
+              <Sparkles className="h-3 w-3" /> How to use
+            </p>
+            <ol className="text-[11px] text-white/75 space-y-1 list-decimal list-inside leading-relaxed">
+              <li>Tap <span className="font-bold text-white">Copy</span> above.</li>
+              <li>Open ChatGPT (GPT-4o) or Gemini.</li>
+              <li>Paste the prompt as <span className="font-bold text-white">plain text</span> (not a .txt file).</li>
+              <li>Upload a clear selfie in the same message.</li>
+              <li>Hit Send — your AI WhatDo portrait is ready to share!</li>
+            </ol>
+            <p className="text-[10.5px] text-amber-200/80 font-semibold leading-snug pt-1">
+              {genPrompt.data.validated ? "✅ Prompt validated — WhatDo checks for forbidden claims." : "⚠️ Review the prompt before use."}
+            </p>
+          </div>
+        </section>
+      )}
 
       <section className="rounded-3xl bg-black/30 border border-white/10 p-3">
         <div className="overflow-hidden rounded-2xl shadow-2xl shadow-black/50 bg-black">
@@ -1380,7 +1429,7 @@ export default function WhatDoResultPage() {
         )}
       </section>
 
-      <section className="grid grid-cols-2 gap-2.5">
+      <section className="grid grid-cols-3 gap-2.5">
         <Button size="lg" onClick={downloadPNG} className="rounded-full bg-white text-black hover:bg-white/95 border-0 shadow-xl shadow-black/30">
           <Download className="h-4.5 w-4.5" /> Download PNG
         </Button>
@@ -1394,28 +1443,11 @@ export default function WhatDoResultPage() {
         </Button>
         <Button
           size="md"
-          onClick={copyAIPrompt}
-          disabled={!genPrompt.data?.shortPrompt && !genPrompt.data?.prompt || shareLoading === "prompt"}
-          loading={shareLoading === "prompt"}
-          className="rounded-full border border-white/30 bg-gradient-to-r from-fuchsia-500/70 via-violet-500/70 to-indigo-500/70 hover:from-fuchsia-500/90 hover:via-violet-500/90 hover:to-indigo-500/90 text-white shadow-lg shadow-black/40 disabled:opacity-60 disabled:cursor-not-allowed font-bold"
-        >
-          {copied === "prompt" ? (
-            <>
-              <Check className="h-4 w-4" /> Prompt copied
-            </>
-          ) : (
-            <>
-              <Copy className="h-4 w-4" /> Copy AI IMAGE PROMPT
-            </>
-          )}
-        </Button>
-        <Button
-          size="md"
           onClick={challengeFriend}
           loading={shareLoading === "challenge"}
           className="rounded-full border border-white/30 bg-white/10 text-white hover:bg-white/20 shadow-lg shadow-black/30"
         >
-          <MessageCircle className="h-4 w-4" /> Challenge a friend
+          <MessageCircle className="h-4 w-4" /> Challenge
         </Button>
       </section>
 
@@ -1472,69 +1504,6 @@ export default function WhatDoResultPage() {
           </div>
           <p className="text-xs text-fuchsia-200 font-mono break-all bg-black/30 rounded-xl border border-white/10 px-3 py-2">
             {shareUrl}
-          </p>
-        </section>
-      )}
-
-      {(genPrompt.data?.shortPrompt || genPrompt.data?.prompt) && (
-        <section className="rounded-3xl bg-white/5 border border-white/10 p-5 space-y-3">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex items-center gap-1 rounded-full bg-black/20 p-1 border border-white/10">
-              <button
-                type="button"
-                onClick={() => setPromptTab("short")}
-                className={`rounded-full px-3 py-1 text-[11.5px] font-black transition-all ${
-                  promptTab === "short"
-                    ? "bg-gradient-to-r from-fuchsia-500 to-indigo-500 text-white shadow-md shadow-fuchsia-900/40"
-                    : "text-white/65 hover:text-white"
-                }`}
-              >
-                ✏️ AI IMAGE PROMPT · {(genPrompt.data?.shortPrompt?.length ?? 0) < 1000 ? (genPrompt.data?.shortPrompt?.length ?? 0) : (genPrompt.data?.shortPrompt?.length ?? 0)} chars
-              </button>
-              <button
-                type="button"
-                onClick={() => setPromptTab("long")}
-                className={`rounded-full px-3 py-1 text-[11.5px] font-black transition-all ${
-                  promptTab === "long"
-                    ? "bg-white/15 text-white"
-                    : "text-white/65 hover:text-white"
-                }`}
-              >
-                📋 FULL BREAKDOWN + Answers · {(genPrompt.data?.prompt?.length ?? 0)} chars
-              </button>
-            </div>
-            <div className="flex items-center gap-1">
-              {promptTab === "short" ? (
-                <button
-                  type="button"
-                  onClick={copyAIPrompt}
-                  className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-white/20"
-                >
-                  {copied === "prompt" ? <><Check className="h-3 w-3 inline mr-1 text-emerald-300" /> Copied</> : <><Copy className="h-3 w-3 inline mr-1" /> Copy short</>}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={copyAIPromptLong}
-                  className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-white/20"
-                >
-                  {copied === "prompt-long" ? <><Check className="h-3 w-3 inline mr-1 text-emerald-300" /> Copied</> : <><Copy className="h-3 w-3 inline mr-1" /> Copy full</>}
-                </button>
-              )}
-            </div>
-          </div>
-          <textarea
-            readOnly
-            rows={promptTab === "short" ? 18 : 28}
-            spellCheck={false}
-            className="w-full rounded-2xl border border-white/10 bg-black/30 p-4 text-[12.5px] leading-relaxed text-white/90 font-mono resize-y focus:outline-none focus:ring-2 focus:ring-fuchsia-400/40 selection:bg-fuchsia-500/30"
-            value={promptTab === "short" ? (genPrompt.data.shortPrompt || genPrompt.data.prompt || "") : (genPrompt.data.prompt || "")}
-            onFocus={(e) => e.currentTarget.select()}
-          />
-          <p className="text-[11px] text-amber-200/80 font-semibold leading-snug">
-            {genPrompt.data.validated ? "Validated: Yes · WhatDo checks for forbidden claims." : "Validated: Review before use."}
-            {" · "}
-            To use: paste into ChatGPT / Gemini / Ideogram <u>as plain text</u> (not as a .txt attachment), then upload your selfie in the same message and hit Send.
           </p>
         </section>
       )}
