@@ -23,6 +23,16 @@ export interface PostMediaItem {
 export interface PostMediaViewerProps {
   media: PostMediaItem[];
   className?: string;
+  /** How the image fills its box. "cover" (default) crops to fill; "contain"
+   *  shows the full image with letterboxing. Reels use "contain". */
+  objectFit?: "cover" | "contain";
+  /** When true, the container uses the media's natural aspect ratio instead
+   *  of a fixed 16:9. Reels use this so portrait/landscape images display
+   *  fully rather than being cropped to a wide strip. */
+  useMediaAspectRatio?: boolean;
+  /** Fallback aspect ratio when useMediaAspectRatio is true but dimensions
+   *  are unknown. Defaults to "9 / 16" (reel portrait). */
+  fallbackAspectRatio?: string;
 }
 
 function useOnScreen<T extends HTMLElement>(
@@ -52,6 +62,9 @@ function useOnScreen<T extends HTMLElement>(
 export const PostMediaViewer: React.FC<PostMediaViewerProps> = ({
   media,
   className,
+  objectFit = "cover",
+  useMediaAspectRatio = false,
+  fallbackAspectRatio = "9 / 16",
 }) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const videoRef = React.useRef<HTMLVideoElement>(null);
@@ -90,6 +103,18 @@ export const PostMediaViewer: React.FC<PostMediaViewerProps> = ({
     current.type === "IMAGE" || current.type === "GIF" || current.type === "LINK";
   const isVideo = current.type === "VIDEO";
 
+  // Determine the container aspect ratio. When useMediaAspectRatio is set
+  // (reels), use the media's natural dimensions so the full image is visible.
+  // Otherwise keep the legacy 16:9 / 16:10 wide ratio for the feed.
+  const mediaAspectRatio =
+    useMediaAspectRatio && current.width && current.height
+      ? `${current.width} / ${current.height}`
+      : null;
+
+  const innerWrapperClass = useMediaAspectRatio
+    ? "relative w-full h-full"
+    : "relative aspect-video md:aspect-[16/10] w-full";
+
   return (
     <div
       ref={containerRef}
@@ -97,15 +122,19 @@ export const PostMediaViewer: React.FC<PostMediaViewerProps> = ({
         "relative rounded-xl overflow-hidden border border-border bg-muted",
         className
       )}
+      style={mediaAspectRatio ? { aspectRatio: mediaAspectRatio } : undefined}
     >
-      <div className="relative aspect-video md:aspect-[16/10] w-full">
+      <div className={innerWrapperClass}>
         {isImageLike && current.url && (
           <>
             {!imgErrored[activeIdx] ? (
               <img
                 src={current.thumbnailUrl || current.url}
                 alt={`Media ${activeIdx + 1}`}
-                className="w-full h-full object-cover"
+                className={cn(
+                  "w-full h-full",
+                  objectFit === "contain" ? "object-contain" : "object-cover"
+                )}
                 loading="lazy"
                 fetchPriority="auto"
                 decoding="async"
@@ -128,7 +157,10 @@ export const PostMediaViewer: React.FC<PostMediaViewerProps> = ({
                 <img
                   src={current.posterUrl}
                   alt="Video thumbnail"
-                  className="w-full h-full object-cover"
+                  className={cn(
+                    "w-full h-full",
+                    objectFit === "contain" ? "object-contain" : "object-cover"
+                  )}
                   loading="lazy"
                   fetchPriority="auto"
                 />
@@ -152,7 +184,10 @@ export const PostMediaViewer: React.FC<PostMediaViewerProps> = ({
                 playsInline
                 controls
                 preload="metadata"
-                className="w-full h-full object-cover bg-black"
+                className={cn(
+                  "w-full h-full bg-black",
+                  objectFit === "contain" ? "object-contain" : "object-cover"
+                )}
               />
             )}
           </div>

@@ -622,15 +622,13 @@ export const ReelsPostCard: React.FC<ReelsPostCardProps> = ({
         {/* Foreground Media - clearly visible inline (mirrors PostCard layout) - bigger for 9:16 mobile */}
         {media.length > 0 && (
           <div className="px-4 pr-20 shrink-0 py-2 min-h-0 flex justify-center">
-            <div
-              className="w-full max-h-[62vh] md:max-h-[52vh] overflow-hidden rounded-2xl ring-1 ring-white/10 shadow-2xl bg-black/30 flex items-center justify-center"
-              style={{
-                aspectRatio: media[0]?.width && media[0]?.height
-                  ? `${media[0].width} / ${media[0].height}`
-                  : "9 / 16",
-              }}
-            >
-              <PostMediaViewer media={media} className="w-full h-full object-contain" />
+            <div className="w-full max-h-[62vh] md:max-h-[52vh] overflow-hidden rounded-2xl ring-1 ring-white/10 shadow-2xl bg-black/60 flex items-center justify-center">
+              <PostMediaViewer
+                media={media}
+                className="w-full h-full bg-black/60"
+                objectFit="contain"
+                useMediaAspectRatio
+              />
             </div>
           </div>
         )}
