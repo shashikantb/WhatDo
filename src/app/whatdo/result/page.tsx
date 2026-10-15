@@ -44,6 +44,61 @@ import { useToast } from "@/components/design-system/Toaster";
 import { Modal } from "@/components/design-system/Modal";
 import { useGeolocation } from "@/hooks/useGeolocation";
 
+/**
+ * Normalize any image to a 9:16 reel canvas (1080×1920) so it displays fully
+ * in LocalPulse reels without awkward cropping. Uses a blurred + darkened
+ * backdrop of the source image for letterboxing, then draws the source image
+ * centered with object-contain on top.
+ */
+async function toReel916Blob(file: File): Promise<{ blob: Blob; width: number; height: number }> {
+  const W = 1080;
+  const H = 1920;
+  const img = await loadAvatarImage(URL.createObjectURL(file));
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    // Fallback: return original file as blob.
+    return { blob: file, width: img.naturalWidth || W, height: img.naturalHeight || H };
+  }
+
+  // 1. Blurred backdrop to fill the 9:16 canvas.
+  ctx.filter = "blur(40px) brightness(0.55)";
+  const srcRatio = img.naturalWidth / img.naturalHeight;
+  const dstRatio = W / H;
+  let bgW = W;
+  let bgH = H;
+  let bgX = 0;
+  let bgY = 0;
+  if (srcRatio > dstRatio) {
+    // source is wider → cover by height
+    bgW = H * srcRatio;
+    bgX = (W - bgW) / 2;
+  } else {
+    bgH = W / srcRatio;
+    bgY = (H - bgH) / 2;
+  }
+  ctx.drawImage(img, bgX, bgY, bgW, bgH);
+  ctx.filter = "none";
+
+  // 2. Original image centered (object-contain) on top.
+  let dw = W;
+  let dh = W / srcRatio;
+  if (dh > H) {
+    dh = H;
+    dw = H * srcRatio;
+  }
+  const dx = (W - dw) / 2;
+  const dy = (H - dh) / 2;
+  ctx.drawImage(img, dx, dy, dw, dh);
+
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("canvas toBlob failed"))), "image/jpeg", 0.92);
+  });
+  return { blob, width: W, height: H };
+}
+
 function usePersistedWhatdoArgs() {
   const params = useSearchParams();
   const fromQuery = params?.get("id");
@@ -131,6 +186,7 @@ export default function WhatDoResultPage() {
 
   const trackClick = trpc.whatdo.trackShareClick.useMutation();
   const aiImageMut = trpc.whatdo.generateAIImage.useMutation();
+  const saveAIPortraitMut = trpc.whatdo.saveAIPortrait.useMutation();
   const presignSelfie = trpc.media.requestPresignedUpload.useMutation();
   const confirmSelfie = trpc.media.confirmUpload.useMutation();
   const uploadSelfieB64 = trpc.media.uploadFromBase64.useMutation();
@@ -165,6 +221,26 @@ export default function WhatDoResultPage() {
   >("idle");
   const [aiPortraitProgress, setAiPortraitProgress] = React.useState(0);
   const [aiPortraitUrl, setAiPortraitUrl] = React.useState<string | null>(null);
+
+  // Hydrate the saved AI portrait (from a previous upload or in-app generation)
+  // into both the in-app portrait section and the upload section so we don't
+  // make the user regenerate / re-upload on every visit.
+  const savedPortraitUrl = (identity.data as any)?.aiPortraitUrl as string | null | undefined;
+  React.useEffect(() => {
+    if (!savedPortraitUrl) return;
+    setAiImageResult((prev) =>
+      prev
+        ? prev
+        : {
+            publicUrl: savedPortraitUrl,
+            fileKey: (identity.data as any)?.aiPortraitFileKey ?? "",
+            enhancedPrompt: (identity.data as any)?.aiPortraitEnhancedPrompt ?? "",
+            sizeBytes: 0,
+          },
+    );
+    setAiPortraitUrl((prev) => prev ?? savedPortraitUrl);
+    setAiPortraitState((prev) => (prev === "idle" ? "done" : prev));
+  }, [savedPortraitUrl, identity.data]);
 
   const CDN_HOST_MARKERS = ["r2.dev", "cloudflare", "whatdo.co", "r2.cloudflarestorage"];
 
@@ -1145,14 +1221,20 @@ export default function WhatDoResultPage() {
 
     try {
       setAiPortraitState("uploading");
-      setAiPortraitProgress(5);
+      setAiPortraitProgress(3);
+
+      // 0. Normalize the source image to a 9:16 reel canvas so it displays
+      //    fully in LocalPulse reels (no awkward crops/letterboxing in-feed).
+      const { blob: reelBlob, width, height } = await toReel916Blob(file);
+      const uploadSize = reelBlob.size;
+      const fileName = `whatdo-ai-portrait-${Date.now()}.jpg`;
 
       // 1. Presign + direct browser PUT to R2.
       const presign = await presignSelfie.mutateAsync({
         type: "image",
-        contentType: file.type || "image/jpeg",
-        fileSize: file.size,
-        fileName: `whatdo-ai-portrait-${Date.now()}.${file.name.split(".").pop() || "jpg"}`,
+        contentType: "image/jpeg",
+        fileSize: uploadSize,
+        fileName,
       });
 
       if (!presign?.uploadUrl) throw new Error("No upload URL");
@@ -1161,7 +1243,7 @@ export default function WhatDoResultPage() {
         const xhr = new XMLHttpRequest();
         xhr.upload.addEventListener("progress", (ev) => {
           if (ev.lengthComputable) {
-            setAiPortraitProgress(Math.round((ev.loaded / ev.total) * 90));
+            setAiPortraitProgress(3 + Math.round((ev.loaded / ev.total) * 87));
           }
         });
         xhr.addEventListener("load", () => {
@@ -1170,23 +1252,14 @@ export default function WhatDoResultPage() {
         });
         xhr.addEventListener("error", () => reject(new Error("Network error during upload")));
         xhr.open("PUT", presign.uploadUrl, true);
-        xhr.setRequestHeader("Content-Type", file.type || "image/jpeg");
-        xhr.send(file);
+        xhr.setRequestHeader("Content-Type", "image/jpeg");
+        xhr.send(reelBlob);
       });
 
       const publicUrl = presign.publicUrl || presign.fileKey;
-      setAiPortraitProgress(95);
+      setAiPortraitProgress(92);
 
-      // 2. Read image dimensions.
-      let width = 1080;
-      let height = 1920;
-      try {
-        const img = await loadAvatarImage(URL.createObjectURL(file));
-        width = img.naturalWidth || 1080;
-        height = img.naturalHeight || 1920;
-      } catch {}
-
-      // 3. Create a SHORT post with the portrait.
+      // 2. Create a SHORT post with the portrait.
       setAiPortraitState("posting");
       const archetypeLabel = arch?.label ?? snapshot?.archetype ?? "WhatDo Type";
       const caption = `My WhatDo AI portrait — I'm ${arch?.emoji ?? "✨"} ${archetypeLabel}! 🎨\nGenerated with my WhatDo prompt. What's your type?`;
@@ -1211,10 +1284,10 @@ export default function WhatDoResultPage() {
           {
             type: "IMAGE",
             url: publicUrl,
-            mimeType: file.type || "image/jpeg",
+            mimeType: "image/jpeg",
             width,
             height,
-            fileSize: file.size,
+            fileSize: uploadSize,
             sortOrder: 0,
           },
         ],
@@ -1223,6 +1296,17 @@ export default function WhatDoResultPage() {
         hideLocation: false,
         isFamilyPost: false,
       });
+
+      // 3. Persist the portrait on the identity so we don't ask to upload again.
+      try {
+        await saveAIPortraitMut.mutateAsync({
+          identityId: identity.data?.id ?? undefined,
+          publicUrl,
+          fileKey: presign.fileKey,
+        });
+      } catch {
+        // non-fatal: post already created
+      }
 
       setAiPortraitUrl(publicUrl);
       setAiPortraitProgress(100);

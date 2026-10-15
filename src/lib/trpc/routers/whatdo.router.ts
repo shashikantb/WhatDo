@@ -509,6 +509,9 @@ export const whatdoRouter = createTRPCRouter({
         citySnapshot: id.citySnapshot,
         strongestTrait: id.strongestTrait,
         rarestAnswerPct: id.rarestAnswerPct,
+        aiPortraitUrl: id.aiPortraitUrl ?? null,
+        aiPortraitFileKey: id.aiPortraitFileKey ?? null,
+        aiPortraitEnhancedPrompt: id.aiPortraitEnhancedPrompt ?? null,
         signalScores: {
           CURIOSITY: id.signalCuriosity,
           RISK_TAKING: id.signalRiskTaking,
@@ -1024,6 +1027,29 @@ export const whatdoRouter = createTRPCRouter({
           },
         });
       } catch {}
+
+      // Persist the generated AI portrait to the identity so revisit doesn't
+      // require a fresh (costly) generation.
+      try {
+        const identWhere: any = input.identityId
+          ? { id: input.identityId }
+          : userId
+            ? { userId }
+            : sessionId
+              ? { sessionId, userId: null }
+              : null;
+        if (identWhere && gen.publicUrl) {
+          await ctx.prisma.whatDoIdentityResult.updateMany({
+            where: identWhere,
+            data: {
+              aiPortraitUrl: gen.publicUrl,
+              aiPortraitFileKey: gen.fileKey ?? null,
+              aiPortraitEnhancedPrompt: gen.enhancedPrompt ?? null,
+            },
+          });
+        }
+      } catch {}
+
       return {
         publicUrl: gen.publicUrl,
         fileKey: gen.fileKey,
@@ -1034,6 +1060,31 @@ export const whatdoRouter = createTRPCRouter({
         usedImg2Img: gen.usedImg2Img,
         shortImagePrompt: generated.shortImagePrompt,
       };
+    }),
+
+  saveAIPortrait: protectedProcedure
+    .input(
+      z.object({
+        identityId: z.string().optional(),
+        publicUrl: z.string(),
+        fileKey: z.string().optional(),
+        enhancedPrompt: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const where: any = input.identityId
+        ? { id: input.identityId, userId }
+        : { userId };
+      await ctx.prisma.whatDoIdentityResult.updateMany({
+        where,
+        data: {
+          aiPortraitUrl: input.publicUrl,
+          aiPortraitFileKey: input.fileKey ?? null,
+          aiPortraitEnhancedPrompt: input.enhancedPrompt ?? null,
+        },
+      });
+      return { ok: true };
     }),
 
   trackShareClick: publicProcedure

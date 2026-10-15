@@ -797,6 +797,9 @@ model WhatDoIdentityResult {
   signalSocial           Int
   signalIndependence     Int
   referrerId             String?
+  aiPortraitUrl          String?
+  aiPortraitFileKey      String?
+  aiPortraitEnhancedPrompt String?
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
