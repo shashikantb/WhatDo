@@ -27,6 +27,7 @@ import {
   Eye,
   Lock,
   MessageCircle,
+  RefreshCw,
   Share2,
   Sparkles,
   Trophy,
@@ -41,6 +42,7 @@ import { ProgressBar } from "@/components/design-system/ProgressBar";
 import { loadAvatarImage } from "@/lib/whatdo/share-canvas";
 import { useToast } from "@/components/design-system/Toaster";
 import { Modal } from "@/components/design-system/Modal";
+import { useGeolocation } from "@/hooks/useGeolocation";
 
 function usePersistedWhatdoArgs() {
   const params = useSearchParams();
@@ -133,6 +135,9 @@ export default function WhatDoResultPage() {
   const confirmSelfie = trpc.media.confirmUpload.useMutation();
   const uploadSelfieB64 = trpc.media.uploadFromBase64.useMutation();
   const updateProfileMut = trpc.auth.updateProfile.useMutation();
+  const createPostMut = trpc.posts.create.useMutation();
+  const categories = trpc.categories.listAll.useQuery(undefined, { staleTime: 5 * 60_000 });
+  const geo = useGeolocation({ immediate: true, persistToServer: false });
   const [aiImageResult, setAiImageResult] = React.useState<{
     publicUrl: string;
     fileKey: string;
@@ -152,6 +157,14 @@ export default function WhatDoResultPage() {
   const [selfieFileKey, setSelfieFileKey] = React.useState<string | null>(null);
   const selfieFileInputRef = React.useRef<HTMLInputElement | null>(null);
   const pendingStartAfterUploadRef = React.useRef(false);
+
+  // User-generated AI portrait (from ChatGPT/Gemini) upload → post
+  const aiPortraitInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [aiPortraitState, setAiPortraitState] = React.useState<
+    "idle" | "picking" | "uploading" | "posting" | "done" | "error"
+  >("idle");
+  const [aiPortraitProgress, setAiPortraitProgress] = React.useState(0);
+  const [aiPortraitUrl, setAiPortraitUrl] = React.useState<string | null>(null);
 
   const CDN_HOST_MARKERS = ["r2.dev", "cloudflare", "whatdo.co", "r2.cloudflarestorage"];
 
@@ -1115,6 +1128,110 @@ export default function WhatDoResultPage() {
     }
   };
 
+  // Upload a user-generated AI portrait (from ChatGPT/Gemini) and publish it
+  // as a SHORT post so it shows up in the feed and LocalPulse reels.
+  const onAIPortraitFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.show("Unsupported file: upload a JPG, PNG, or WebP photo.", "danger");
+      return;
+    }
+    if (file.size > 12 * 1024 * 1024) {
+      toast.show("File too large: choose an image under 12MB.", "danger");
+      return;
+    }
+
+    try {
+      setAiPortraitState("uploading");
+      setAiPortraitProgress(5);
+
+      // 1. Presign + direct browser PUT to R2.
+      const presign = await presignSelfie.mutateAsync({
+        type: "image",
+        contentType: file.type || "image/jpeg",
+        fileSize: file.size,
+        fileName: `whatdo-ai-portrait-${Date.now()}.${file.name.split(".").pop() || "jpg"}`,
+      });
+
+      if (!presign?.uploadUrl) throw new Error("No upload URL");
+
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.upload.addEventListener("progress", (ev) => {
+          if (ev.lengthComputable) {
+            setAiPortraitProgress(Math.round((ev.loaded / ev.total) * 90));
+          }
+        });
+        xhr.addEventListener("load", () => {
+          if (xhr.status >= 200 && xhr.status < 300) resolve();
+          else reject(new Error(`Upload failed (${xhr.status})`));
+        });
+        xhr.addEventListener("error", () => reject(new Error("Network error during upload")));
+        xhr.open("PUT", presign.uploadUrl, true);
+        xhr.setRequestHeader("Content-Type", file.type || "image/jpeg");
+        xhr.send(file);
+      });
+
+      const publicUrl = presign.publicUrl || presign.fileKey;
+      setAiPortraitProgress(95);
+
+      // 2. Read image dimensions.
+      let width = 1080;
+      let height = 1920;
+      try {
+        const img = await loadAvatarImage(URL.createObjectURL(file));
+        width = img.naturalWidth || 1080;
+        height = img.naturalHeight || 1920;
+      } catch {}
+
+      // 3. Create a SHORT post with the portrait.
+      setAiPortraitState("posting");
+      const archetypeLabel = arch?.label ?? snapshot?.archetype ?? "WhatDo Type";
+      const caption = `My WhatDo AI portrait — I'm ${arch?.emoji ?? "✨"} ${archetypeLabel}! 🎨\nGenerated with my WhatDo prompt. What's your type?`;
+      const tagList = ["whatdo", "aiportrait", "thecreativemind", archetypeLabel.toLowerCase().replace(/[^a-z0-9]/g, "")].filter(Boolean).slice(0, 6);
+
+      const categoryId = categories.data?.find(
+        (c: any) => c.slug === "whatdo" || c.slug === "fun" || c.slug === "random"
+      )?.id;
+
+      await createPostMut.mutateAsync({
+        question: caption,
+        type: "SHORT",
+        categoryId,
+        isAnonymous: false,
+        allowComments: true,
+        tags: tagList,
+        options: [],
+        media: [
+          {
+            type: "IMAGE",
+            url: publicUrl,
+            mimeType: file.type || "image/jpeg",
+            width,
+            height,
+            fileSize: file.size,
+            sortOrder: 0,
+          },
+        ],
+        latitude: geo.latitude ?? undefined,
+        longitude: geo.longitude ?? undefined,
+        hideLocation: false,
+        isFamilyPost: false,
+      });
+
+      setAiPortraitUrl(publicUrl);
+      setAiPortraitProgress(100);
+      setAiPortraitState("done");
+      toast.show("AI portrait posted to your feed & LocalPulse reels! 🎉", "success");
+    } catch (err: any) {
+      setAiPortraitState("error");
+      const msg = err?.message || "Couldn't upload your AI portrait.";
+      toast.show(msg, "danger");
+    }
+  };
+
   const challengeFriend = async () => {
     safeTrackClick("CHALLENGE");
     setShareLoading("challenge");
@@ -1272,6 +1389,93 @@ export default function WhatDoResultPage() {
               {genPrompt.data.validated ? "✅ Prompt validated — WhatDo checks for forbidden claims." : "⚠️ Review the prompt before use."}
             </p>
           </div>
+        </section>
+      )}
+
+      {/* Upload AI portrait generated from ChatGPT/Gemini → publish to feed + LocalPulse */}
+      {(genPrompt.data?.shortPrompt || genPrompt.data?.prompt) && (
+        <section className="rounded-3xl bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border border-white/10 p-4 space-y-3">
+          <div className="flex items-start gap-2.5">
+            <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shrink-0">
+              <Upload className="h-4 w-4 text-white" />
+            </div>
+            <div className="space-y-1 min-w-0">
+              <p className="text-sm font-black text-white leading-tight">
+                Upload your AI portrait &amp; share it
+              </p>
+              <p className="text-[11.5px] text-white/70 leading-relaxed">
+                Got your portrait from ChatGPT or Gemini? Upload it here and we&apos;ll post it to your
+                feed and LocalPulse reels so everyone can see it.
+              </p>
+            </div>
+          </div>
+
+          <input
+            ref={aiPortraitInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={onAIPortraitFile}
+          />
+
+          {aiPortraitState === "idle" && (
+            <Button
+              size="lg"
+              onClick={() => aiPortraitInputRef.current?.click()}
+              className="w-full rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:from-emerald-500/90 hover:to-teal-500/90 font-black shadow-lg shadow-emerald-900/30"
+            >
+              <Upload className="h-4 w-4 mr-1.5" /> Upload AI portrait
+            </Button>
+          )}
+
+          {(aiPortraitState === "uploading" || aiPortraitState === "posting") && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-xs text-white/80">
+                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                {aiPortraitState === "uploading" ? "Uploading your portrait…" : "Posting to feed & reels…"}
+              </div>
+              <ProgressBar value={aiPortraitProgress} className="h-2 bg-white/10" />
+            </div>
+          )}
+
+          {aiPortraitState === "done" && aiPortraitUrl && (
+            <div className="space-y-3">
+              <div className="relative aspect-[9/16] w-full max-w-[260px] mx-auto rounded-2xl overflow-hidden border border-white/15 shadow-xl">
+                <img src={aiPortraitUrl} alt="Your AI WhatDo portrait" className="w-full h-full object-cover" />
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-emerald-300 font-semibold justify-center">
+                <Check className="h-3.5 w-3.5" />
+                Posted to your feed &amp; LocalPulse reels!
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => aiPortraitInputRef.current?.click()}
+                  className="flex-1 rounded-full bg-white/10 text-white hover:bg-white/15"
+                >
+                  <Upload className="h-3.5 w-3.5 mr-1" /> Upload another
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => router.push("/nearby")}
+                  className="flex-1 rounded-full bg-white text-black hover:bg-white/95"
+                >
+                  View in LocalPulse
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {aiPortraitState === "error" && (
+            <Button
+              size="lg"
+              variant="outline"
+              onClick={() => aiPortraitInputRef.current?.click()}
+              className="w-full rounded-2xl border border-white/20 bg-white/5 text-white hover:bg-white/10"
+            >
+              <Upload className="h-4 w-4 mr-1.5" /> Try again
+            </Button>
+          )}
         </section>
       )}
 
