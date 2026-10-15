@@ -469,8 +469,9 @@ export const feedRouter = createTRPCRouter({
         limit: z.number().int().min(1).max(100).default(20),
       }),
     )
-    .query(async ({ input }) => {
-      return nearbyPosts({
+    .query(async ({ ctx, input }) => {
+      // Geo-filter + distance ordering via raw SQL (returns basic fields + distanceKm).
+      const geo = await nearbyPosts({
         centerLat: input.centerLat,
         centerLng: input.centerLng,
         radiusKm: input.radiusKm,
@@ -478,5 +479,39 @@ export const feedRouter = createTRPCRouter({
         cursor: input.cursor,
         excludeFamilyPosts: true,
       });
+
+      const ids = geo.items.map((p) => p.id).filter((id) => isCuid(id));
+      if (ids.length === 0) {
+        return { items: [], nextCursor: geo.nextCursor, hasMore: geo.hasMore };
+      }
+
+      // Fetch full post shape (media, tags, options, category, creator, counts).
+      const fullPosts = await ctx.prisma.post.findMany({
+        where: { id: { in: ids } },
+        include: postBasicInclude,
+      });
+
+      // Enrich with viewer state (userVote, liked, saved, followed).
+      const enriched = await enrichPostsWithViewerState(ctx, fullPosts);
+
+      // Preserve geo distance ordering and attach distanceKm.
+      const distanceByPost = new Map(geo.items.map((p) => [p.id, p.distanceKm]));
+      const orderById = new Map(ids.map((id, i) => [id, i]));
+      enriched.sort(
+        (a, b) => (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0),
+      );
+
+      // Map _count to direct fields (voteCount, commentCount, likeCount, saveCount)
+      // to match the shape ReelsPostCard expects.
+      const items = enriched.map((p) => ({
+        ...p,
+        voteCount: p._count.votes,
+        commentCount: p._count.comments,
+        likeCount: p._count.likes,
+        saveCount: p._count.savedPosts,
+        distanceKm: distanceByPost.get(p.id) ?? 0,
+      }));
+
+      return { items, nextCursor: geo.nextCursor, hasMore: geo.hasMore };
     }),
 });
