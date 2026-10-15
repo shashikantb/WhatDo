@@ -60,9 +60,6 @@ export const MobileTopBar: React.FC = () => {
         <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-sm">
           <span className="text-white font-bold text-sm">W</span>
         </div>
-        <span className="font-bold text-base tracking-tight bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-          WHATDO
-        </span>
       </Link>
 
       <div className="flex items-center gap-1">

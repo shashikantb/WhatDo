@@ -276,9 +276,6 @@ export default function Home() {
                 <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/30">
                   <span className="text-white font-black text-base">W</span>
                 </div>
-                <span className="font-black text-[1.05rem] leading-none tracking-tight text-white drop-shadow-lg">
-                  WHATDO
-                </span>
               </Link>
 
               {/* Feed sort (For You / Latest) RIGHT AFTER the brand logo on the same TOP row — user requested it here */}

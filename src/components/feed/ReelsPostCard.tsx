@@ -54,6 +54,9 @@ export interface ReelsPostCardProps {
   onClick?: (post: FeedPost, index: number) => void;
   onVoteSuccess?: (postId: string) => void;
   className?: string;
+  /** Top padding of the inner content layer, in CSS units. Use a larger value
+   *  when a taller fixed header overlays the reel (e.g. LocalPulse nearby). */
+  headerOffset?: string;
 }
 
 interface ActionButtonProps {
@@ -111,6 +114,7 @@ export const ReelsPostCard: React.FC<ReelsPostCardProps> = ({
   onClick,
   onVoteSuccess,
   className,
+  headerOffset = "3.5rem",
 }) => {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -518,7 +522,10 @@ export const ReelsPostCard: React.FC<ReelsPostCardProps> = ({
       />
 
       {/* Content layer (natural flow, no justify-between spacer — 9:16 mobile friendly) */}
-      <div className="relative z-10 flex-1 min-h-0 flex flex-col justify-start pt-[3.5rem] pb-[6.5rem] overflow-y-auto scrollbar-hide" style={{scrollbarWidth:'none'}}>
+      <div
+        className="relative z-10 flex-1 min-h-0 flex flex-col justify-start pb-[6.5rem] overflow-y-auto scrollbar-hide"
+        style={{ scrollbarWidth: "none", paddingTop: headerOffset }}
+      >
         {/* HEADING at TOP: always visible, never pushed above the viewport clip */}
         <div className="px-4 pr-20 shrink-0 pb-2">
           <div className="backdrop-blur-md bg-black/35 rounded-2xl p-3 border border-white/10 shadow-2xl">

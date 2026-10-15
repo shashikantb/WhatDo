@@ -116,9 +116,6 @@ export const TopBar: React.FC<TopBarProps> = ({
           <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-sm">
             <span className="text-white font-bold">W</span>
           </div>
-          <span className="font-bold text-lg tracking-tight bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            WHATDO
-          </span>
         </Link>
       </div>
 

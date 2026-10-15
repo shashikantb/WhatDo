@@ -48,7 +48,7 @@ export const NearbyPageClient: React.FC = () => {
   const isAuthed = status === "authenticated";
   const utils = trpc.useUtils();
   const geo = useGeolocation({ immediate: true, persistToServer: true });
-  const [radiusKm, setRadiusKm] = React.useState(25);
+  const [radiusKm, setRadiusKm] = React.useState(100);
   const [cursor, setCursor] = React.useState<string | undefined>(undefined);
   const [view, setView] = React.useState<ViewMode>("list");
 
@@ -285,6 +285,7 @@ export const NearbyPageClient: React.FC = () => {
                       index={idx}
                       onClick={handlePostClick}
                       onVoteSuccess={handleVoteSuccess}
+                      headerOffset="8rem"
                     />
                   </div>
                 ))}

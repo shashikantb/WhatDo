@@ -101,9 +101,6 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
           <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-sm">
             <span className="text-white font-bold text-lg">W</span>
           </div>
-          <span className="font-bold text-xl tracking-tight bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            WHATDO
-          </span>
         </div>
       </div>
 

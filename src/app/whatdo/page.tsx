@@ -105,7 +105,6 @@ export default function WhatDoLandingPage() {
             <span className="h-7 w-7 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow">
               W
             </span>
-            WHATDO
           </Link>
           <div className="flex items-center gap-1.5 text-[11px] font-bold text-white/75">
             <Users className="h-3.5 w-3.5" />
