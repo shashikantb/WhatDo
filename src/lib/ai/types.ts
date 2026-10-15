@@ -42,6 +42,14 @@ export interface CommentForSummary {
   likeCount: number;
 }
 
+export interface LocalPulsePostDraft {
+  caption: string;
+  tags: string[];
+  categorySlug: string;
+  /** Prompt used to generate/select a representative image. */
+  imagePrompt: string;
+}
+
 export interface AIProvider {
   moderateText(text: string): Promise<AIModerationResult>;
   moderateImage(imageUrl: string, mimeType?: string): Promise<AIModerationResult>;
@@ -53,4 +61,13 @@ export interface AIProvider {
     mediaUrls?: string[],
   ): Promise<AIClassificationResult>;
   summarizeComments(comments: CommentForSummary[]): Promise<AISummary>;
+  /**
+   * Generate N short, location-aware LocalPulse post drafts.
+   * Content must be non-controversial (no politics, no community conflict),
+   * funny / informative / interesting, aimed at ages 10–30.
+   */
+  generateLocalPulseContent(
+    location: { latitude: number; longitude: number; city?: string },
+    count: number,
+  ): Promise<LocalPulsePostDraft[]>;
 }

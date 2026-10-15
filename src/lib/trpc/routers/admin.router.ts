@@ -5,6 +5,12 @@ import {
 } from "../trpc";
 import { USER_SELECT_PUBLIC, OPINION } from "../../constants";
 import { setSystemSetting, getSystemSetting, GLOBAL_CONFIG_KEYS } from "../../config";
+import {
+  generateLocalPulsePosts,
+  getLocalPulseAutoGenSettings,
+  countNearbyPosts,
+  getOrCreateLocalPulseBot,
+} from "../../localpulse/content-service";
 
 const UserAction = z.enum(["VERIFY", "SUSPEND", "BAN", "RESTORE"]);
 const PostAction = z.enum(["APPROVE", "HIDE", "REMOVE", "FEATURE", "UNFEATURE"]);
@@ -927,5 +933,92 @@ export const adminRouter = createTRPCRouter({
         topReferrers,
         funnelLast7: funnel,
       };
+    }),
+
+  // ── LocalPulse AI content ──────────────────────────────────────────────
+
+  localpulseGetSettings: adminProcedure.query(async ({ ctx }) => {
+    const settings = await getLocalPulseAutoGenSettings();
+    const bot = await getOrCreateLocalPulseBot();
+    const [botPostCount, totalLocalpulsePosts] = await Promise.all([
+      ctx.prisma.post.count({ where: { creatorId: bot.id } }),
+      ctx.prisma.post.count({ where: { type: "SHORT", isFamilyPost: false } }),
+    ]);
+    return {
+      ...settings,
+      botUserId: bot.id,
+      botPostCount,
+      totalLocalpulsePosts,
+    };
+  }),
+
+  localpulseUpdateSettings: adminProcedure
+    .input(
+      z.object({
+        enabled: z.boolean().optional(),
+        maxPerLocation: z.number().int().min(1).max(10).optional(),
+        minNearbyPosts: z.number().int().min(0).max(50).optional(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const writes: Promise<void>[] = [];
+      if (input.enabled !== undefined) {
+        writes.push(
+          setSystemSetting<boolean>(
+            GLOBAL_CONFIG_KEYS.LOCALPULSE_AUTOGEN_ENABLED,
+            input.enabled,
+          ),
+        );
+      }
+      if (input.maxPerLocation !== undefined) {
+        writes.push(
+          setSystemSetting<number>(
+            GLOBAL_CONFIG_KEYS.LOCALPULSE_AUTOGEN_MAX_PER_LOCATION,
+            input.maxPerLocation,
+          ),
+        );
+      }
+      if (input.minNearbyPosts !== undefined) {
+        writes.push(
+          setSystemSetting<number>(
+            GLOBAL_CONFIG_KEYS.LOCALPULSE_AUTOGEN_MIN_NEARBY_POSTS,
+            input.minNearbyPosts,
+          ),
+        );
+      }
+      await Promise.all(writes);
+      return { ok: true };
+    }),
+
+  localpulseGenerateForLocation: adminProcedure
+    .input(
+      z.object({
+        latitude: z.number().min(-90).max(90),
+        longitude: z.number().min(-180).max(180),
+        city: z.string().max(100).optional(),
+        count: z.number().int().min(1).max(10).default(2),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const result = await generateLocalPulsePosts({
+        latitude: input.latitude,
+        longitude: input.longitude,
+        city: input.city,
+        count: input.count,
+      });
+      return result;
+    }),
+
+  localpulseCountNearby: adminProcedure
+    .input(
+      z.object({
+        latitude: z.number().min(-90).max(90),
+        longitude: z.number().min(-180).max(180),
+        radiusKm: z.number().min(0.1).max(500).default(25),
+      }),
+    )
+    .query(async ({ input }) => {
+      const count = await countNearbyPosts(input.latitude, input.longitude, input.radiusKm);
+      return { count };
     }),
 });

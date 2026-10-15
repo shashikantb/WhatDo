@@ -5,6 +5,7 @@ import type {
   AIClassificationResult,
   AISummary,
   CommentForSummary,
+  LocalPulsePostDraft,
   ModerationFlag,
 } from "./types";
 import { MockAIProvider } from "./provider.mock";
@@ -310,6 +311,61 @@ export class OpenAIProvider implements AIProvider {
       }
     } catch {
       return this.fallback.summarizeComments(comments);
+    }
+  }
+
+  async generateLocalPulseContent(
+    location: { latitude: number; longitude: number; city?: string },
+    count: number,
+  ): Promise<LocalPulsePostDraft[]> {
+    if (this.useFallback()) {
+      return this.fallback.generateLocalPulseContent(location, count);
+    }
+    try {
+      const client = await this.getClient();
+      if (!client) return this.fallback.generateLocalPulseContent(location, count);
+
+      const place = location.city || `the area around lat ${location.latitude.toFixed(2)}, lng ${location.longitude.toFixed(2)}`;
+      const sys = [
+        'You generate short-form social media post drafts for "LocalPulse" — a location-based reels/shorts feed.',
+        "Target audience: ages 10–30.",
+        "Rules:",
+        "1. NON-CONTROVERSIAL: No politics, no religious/community conflict, no sensitive topics.",
+        "2. Tone: funny OR informative OR interesting — never boring.",
+        "3. Length: 1 short sentence / caption (under 120 chars). Use 1–2 emojis max.",
+        "4. Must feel local to the provided location (reference the place naturally).",
+        "5. Include 2–3 relevant lowercase tags in the caption text itself.",
+        "6. Suggest an imagePrompt describing a representative photo for the post.",
+        `Return ONLY valid JSON: { posts: [ { caption, tags: string[], categorySlug, imagePrompt } ] }`,
+        `Categories allowed: technology, entertainment, sports, news, gaming, food, travel, fitness, education, finance, art, science.`,
+      ].join("\n");
+
+      const res = await client.chat.completions.create({
+        model: "gpt-4o-mini",
+        temperature: 0.9,
+        messages: [
+          { role: "system", content: sys },
+          {
+            role: "user",
+            content: `Generate ${count} LocalPulse post drafts for this location: ${place}. Make them feel like real local posts someone would share.`,
+          },
+        ],
+        max_tokens: 700,
+        response_format: { type: "json_object" },
+      });
+
+      const raw = res?.choices?.[0]?.message?.content ?? '{"posts":[]}';
+      const parsed = JSON.parse(raw);
+      const posts: LocalPulsePostDraft[] = Array.isArray(parsed.posts) ? parsed.posts : [];
+      if (posts.length === 0) return this.fallback.generateLocalPulseContent(location, count);
+      return posts.slice(0, count).map((p) => ({
+        caption: String(p.caption ?? "").slice(0, 500),
+        tags: Array.isArray(p.tags) ? p.tags.slice(0, 10).map((t: string) => String(t).slice(0, 30)) : [],
+        categorySlug: String(p.categorySlug ?? "general"),
+        imagePrompt: String(p.imagePrompt ?? "local scene").slice(0, 300),
+      }));
+    } catch {
+      return this.fallback.generateLocalPulseContent(location, count);
     }
   }
 }

@@ -5,6 +5,7 @@ import type {
   AIClassificationResult,
   AISummary,
   CommentForSummary,
+  LocalPulsePostDraft,
   ModerationFlag,
 } from "./types";
 
@@ -237,5 +238,69 @@ export class MockAIProvider implements AIProvider {
         : "Comments reflect a balanced mix of opinions.";
 
     return { summary, sentiment, keyPoints };
+  }
+
+  async generateLocalPulseContent(
+    location: { latitude: number; longitude: number; city?: string },
+    count: number,
+  ): Promise<LocalPulsePostDraft[]> {
+    const place = location.city || "your area";
+    const templates: Array<Omit<LocalPulsePostDraft, "tags"> & { tags: string[] }> = [
+      {
+        caption: `Just spotted the cutest street art near ${place} — this city keeps surprising me! 🎨 #localpulse`,
+        tags: ["streetart", "localpulse", "cityvibes"],
+        categorySlug: "art",
+        imagePrompt: "colorful street art mural in an urban neighborhood, vibrant colors",
+      },
+      {
+        caption: `Hidden gem cafe alert in ${place}! Best chai I've had all week ☕✨ Who else loves discovering new spots?`,
+        tags: ["food", "cafe", "localpulse"],
+        categorySlug: "food",
+        imagePrompt: "cozy small cafe interior with warm lighting and chai cup",
+      },
+      {
+        caption: `Evening skies over ${place} hit different today 🌅 Sometimes you just gotta stop and look up.`,
+        tags: ["sunset", "cityscape", "localpulse"],
+        categorySlug: "travel",
+        imagePrompt: "beautiful sunset sky over a city skyline, warm orange and purple hues",
+      },
+      {
+        caption: `Local festival vibes in ${place} this weekend! The energy was unreal 🎉 Anybody else go?`,
+        tags: ["festival", "localpulse", "weekend"],
+        categorySlug: "entertainment",
+        imagePrompt: "crowd at an outdoor local festival with colorful lights and decorations",
+      },
+      {
+        caption: `Found the best vada pav spot in ${place} and I'm gatekeeping... just kidding, it's amazing 🌶️🔥`,
+        tags: ["streetfood", "localpulse", "food"],
+        categorySlug: "food",
+        imagePrompt: "Indian street food vada pav on a plate, close up shot",
+      },
+      {
+        caption: `${place} after rain hits different ✨ The whole city smells like fresh earth and chai. Love this weather!`,
+        tags: ["rain", "weather", "localpulse"],
+        categorySlug: "travel",
+        imagePrompt: "city street after rain with reflections on the pavement, moody atmosphere",
+      },
+      {
+        caption: `Morning walk in ${place}'s local park and the vibe is immaculate 🌳 Sometimes slow mornings are the best mornings.`,
+        tags: ["morning", "park", "localpulse"],
+        categorySlug: "fitness",
+        imagePrompt: "lush green park in the morning with walking path and sunlight through trees",
+      },
+      {
+        caption: `Local bookstore in ${place} that feels like a hug 📚 Spent 2 hours just browsing. Anyone else a bookworm?`,
+        tags: ["books", "localpulse", "cozy"],
+        categorySlug: "art",
+        imagePrompt: "cozy independent bookstore interior with shelves full of books",
+      },
+    ];
+    const shuffled = templates.sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, count).map((t) => ({
+      caption: t.caption,
+      tags: t.tags,
+      categorySlug: t.categorySlug,
+      imagePrompt: t.imagePrompt,
+    }));
   }
 }

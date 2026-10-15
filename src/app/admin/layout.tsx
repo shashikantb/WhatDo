@@ -20,6 +20,7 @@ import {
   Home,
   AlertTriangle,
   RefreshCw,
+  Film,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/design-system/Card";
@@ -34,6 +35,7 @@ const navItems = [
   { href: "/admin/categories", label: "Categories", icon: FolderTree, section: "Content" },
   { href: "/admin/tags", label: "Tags", icon: Tags, section: "Content" },
   { href: "/admin/ads", label: "Ads", icon: Megaphone, section: "Content" },
+  { href: "/admin/localpulse", label: "LocalPulse", icon: Film, section: "Content" },
   { href: "/admin/analytics", label: "Analytics", icon: BarChart3, section: "Insights" },
   { href: "/admin/settings", label: "Settings", icon: Settings, section: "System" },
 ];

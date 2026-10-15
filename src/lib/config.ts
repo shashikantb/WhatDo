@@ -119,6 +119,9 @@ export const GLOBAL_CONFIG_KEYS = {
   OPINION_SCORE_PER_VOTE: "opinion.scorePerVote",
   OPINION_SCORE_PER_POST: "opinion.scorePerPost",
   OPINION_PREDICTION_CORRECT: "opinion.predictionCorrect",
+  LOCALPULSE_AUTOGEN_ENABLED: "localpulse.autogen.enabled",
+  LOCALPULSE_AUTOGEN_MAX_PER_LOCATION: "localpulse.autogen.maxPerLocation",
+  LOCALPULSE_AUTOGEN_MIN_NEARBY_POSTS: "localpulse.autogen.minNearbyPosts",
 } as const;
 
 export async function getGlobalConfig() {

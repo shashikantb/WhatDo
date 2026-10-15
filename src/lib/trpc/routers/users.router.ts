@@ -264,6 +264,29 @@ export const usersRouter = createTRPCRouter({
           city: true,
         },
       });
+
+      // Fire-and-forget LocalPulse seed-content generation (if enabled).
+      // We don't await this so the location update returns quickly.
+      void (async () => {
+        try {
+          const { getLocalPulseAutoGenSettings, countNearbyPosts, generateLocalPulsePosts } = await import("../../localpulse/content-service");
+          const settings = await getLocalPulseAutoGenSettings();
+          if (!settings.enabled) return;
+
+          const nearbyCount = await countNearbyPosts(input.latitude, input.longitude, 25);
+          if (nearbyCount >= settings.minNearbyPosts) return;
+
+          await generateLocalPulsePosts({
+            latitude: input.latitude,
+            longitude: input.longitude,
+            city: user.city ?? undefined,
+            count: settings.maxPerLocation,
+          });
+        } catch {
+          // Non-critical: seed generation failures should never break location updates.
+        }
+      })();
+
       return user;
     }),
 });
