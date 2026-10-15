@@ -1275,17 +1275,6 @@ export default function WhatDoResultPage() {
         </section>
       )}
 
-      <section className="rounded-3xl bg-black/30 border border-white/10 p-3">
-        <div className="overflow-hidden rounded-2xl shadow-2xl shadow-black/50 bg-black">
-          <canvas
-            ref={canvasRef}
-            width={CARD_W}
-            height={CARD_H}
-            className="w-full h-auto block"
-          />
-        </div>
-      </section>
-
       <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-fuchsia-500/10 via-violet-500/10 to-indigo-500/10 p-4 space-y-3">
         <div className="flex items-center justify-between px-1">
           <div className="flex items-center gap-1.5">
@@ -1429,17 +1418,14 @@ export default function WhatDoResultPage() {
         )}
       </section>
 
-      <section className="grid grid-cols-3 gap-2.5">
-        <Button size="lg" onClick={downloadPNG} className="rounded-full bg-white text-black hover:bg-white/95 border-0 shadow-xl shadow-black/30">
-          <Download className="h-4.5 w-4.5" /> Download PNG
-        </Button>
+      <section className="grid grid-cols-2 gap-2.5">
         <Button
           size="lg"
           onClick={shareNative}
           loading={shareLoading === "share"}
-          className="rounded-full border border-white/20 bg-white/5 text-white hover:bg-white/10"
+          className="rounded-full bg-white text-black hover:bg-white/95 border-0 shadow-xl shadow-black/30 font-black"
         >
-          <Share2 className="h-4.5 w-4.5" /> Share
+          <Share2 className="h-4.5 w-4.5 mr-1.5" /> Share
         </Button>
         <Button
           size="md"
