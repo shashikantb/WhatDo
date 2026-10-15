@@ -37,6 +37,7 @@ export default function AdminLocalPulsePage() {
   const [genCount, setGenCount] = React.useState(2);
   const [genLoading, setGenLoading] = React.useState(false);
   const [genResult, setGenResult] = React.useState<{ id: string; slug: string; caption: string }[]>([]);
+  const [activeTab, setActiveTab] = React.useState("autogen");
 
   const settingsQuery = trpc.admin.localpulseGetSettings.useQuery();
   const updateSettings = trpc.admin.localpulseUpdateSettings.useMutation({
@@ -133,7 +134,7 @@ export default function AdminLocalPulsePage() {
         )}
       </div>
 
-      <Tabs defaultValue="autogen">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="autogen">Auto-generation</TabsTrigger>
           <TabsTrigger value="manual">Manual generate</TabsTrigger>
