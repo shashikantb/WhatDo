@@ -1190,7 +1190,10 @@ export default function WhatDoResultPage() {
       setAiPortraitState("posting");
       const archetypeLabel = arch?.label ?? snapshot?.archetype ?? "WhatDo Type";
       const caption = `My WhatDo AI portrait — I'm ${arch?.emoji ?? "✨"} ${archetypeLabel}! 🎨\nGenerated with my WhatDo prompt. What's your type?`;
-      const tagList = ["whatdo", "aiportrait", "thecreativemind", archetypeLabel.toLowerCase().replace(/[^a-z0-9]/g, "")].filter(Boolean).slice(0, 6);
+      const archetypeSlug = archetypeLabel.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const tagList = Array.from(
+        new Set(["whatdo", "aiportrait", "thecreativemind", archetypeSlug].filter(Boolean)),
+      ).slice(0, 6);
 
       const categoryId = categories.data?.find(
         (c: any) => c.slug === "whatdo" || c.slug === "fun" || c.slug === "random"

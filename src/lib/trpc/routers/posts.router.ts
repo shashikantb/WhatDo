@@ -193,8 +193,22 @@ export const postsRouter = createTRPCRouter({
       const tempCuid = `c${Math.random().toString(36).slice(2, 14)}`;
       const slug = slugifyShortCuid(tempCuid);
 
+      // Normalize + dedupe tag names by their slug so we never create duplicate
+      // PostTag rows (unique constraint on (postId, tagId)) and don't double-count.
+      const seenSlugs = new Set<string>();
+      const uniqueTags = input.tags.filter((tagName) => {
+        const slugTag = tagName
+          .toLowerCase()
+          .replace(/[^a-z0-9-_]/g, "-")
+          .replace(/-+/g, "-")
+          .slice(0, 50);
+        if (seenSlugs.has(slugTag)) return false;
+        seenSlugs.add(slugTag);
+        return true;
+      });
+
       const tagRows = await Promise.all(
-        input.tags.map(async (tagName) => {
+        uniqueTags.map(async (tagName) => {
           const slugTag = tagName
             .toLowerCase()
             .replace(/[^a-z0-9-_]/g, "-")
