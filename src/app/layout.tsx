@@ -21,12 +21,12 @@ function buildMetadataBase(): URL {
     process.env.SITE_URL?.trim() ||
     process.env.VERCEL_URL?.trim() ||
     "";
-  if (!raw) return new URL("https://whatdo.app");
+  if (!raw) return new URL("https://whatdo.co.in");
   try {
     if (/^https?:\/\//i.test(raw)) return new URL(raw);
     return new URL(`https://${raw}`);
   } catch {
-    return new URL("https://whatdo.app");
+    return new URL("https://whatdo.co.in");
   }
 }
 
@@ -52,9 +52,11 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: "/favicon.svg", type: "image/svg+xml", sizes: "any" },
+      { url: "/icons/icon-192.png", type: "image/png", sizes: "192x192" },
+      { url: "/icons/icon-512.png", type: "image/png", sizes: "512x512" },
     ],
     apple: [
-      { url: "/icons/icon-192.svg" },
+      { url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
     ],
     shortcut: ["/favicon.svg"],
   },
@@ -194,6 +196,13 @@ export default function RootLayout({
   }
 } catch(e) {}})();`
         }} />
+        <Script
+          id="register-service-worker"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `(function(){if(typeof window==="undefined"||!("serviceWorker" in navigator))return;window.addEventListener("load",function(){navigator.serviceWorker.register("/sw.js",{scope:"/"}).catch(function(err){console.warn("SW registration failed",err);});});})();`,
+          }}
+        />
         <AppProviders>{children}</AppProviders>
       </body>
     </html>

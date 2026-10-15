@@ -131,6 +131,13 @@ const nextConfig = {
         ],
       },
       {
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+        ],
+      },
+      {
         source: "/robots.txt",
         headers: [{ key: "Cache-Control", value: "public, max-age=3600" }],
       },

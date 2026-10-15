@@ -1,5 +1,14 @@
 const CACHE = "whatdo-v1";
-const STATIC = ["/", "/feed", "/manifest.webmanifest", "/favicon.svg", "/icons/icon.svg"];
+const STATIC = [
+  "/",
+  "/feed",
+  "/manifest.webmanifest",
+  "/favicon.svg",
+  "/icons/icon.svg",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png",
+  "/icons/apple-touch-icon.png",
+];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(STATIC)).catch(() => {}));

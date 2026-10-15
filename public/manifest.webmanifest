@@ -1,26 +1,35 @@
 {
+  "id": "/?source=pwa",
   "name": "WHATDO — See it. Vote it. Know what people think.",
   "short_name": "WHATDO",
   "description": "Scroll through questions, images, videos and ideas — tell the world what you think in one tap.",
-  "start_url": "/feed",
+  "start_url": "/feed?source=pwa",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
+  "lang": "en",
   "background_color": "#0b0b12",
   "theme_color": "#6366f1",
   "categories": ["social", "entertainment", "news"],
+  "prefer_related_applications": false,
   "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
     {
       "src": "/icons/icon-192.svg",
       "sizes": "192x192",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/icons/icon-512.svg",
-      "sizes": "512x512",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "/icons/icon.svg",
@@ -41,6 +50,20 @@
           "type": "image/svg+xml"
         }
       ]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/home-screen.png",
+      "sizes": "1414x978",
+      "type": "image/png",
+      "label": "WHATDO home feed and quiz entry screen"
+    },
+    {
+      "src": "/screenshots/whatdo-screen.png",
+      "sizes": "1414x978",
+      "type": "image/png",
+      "label": "WHATDO viral identity quiz screen"
     }
   ]
 }
