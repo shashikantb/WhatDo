@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc/client";
+import { getCurrentPosition, isNativeApp } from "@/lib/native/bridge";
 
 export interface GeolocationState {
   latitude: number | null;
@@ -61,7 +62,13 @@ export function useGeolocation(options: UseGeolocationOptions = {}) {
   );
 
   const request = useCallback(() => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
+    // Inside the Android app this goes through the native Geolocation plugin
+    // (real runtime permission prompt, precise location); on the website it is
+    // a straight passthrough to navigator.geolocation with identical options
+    // and error messages.
+    const supportsWeb =
+      typeof navigator !== "undefined" && !!navigator.geolocation;
+    if (!isNativeApp() && !supportsWeb) {
       setState((s) => ({
         ...s,
         error: "Geolocation is not supported by this browser.",
@@ -70,9 +77,8 @@ export function useGeolocation(options: UseGeolocationOptions = {}) {
       return;
     }
     setState((s) => ({ ...s, loading: true, error: null }));
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude, accuracy } = position.coords;
+    getCurrentPosition({ enableHighAccuracy, timeout, maximumAge })
+      .then(({ latitude, longitude, accuracy }) => {
         setState({
           latitude,
           longitude,
@@ -81,18 +87,14 @@ export function useGeolocation(options: UseGeolocationOptions = {}) {
           loading: false,
         });
         persist(latitude, longitude);
-      },
-      (err) => {
-        let message = err.message;
-        if (err.code === err.PERMISSION_DENIED) {
-          message = "Location access denied. Please enable location services.";
-        } else if (err.code === err.TIMEOUT) {
-          message = "Location request timed out. Please try again.";
-        }
+      })
+      .catch((err: unknown) => {
+        const message =
+          err instanceof Error && err.message
+            ? err.message
+            : "Could not determine your location.";
         setState((s) => ({ ...s, error: message, loading: false }));
-      },
-      { enableHighAccuracy, timeout, maximumAge },
-    );
+      });
   }, [enableHighAccuracy, timeout, maximumAge, persist]);
 
   useEffect(() => {

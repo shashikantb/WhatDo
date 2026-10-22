@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>WHATDO</title>
+    <style>
+      :root { color-scheme: dark; }
+      html, body {
+        margin: 0;
+        height: 100%;
+        background: #0b0b12;
+        color: #e8e8f0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+      .wrap {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        text-align: center;
+        padding: 24px;
+      }
+      .logo {
+        width: 72px;
+        height: 72px;
+        border-radius: 18px;
+        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 34px;
+        font-weight: 800;
+      }
+      h1 { font-size: 18px; margin: 0; letter-spacing: 0.02em; }
+      p { margin: 0; font-size: 13px; color: #9a9ab0; max-width: 30ch; line-height: 1.5; }
+      button {
+        margin-top: 8px;
+        border: 0;
+        border-radius: 999px;
+        padding: 12px 22px;
+        font-size: 14px;
+        font-weight: 700;
+        background: #6366f1;
+        color: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      Offline fallback page.
+
+      In normal operation the WHATDO Android app loads the live site from
+      `server.url` (see capacitor.config.ts); this file is only shown when the
+      remote app is unreachable. It performs no application logic of its own and
+      holds no credentials.
+    -->
+    <div class="wrap">
+      <div class="logo">W</div>
+      <h1>Can&rsquo;t reach WHATDO</h1>
+      <p>Check your internet connection and try again. Your session stays signed in.</p>
+      <button onclick="location.replace('https://whatdo.co.in/feed')">Retry</button>
+    </div>
+  </body>
+</html>

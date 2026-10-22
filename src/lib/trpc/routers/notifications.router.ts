@@ -72,4 +72,63 @@ export const notificationsRouter = createTRPCRouter({
       where: { recipientId: userId, isRead: false },
     });
   }),
+
+  /**
+   * Registers a native push (FCM) device token for the signed-in user.
+   *
+   * Called by the Android app when the Capacitor PushNotifications plugin
+   * returns a registration token. Purely additive: the existing website never
+   * calls it, and it fails soft when the DeviceToken table has not been created
+   * in a given environment yet, so shipping the app cannot break the site.
+   */
+  registerDevice: protectedProcedure
+    .input(
+      z.object({
+        token: z.string().min(10).max(4096),
+        platform: z.enum(["android", "ios", "web"]).default("android"),
+        deviceId: z.string().max(200).optional(),
+        appVersion: z.string().max(40).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      try {
+        await ctx.prisma.deviceToken.upsert({
+          where: { token: input.token },
+          create: {
+            userId,
+            token: input.token,
+            platform: input.platform,
+            deviceId: input.deviceId,
+            appVersion: input.appVersion,
+          },
+          update: {
+            userId,
+            platform: input.platform,
+            deviceId: input.deviceId,
+            appVersion: input.appVersion,
+            isActive: true,
+            lastSeenAt: new Date(),
+          },
+        });
+        return { success: true };
+      } catch {
+        return { success: false };
+      }
+    }),
+
+  /** Marks a device token inactive (e.g. on sign-out). */
+  unregisterDevice: protectedProcedure
+    .input(z.object({ token: z.string().min(10).max(4096) }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await ctx.prisma.deviceToken.updateMany({
+          where: { token: input.token, userId: ctx.session.user.id },
+          data: { isActive: false },
+        });
+        return { success: true };
+      } catch {
+        return { success: false };
+      }
+    }),
 });

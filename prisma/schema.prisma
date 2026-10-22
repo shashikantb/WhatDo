@@ -207,6 +207,29 @@ model User {
   appointmentsAsCustomer  Appointment[]     @relation("AppointmentCustomer")
   sentSosAlerts           SosAlert[]        @relation("SosSender")
   receivedSosAlerts       SosAlertRecipient[] @relation("SosRecipient")
+  deviceTokens            DeviceToken[]
+}
+
+/// Push-notification device registration. Written by the Android app (and,
+/// later, the web PWA) so the server can deliver FCM messages. Purely additive:
+/// nothing in the existing website reads this table, and the register endpoint
+/// fails soft if the table has not been created yet.
+model DeviceToken {
+  id         String   @id @default(cuid())
+  userId     String
+  token      String   @unique
+  platform   String   @default("android")
+  deviceId   String?
+  appVersion String?
+  isActive   Boolean  @default(true)
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isActive])
+  @@index([platform])
 }
 
 model Account {

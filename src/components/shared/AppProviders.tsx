@@ -7,6 +7,7 @@ import { ToastProvider } from "@/components/design-system/Toaster";
 import { LoginModalProvider } from "@/components/auth/LoginModal";
 import { CookieConsent } from "@/components/shared/CookieConsent";
 import { PageViewTracker } from "@/components/shared/PageViewTracker";
+import { NativeAppBridge } from "@/components/shared/NativeAppBridge";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { auth } from "@/auth";
 
@@ -55,6 +56,9 @@ export async function AppProviders({
               <BottomNav />
               <CookieConsent />
               <PageViewTracker />
+              {/* No-op on the website; activates native shell behaviour only
+                  when running inside the packaged Android app. */}
+              <NativeAppBridge />
             </LoginModalProvider>
           </ToastProvider>
         </ThemeProvider>

@@ -1,0 +1,27 @@
+# Node / Capacitor tooling
+node_modules/
+dist/
+.capacitor/
+
+# Android build output
+android/build/
+android/app/build/
+android/.gradle/
+android/local.properties
+android/capacitor-cordova-android-plugins/
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+
+# Keystores and signing secrets — NEVER commit these
+*.keystore
+*.jks
+keystore.properties
+release-signing.properties
+
+# Google services / Firebase config may contain project identifiers
+android/app/google-services.json
+
+# IDE
+.idea/
+*.iml
+.DS_Store
