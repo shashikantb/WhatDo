@@ -104,6 +104,7 @@ export const BottomNav: React.FC = () => {
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={false}
                 className={cn(
                   "flex flex-col items-center justify-center gap-0.5 py-1.5 px-3 rounded-lg min-w-[60px]",
                   "transition-colors duration-200",
